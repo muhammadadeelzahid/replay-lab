@@ -1,0 +1,46 @@
+{
+  "bundle_version": 1,
+  "run_id": "chef_cooking_llm_18Mbps_run_3",
+  "created_utc": "2026-10-18T17:47:11Z",
+  "source_commit": "9cb7c95",
+  "scenario": "ntn-iab-quic-dash-ai",
+  "policy": {
+    "name": "llm",
+    "client": "ns3::AiDashClient",
+    "model": "abr-llm-v2",
+    "description": "Content-aware SLM ABR policy (greedy-teacher). NOTE: encoded segments are 2.0 s but the simulated player buffered in 3.3 s units; sim times are copied verbatim (not rescaled)."
+  },
+  "network": {
+    "num_ues": 1,
+    "simulated_num_ues": 3,
+    "num_relays": 1,
+    "feeder_link_rate_bps": 18000000,
+    "congestion_control": "ns3::QuicBbr",
+    "rlc_mode": "AM",
+    "rng_run": 1
+  },
+  "player": {
+    "segment_duration_s": 3.3,
+    "ladder_bps": [
+      250000,
+      750000,
+      1500000,
+      3000000,
+      6000000,
+      12000000
+    ]
+  },
+  "sim_stop_time_s": 37.4231,
+  "ues": [
+    {
+      "ue": 0,
+      "node_id": 6,
+      "video": "chef_cooking",
+      "stream_start_s": 0.124912
+    }
+  ],
+  "log_time_format": "leading seconds",
+  "sim_log_source": "task_33_chef_cooking_18Mbps_run5.log",
+  "sim_log_decision_agreement": 1.0,
+  "notes": "SINGLE-UE bundle: only the UE that received the whole video is included (re-indexed ue=0); the feeder was shared by simulated_num_ues UEs during the run. STALLS/rebuffer in player_events.jsonl + summary.json are computed from the REAL ns-3 sim.log MPEG player (stall_start/stall_end with source:'sim.log'; a never-resumed freeze is a terminal:true stall to session end), NOT from decisions.jsonl. summary.ue.completed says whether the stream played to the end. segments/samples come from decisions.jsonl. sim_log_decision_agreement<1.0 means the attached sim.log is a sibling re-execution of this cell. Encoded segments are 2.0 s but the player buffered in 3.3 s units; sim times verbatim. sim_stop_time_s is this UE's session end."
+}

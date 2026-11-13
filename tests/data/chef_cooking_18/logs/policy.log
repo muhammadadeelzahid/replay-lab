@@ -1,0 +1,25 @@
+# reconstructed from /project/6030214/adeel/ns3-ntn-iab/Quic_artifacts/AiDash/bench_down_scored/chef_cooking/run_3/decisions.jsonl (exact decision record)
+    0.2284 ue-id: 6 seg(1-idx): 1 rung: 3 bitrate: 3000000 thr_est: 4115489 buf: 3.039 infer_ms: 257.9 reason: llm_policy_model+guard(buf3.0:r4->r3)
+    0.2290 ue-id: 7 seg(1-idx): 1 rung: 3 bitrate: 3000000 thr_est: 4115489 buf: 3.038 infer_ms: 29.7 reason: llm_policy_model+guard(buf3.0:r4->r3)
+    1.0245 ue-id: 6 seg(1-idx): 2 rung: 4 bitrate: 6000000 thr_est: 7992855 buf: 5.542 infer_ms: 30.6 reason: llm_policy_model+guard(buf5.5:r5->r4)
+    1.0382 ue-id: 7 seg(1-idx): 2 rung: 4 bitrate: 6000000 thr_est: 7863137 buf: 5.529 infer_ms: 29.6 reason: llm_policy_model+guard(buf5.5:r5->r4)
+    1.0909 ue-id: 5 seg(1-idx): 1 rung: 1 bitrate: 750000 thr_est: 807774 buf: 2.176 infer_ms: 29.7 reason: llm_policy_model
+    1.8852 ue-id: 5 seg(1-idx): 2 rung: 3 bitrate: 3000000 thr_est: 1930928 buf: 6.513 infer_ms: 31.3 reason: llm_policy_model
+    2.4219 ue-id: 6 seg(1-idx): 3 rung: 5 bitrate: 12000000 thr_est: 8936253 buf: 8.601 infer_ms: 30.0 reason: llm_policy_model
+    2.9107 ue-id: 7 seg(1-idx): 3 rung: 5 bitrate: 12000000 thr_est: 6669021 buf: 8.113 infer_ms: 30.0 reason: llm_policy_model
+    5.8591 ue-id: 6 seg(1-idx): 4 rung: 5 bitrate: 12000000 thr_est: 8164020 buf: 8.464 infer_ms: 30.0 reason: llm_policy_model
+    7.2817 ue-id: 7 seg(1-idx): 4 rung: 4 bitrate: 6000000 thr_est: 6419897 buf: 7.042 infer_ms: 29.7 reason: llm_policy_model+guard(buf7.0:r5->r4)
+    8.8855 ue-id: 6 seg(1-idx): 5 rung: 5 bitrate: 12000000 thr_est: 9727856 buf: 8.738 infer_ms: 29.8 reason: llm_policy_model
+   10.0436 ue-id: 7 seg(1-idx): 5 rung: 4 bitrate: 6000000 thr_est: 5190291 buf: 7.580 infer_ms: 29.9 reason: llm_policy_model+guard(buf7.6:r5->r4)
+   11.5008 ue-id: 6 seg(1-idx): 6 rung: 5 bitrate: 12000000 thr_est: 10205937 buf: 9.422 infer_ms: 30.8 reason: llm_policy_model
+   12.2257 ue-id: 7 seg(1-idx): 6 rung: 5 bitrate: 12000000 thr_est: 5942631 buf: 8.698 infer_ms: 30.0 reason: llm_policy_model
+   14.5242 ue-id: 6 seg(1-idx): 7 rung: 5 bitrate: 12000000 thr_est: 8354457 buf: 9.699 infer_ms: 29.9 reason: llm_policy_model
+   16.3860 ue-id: 7 seg(1-idx): 7 rung: 5 bitrate: 12000000 thr_est: 6071404 buf: 7.838 infer_ms: 30.2 reason: llm_policy_model
+   16.9390 ue-id: 6 seg(1-idx): 8 rung: 5 bitrate: 12000000 thr_est: 10639646 buf: 10.584 infer_ms: 29.9 reason: llm_policy_model
+   19.0222 ue-id: 6 seg(1-idx): 9 rung: 5 bitrate: 12000000 thr_est: 11666010 buf: 11.801 infer_ms: 29.9 reason: llm_policy_model
+   21.1589 ue-id: 6 seg(1-idx): 10 rung: 5 bitrate: 12000000 thr_est: 11005543 buf: 12.964 infer_ms: 29.9 reason: llm_policy_model
+   22.2979 ue-id: 6 seg(1-idx): 11 rung: 5 bitrate: 12000000 thr_est: 9807796 buf: 15.125 infer_ms: 30.5 reason: llm_policy_model
+   22.3029 ue-id: 7 seg(1-idx): 8 rung: 3 bitrate: 3000000 thr_est: 4342243 buf: 5.221 infer_ms: 29.7 reason: llm_policy_model+guard(buf5.2:r5->r3)
+   22.7950 ue-id: 7 seg(1-idx): 9 rung: 5 bitrate: 12000000 thr_est: 12440415 buf: 8.029 infer_ms: 30.0 reason: llm_policy_model
+   24.3995 ue-id: 7 seg(1-idx): 10 rung: 5 bitrate: 12000000 thr_est: 14655995 buf: 9.724 infer_ms: 29.5 reason: llm_policy_model
+   25.1732 ue-id: 7 seg(1-idx): 11 rung: 4 bitrate: 6000000 thr_est: 14438516 buf: 12.251 infer_ms: 29.5 reason: llm_policy_model

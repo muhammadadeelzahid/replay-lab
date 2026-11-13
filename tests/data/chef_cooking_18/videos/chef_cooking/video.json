@@ -1,0 +1,51 @@
+{
+  "name": "chef_cooking",
+  "title": "A Chef Cooking Foods",
+  "source": "pexels",
+  "license": "Pexels-License",
+  "duration_s": 22.0,
+  "segment_duration_s": 2.0,
+  "frame_rate": 25.0,
+  "segment_count": 11,
+  "rungs": [
+    {
+      "rung": 0,
+      "bitrate_bps": 250000,
+      "width": 428,
+      "height": 240
+    },
+    {
+      "rung": 1,
+      "bitrate_bps": 750000,
+      "width": 640,
+      "height": 360
+    },
+    {
+      "rung": 2,
+      "bitrate_bps": 1500000,
+      "width": 854,
+      "height": 480
+    },
+    {
+      "rung": 3,
+      "bitrate_bps": 3000000,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "rung": 4,
+      "bitrate_bps": 6000000,
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "rung": 5,
+      "bitrate_bps": 12000000,
+      "width": 3840,
+      "height": 2160
+    }
+  ],
+  "segment_file_pattern": "r{rung}/seg_{segment:04d}.mp4",
+  "init_file_pattern": null,
+  "quality_source": "bitrate+resolution (per-segment VMAF omitted: unreliable upstream)"
+}

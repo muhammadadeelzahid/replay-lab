@@ -1,0 +1,11 @@
+{"type": "sample","ue": 0,"t": 0.228408,"buffer_s": 3.038591681,"throughput_bps": 4115489.086324629,"rtt_ms": null,"loss_rate": 0.0}
+{"type": "sample","ue": 0,"t": 1.024508,"buffer_s": 5.542491681,"throughput_bps": 7992855.168948624,"rtt_ms": 24.0,"loss_rate": 0.0}
+{"type": "sample","ue": 0,"t": 2.421908,"buffer_s": 8.60120416,"throughput_bps": 8936253.041362531,"rtt_ms": 24.0,"loss_rate": 0.0}
+{"type": "sample","ue": 0,"t": 5.859108,"buffer_s": 8.46400416,"throughput_bps": 8164019.550797161,"rtt_ms": 33.0,"loss_rate": 0.5818689631095078}
+{"type": "sample","ue": 0,"t": 8.885512,"buffer_s": 8.7376,"throughput_bps": 9727856.044184132,"rtt_ms": 30.0,"loss_rate": 0.33042513396492296}
+{"type": "sample","ue": 0,"t": 11.500808,"buffer_s": 9.42230416,"throughput_bps": 10205936.778456392,"rtt_ms": 26.0,"loss_rate": 0.38236592002532305}
+{"type": "sample","ue": 0,"t": 14.524208,"buffer_s": 9.69890416,"throughput_bps": 8354456.572071178,"rtt_ms": 24.0,"loss_rate": 0.6615069127472382}
+{"type": "sample","ue": 0,"t": 16.939008,"buffer_s": 10.58410416,"throughput_bps": 10639645.519297665,"rtt_ms": 52.0,"loss_rate": 0.0}
+{"type": "sample","ue": 0,"t": 19.022208,"buffer_s": 11.80090416,"throughput_bps": 11666009.984639017,"rtt_ms": 24.0,"loss_rate": 0.0}
+{"type": "sample","ue": 0,"t": 21.158908,"buffer_s": 12.96420416,"throughput_bps": 11005543.127252307,"rtt_ms": 24.0,"loss_rate": 0.0}
+{"type": "sample","ue": 0,"t": 22.297908,"buffer_s": 15.12520416,"throughput_bps": 9807796.312554872,"rtt_ms": 25.0,"loss_rate": 0.0}

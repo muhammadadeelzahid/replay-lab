@@ -1,0 +1,5 @@
+{"type": "player_event","ue": 0,"t": 0.124812,"event": "stream_start"}
+{"type": "player_event","ue": 0,"t": 1.15571,"event": "playback_start"}
+{"type": "player_event","ue": 0,"t": 56.8597,"event": "stall_start","source": "sim.log"}
+{"type": "player_event","ue": 0,"t": 57.2204,"event": "stall_end","source": "sim.log"}
+{"type": "player_event","ue": 0,"t": 180.97,"event": "playback_end"}

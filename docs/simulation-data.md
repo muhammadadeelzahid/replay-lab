@@ -132,6 +132,14 @@ last frame, and their `sim_stop_time_s` is the time of that frame.
 The viewer reports where playback stopped and ends the replay there.
 
 
+## A skipped segment
+
+In `pexels_34797065` at 36 Mbps the simulated player never shows segment 13: its download in
+`segments.jsonl` takes no time (`request_s` equals `done_s`), `sim.log` has no decision after
+segment 13, and playback goes from segment 12 straight to segment 14 (the simulated play time
+jumps by 3.3 s). The viewer marks segment 13 as not played and leaves it out of the replay.
+
+
 ## Stalls
 
 Three bundles have one short stall each: BBB 36 Mbps (0.36 s at 56.86 s), `peace_autumn_lake`

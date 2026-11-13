@@ -1,0 +1,17 @@
+{
+  "ues": [
+    {
+      "ue": 0,
+      "avg_bitrate_bps": 10636364,
+      "avg_throughput_bps": 9146896,
+      "switch_count": 2,
+      "completed": true,
+      "segments_available": 11,
+      "total_segments": 11,
+      "rebuffer_time_s": 0.0,
+      "stall_count": 0,
+      "startup_delay_s": 1.0312,
+      "stall_source": "sim.log"
+    }
+  ]
+}
