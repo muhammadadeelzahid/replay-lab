@@ -12,6 +12,8 @@ add_library(abrviz_core STATIC
     include/abrviz/core/load/load_result.h
     include/abrviz/core/load/segment_shift.h
     include/abrviz/core/load/bundle_reader.h
+    include/abrviz/core/load/bundle_loader.h
+    include/abrviz/core/util/future_guard.h
     src/version.cpp
     src/model/run_data.cpp
     src/io/mapped_file.cpp
@@ -21,7 +23,8 @@ add_library(abrviz_core STATIC
     src/io/policy_log_parser.cpp
     src/io/mp4_duration.cpp
     src/load/segment_shift.cpp
-    src/load/bundle_reader.cpp)
+    src/load/bundle_reader.cpp
+    src/load/bundle_loader.cpp)
 
 target_include_directories(abrviz_core PUBLIC include)
 target_link_libraries(abrviz_core PUBLIC Qt6::Core Qt6::Concurrent)

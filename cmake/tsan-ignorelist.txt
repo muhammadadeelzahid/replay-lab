@@ -1,0 +1,10 @@
+# Functions from Qt's headers are not instrumented in the ThreadSanitizer build.
+#
+# Qt itself is not built with TSan, so TSan cannot see the locks inside QThreadPool, QFuture and
+# QtConcurrent. Without this list, every Qt template compiled into our code (task kernels,
+# result stores, continuations) is reported as racing with itself. Our own functions, including
+# the lambdas we hand to Qt, stay instrumented; hand-offs between them are annotated with
+# util/tsan.h.
+src:*/Qt*.framework/*
+src:*/include/qt6/*
+src:*/include/Qt*/*

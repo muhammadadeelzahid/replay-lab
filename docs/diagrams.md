@@ -63,9 +63,17 @@ classDiagram
   RunData *-- Stall
 
   class BundleLoader {
-    +loadBundle(QString dir)$ QFuture~LoadResult~
-    -assemble(Parts parts)$ LoadResult
+    +loadBundle(QString dir, QThreadPool* pool)$ QFuture~LoadResult~
   }
+  class LoadState {
+    +QPromise~LoadResult~ promise
+    +BundleParts parts
+    +vector~SimLogPart~ logParts
+    +atomic~bool~ ready
+    +atomic~int~ remaining
+    +mutex progressMutex
+  }
+  BundleLoader ..> LoadState : one per load, shared_ptr
   class LoadResult {
     +shared_ptr~RunData~ run
     +QStringList errors
@@ -349,9 +357,9 @@ flowchart LR
   subgraph POOL["global QThreadPool"]
     FILES["file parsers<br/>run, segments, samples, events,<br/>video metadata, policy.log"]
     MP4["MP4 durations<br/>one task per played segment"]
-    SIMLOG["mappedReduced over sim.log chunks"]
-    JOIN["whenAll, then assemble RunData"]
-    SCAN["library scan<br/>QtConcurrent::mapped"]
+    SIMLOG["sim.log chunks<br/>one task per chunk"]
+    JOIN["last task to finish<br/>(atomic countdown)<br/>assembles RunData"]
+    SCAN["library scan<br/>one task per bundle"]
     FILT["log filter task<br/>shared_ptr#lt;const LogIndex#gt;"]
   end
 
@@ -398,6 +406,7 @@ flowchart LR
 | Shared between threads | Protection |
 | --- | --- |
 | `shared_ptr<const RunData>`, `shared_ptr<const LogIndex>` | immutable, no lock |
+| load setup and task results | `std::atomic` release/acquire and an acq_rel countdown |
 | load progress and result | `QPromise` |
 | log filter generation, render progress | `std::atomic` |
 | render job queue | `std::mutex`, `std::condition_variable_any` |

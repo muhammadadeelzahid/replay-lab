@@ -24,6 +24,10 @@ abrviz_add_test(tst_bundle_reader
     SOURCES tst_bundle_reader.cpp
     LIBS abrviz_core)
 
+abrviz_add_test(tst_bundle_loader
+    SOURCES tst_bundle_loader.cpp
+    LIBS abrviz_core)
+
 abrviz_add_test(tst_media_engine_support
     SOURCES tst_media_engine_support.cpp
     LIBS abrviz_media)

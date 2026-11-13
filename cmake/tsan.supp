@@ -1,0 +1,14 @@
+# ThreadSanitizer suppressions, used together with cmake/tsan-ignorelist.txt.
+#
+# Qt is not built with TSan, so TSan cannot see the locks Qt uses in two hand-offs:
+# - creating a task: QtConcurrent::run copies the task's lambda on the calling thread and a pool
+#   thread runs it;
+# - the value in a QFuture: copied in by the producing thread, copied out by the consumer.
+# Both entries name Qt frames that never contain our own code, apart from copy constructors.
+race:QtConcurrent::NonPromiseTaskResolver
+race:QtConcurrent::PromiseTaskResolver
+race:QtPrivate::ResultStoreBase
+race:QFutureInterface<*>::reportAndEmplaceResult
+race:QFutureInterface<*>::reportResult
+race:QFutureInterface<*>::resultReference
+race:QFuture<*>::result

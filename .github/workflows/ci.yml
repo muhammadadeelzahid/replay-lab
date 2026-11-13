@@ -11,7 +11,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: [debug, nogst, asan, tsan]
+        include:
+          - preset: debug
+            cxx: g++
+          - preset: nogst
+            cxx: g++
+          - preset: asan
+            cxx: g++
+          # The TSan preset uses -fsanitize-ignorelist, which only clang supports.
+          - preset: tsan
+            cxx: clang++
+    env:
+      CXX: ${{ matrix.cxx }}
 
     steps:
       - uses: actions/checkout@v4

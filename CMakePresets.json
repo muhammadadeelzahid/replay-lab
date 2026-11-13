@@ -1,6 +1,10 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "base",
@@ -15,19 +19,25 @@
       "name": "debug",
       "displayName": "Debug",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
     },
     {
       "name": "release",
       "displayName": "Release",
       "inherits": "base",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
     },
     {
       "name": "nogst",
       "displayName": "Debug, without GStreamer",
       "inherits": "debug",
-      "cacheVariables": { "ABR_WITH_GSTREAMER": "OFF" }
+      "cacheVariables": {
+        "ABR_WITH_GSTREAMER": "OFF"
+      }
     },
     {
       "name": "asan",
@@ -44,29 +54,60 @@
       "displayName": "ThreadSanitizer",
       "inherits": "debug",
       "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer -fsanitize-ignorelist=${sourceDir}/cmake/tsan-ignorelist.txt",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
       }
     }
   ],
   "buildPresets": [
-    { "name": "debug", "configurePreset": "debug" },
-    { "name": "release", "configurePreset": "release" },
-    { "name": "nogst", "configurePreset": "nogst" },
-    { "name": "asan", "configurePreset": "asan" },
-    { "name": "tsan", "configurePreset": "tsan" }
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "nogst",
+      "configurePreset": "nogst"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan"
+    }
   ],
   "testPresets": [
     {
       "name": "base",
       "hidden": true,
-      "output": { "outputOnFailure": true },
-      "environment": { "QT_QPA_PLATFORM": "offscreen" }
+      "output": {
+        "outputOnFailure": true
+      },
+      "environment": {
+        "QT_QPA_PLATFORM": "offscreen"
+      }
     },
-    { "name": "debug", "inherits": "base", "configurePreset": "debug" },
-    { "name": "release", "inherits": "base", "configurePreset": "release" },
-    { "name": "nogst", "inherits": "base", "configurePreset": "nogst" },
+    {
+      "name": "debug",
+      "inherits": "base",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "configurePreset": "release"
+    },
+    {
+      "name": "nogst",
+      "inherits": "base",
+      "configurePreset": "nogst"
+    },
     {
       "name": "asan",
       "inherits": "base",
@@ -82,7 +123,7 @@
       "configurePreset": "tsan",
       "environment": {
         "QT_QPA_PLATFORM": "offscreen",
-        "TSAN_OPTIONS": "second_deadlock_stack=1"
+        "TSAN_OPTIONS": "second_deadlock_stack=1 halt_on_error=1 suppressions=${sourceDir}/cmake/tsan.supp"
       }
     }
   ]

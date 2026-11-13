@@ -105,9 +105,9 @@ new values through `QFuture` or queued calls.
 
 | Work | Thread | Mechanism |
 | --- | --- | --- |
-| Loading a bundle | global `QThreadPool` | `loadBundle()` starts one task per file (run, segments, samples, events, video metadata, `policy.log`), one task per media file for its duration, and a map-reduce over `sim.log` chunks. `QtFuture::whenAll` joins them and a `.then()` continuation assembles `RunData`, so no pool thread waits for another. A shared `QPromise<LoadResult>` carries progress, cancellation and the result |
-| Parsing `sim.log` | global pool | the memory-mapped log is cut into line-aligned chunks; `QtConcurrent::mappedReduced` parses each chunk and merges the parts in order |
-| Scanning a folder of bundles | global pool | `QtConcurrent::mapped` reads `run.json` and `summary.json` of each bundle |
+| Loading a bundle | global `QThreadPool` | `loadBundle()` reads `run.json`, the video description and the segment records in one task, then starts one task per remaining file, per `sim.log` chunk and per media file (for its duration). An `std::atomic<int>` counts the unfinished tasks; the task that brings it to zero assembles `RunData`, so no thread ever waits for another. A shared `QPromise<LoadResult>` carries progress, cancellation and the result |
+| Parsing `sim.log` | global pool | the memory-mapped log is cut into line-aligned chunks, one task each; every task writes its own slot, and the slots are merged in order when the load completes |
+| Scanning a folder of bundles | global pool | one task per bundle reads `run.json` and `summary.json`, joined the same way as a load |
 | Filtering the log | global pool | one task per request, holding a `std::shared_ptr<const LogIndex>`; it checks its `QPromise` for cancellation. An atomic generation counter discards results of older requests; a 150 ms timer debounces typing |
 | Rendering the experienced video | `RenderQueue` thread | a `std::jthread` takes jobs from a queue guarded by `std::mutex` and `std::condition_variable_any`, waiting on its `std::stop_token` |
 | Transcoding segments | `RenderQueue`'s own `QThreadPool` | one task per segment runs `ffmpeg` through `QProcess`, polling `waitForFinished(100)` and the job's stop token, so cancelling takes effect within 100 ms |
@@ -120,7 +120,9 @@ State written by one thread and read by another, and how it is protected:
 | State | Protection |
 | --- | --- |
 | `RunData`, `LogIndex` | immutable after construction; shared through `shared_ptr<const T>` |
-| `QPromise` progress and result | thread-safe by design (`QFutureInterface`) |
+| state prepared before a load's tasks start | `std::atomic<bool>` stored with release, loaded with acquire by each task |
+| results of a load's tasks | each task writes its own member or slot; the `std::atomic<int>` countdown (acq_rel) orders them before assembly |
+| `QPromise` progress and result | thread-safe by design (`QFutureInterface`); progress values go through a `std::mutex` so they only increase |
 | log filter generation, render progress | `std::atomic` |
 | `RenderQueue` job queue | `std::mutex` and `std::condition_variable_any` |
 | `RenderCache` (rendered files and jobs in progress) | `std::mutex`; claims released by `ClaimGuard` |
@@ -133,13 +135,20 @@ Rules:
    work. (Cancelling the future of a plain `QtConcurrent::run` has no effect on the task.)
 3. `Qt::BlockingQueuedConnection` is not used. The GUI thread waits for tasks at shutdown, and
    a task blocking on the GUI thread at that moment would deadlock.
-4. A pool task never blocks waiting for another pool task; work is joined with
-   `QtFuture::whenAll` and continued with `.then()`.
+4. A pool task never blocks waiting for another pool task. Groups of tasks are joined with an
+   atomic countdown: the last task to finish does the follow-up work.
 5. A class that owns a thread stops and joins it at the start of its destructor, before any
    member the thread uses is destroyed.
 6. In `GstSegmentSource`, streaming threads touch only the frame slot. The video sink (a
    `QPointer`, which is not thread-safe) is used only on the GUI thread, and the run can only
    be replaced while the pipeline is stopped.
+
+ThreadSanitizer. Qt is not built with TSan, so TSan cannot see the locks inside `QThreadPool`
+and `QFuture`. Our own synchronisation therefore uses standard atomics and mutexes, which TSan
+understands, instead of Qt continuations. The TSan preset leaves Qt's header code
+uninstrumented (`cmake/tsan-ignorelist.txt`) and suppresses the two Qt hand-offs that remain:
+creating a task and reading a future's result (`cmake/tsan.supp`). Our own functions, including
+every task body, are fully checked; a race injected into the loader is reported.
 
 Shutdown: `~MainWindow()` first calls `shutdown()`, which cancels and waits for pending loads,
 then destroys the replay engine, then lets its private state (and the `RenderQueue`) be
