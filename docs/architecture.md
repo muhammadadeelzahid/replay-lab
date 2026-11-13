@@ -1,0 +1,314 @@
+# Architecture
+
+abr-viz is a desktop application in C++20 and Qt 6. It opens one simulation run bundle (see
+[simulation-data.md](simulation-data.md)) and shows the session of one UE: the rung played for
+each segment, the video as the user saw it, the buffer, throughput, RTT and loss over time,
+the logs, and a QoE report.
+
+Names: repository `abr-viz`, executable `abrviz`, C++ namespace `abrviz`.
+
+Class and thread diagrams are in [diagrams.md](diagrams.md); the build order is in
+[development-plan.md](development-plan.md).
+
+
+## Goals
+
+- Qt 6 for the GUI, the event loop, Qt Multimedia and Qt Concurrent.
+- GStreamer as the default replay engine, playing the segment files directly at the rungs that
+  were played. A Qt Multimedia engine that plays a pre-rendered file is the alternative; a
+  build option and a command-line flag choose between them.
+- Loading, parsing, log filtering and rendering run on worker threads. The GUI thread only
+  paints and handles input.
+- Every resource (files, mappings, processes, threads, GStreamer objects) is owned by an object
+  that releases it in its destructor.
+
+
+## Project layout
+
+```
+CMakeLists.txt, CMakePresets.json   build; presets debug, release, nogst, asan, tsan
+core/        static library, QtCore and QtConcurrent only
+  model/     value types and RunData
+  io/        MappedFile, JSON Lines reading, bundle file parsers, log parsers, MP4 duration
+  load/      segment shift, BundleLoader, BundleLibrary
+  playback/  PlaybackClock
+  metrics/   QoeMetrics
+  logs/      LogIndex, LogFilter
+  render/    RenderQueue, RenderCache, SegmentTranscoder
+  util/      FutureGuard, ProcessGuard
+media/       static library, Qt Multimedia, plus GStreamer when ABR_WITH_GSTREAMER is ON
+  ReplaySource, PrerenderedSource, ReplaySourceFactory
+  gst/       GstSegmentSource and the GStreamer wrappers
+app/         Qt Widgets: MainWindow, Session, TimeCursor and the panels
+tools/       validate_bundle, print_report, render_experienced
+tests/       Qt Test suites, run by CTest
+docs/        documentation
+```
+
+`core` includes no widget, media or GStreamer header, so the command-line tools and the tests
+use the same loading and metrics code as the GUI. GStreamer headers appear only in
+`media/gst/`.
+
+
+## Data model
+
+`RunData` holds everything loaded from one bundle:
+
+| Type | Content |
+| --- | --- |
+| `RunInfo` | run id, link rate, UEs in the simulation, seed, ns-3 node id, log agreement, notes |
+| `VideoInfo` | name, title, licence, frame rate, ladder (bitrate and resolution per rung) |
+| `Segment` | index, download start and end, played rung, bytes, media file path, media duration |
+| `Decision` | the inputs of one ABR decision (buffer, throughput estimate, RTT, loss, decision delay), whether the buffer guard changed the choice, the rung the LLM wanted, the buffer-full wait |
+| `Sample` | throughput, RTT and loss at a decision; `std::optional<double>` for missing values |
+| `BufferPoint` | buffer level every 33 ms, from the `sim.log` frame lines |
+| `SegmentPlayback` | simulation time of the first and last frame of each played segment |
+| `Stall` | start, end, whether it never ended |
+| `Warning` | log agreement below 1, playback cut off, mismatches found while loading |
+
+`RunData` is built once by the loader and never changed afterwards. It is shared as
+`std::shared_ptr<const RunData>`: any thread can read it without a lock, and it is freed when
+the last panel or task releases it. Lookups by time use `std::ranges::lower_bound` on sorted
+vectors; ranges are returned as `std::span<const T>`.
+
+Pure functions, with no threads and no QObjects:
+- `applySegmentShift()` turns the bundle records into played segments and decisions
+  ([simulation-data.md](simulation-data.md), "Rungs are shifted by one segment").
+- `PlaybackClock` maps between simulation time and replay time (below).
+- `computeQoe()` computes the report numbers.
+
+
+## Playback clock
+
+The simulated player shows each segment for 3.3 s; the media file for that segment usually
+lasts 2.0 s but not always. The replay plays the media at normal speed, so its timeline is
+shorter than the simulation's. `PlaybackClock` maps between three timelines:
+
+- simulation time: the times in the bundle and the logs;
+- media time: the segments' media played back to back, without stalls (the GStreamer engine's
+  timeline);
+- replay time: media time with a frozen frame inserted for each stall (the pre-rendered file's
+  timeline, and the time shown to the user).
+
+The clock is a list of pieces in playback order. A segment piece lasts from its first frame to
+the next piece in simulation time, and for its real media duration in media and replay time.
+A stall piece lasts the stall duration in simulation and replay time and zero in media time.
+Within a piece the mapping is linear. Before playback starts every time maps to 0; after the
+last frame it is clamped to the end. If playback was cut off in the middle of a segment, that
+segment's media duration is scaled by the fraction of its frames that were played.
+
+
+## Threads
+
+Widgets and QObjects with a parent live on the GUI thread. Tasks get immutable inputs and return
+new values through `QFuture` or queued calls.
+
+| Work | Thread | Mechanism |
+| --- | --- | --- |
+| Loading a bundle | global `QThreadPool` | `loadBundle()` starts one task per file (run, segments, samples, events, video metadata, `policy.log`), one task per media file for its duration, and a map-reduce over `sim.log` chunks. `QtFuture::whenAll` joins them and a `.then()` continuation assembles `RunData`, so no pool thread waits for another. A shared `QPromise<LoadResult>` carries progress, cancellation and the result |
+| Parsing `sim.log` | global pool | the memory-mapped log is cut into line-aligned chunks; `QtConcurrent::mappedReduced` parses each chunk and merges the parts in order |
+| Scanning a folder of bundles | global pool | `QtConcurrent::mapped` reads `run.json` and `summary.json` of each bundle |
+| Filtering the log | global pool | one task per request, holding a `std::shared_ptr<const LogIndex>`; it checks its `QPromise` for cancellation. An atomic generation counter discards results of older requests; a 150 ms timer debounces typing |
+| Rendering the experienced video | `RenderQueue` thread | a `std::jthread` takes jobs from a queue guarded by `std::mutex` and `std::condition_variable_any`, waiting on its `std::stop_token` |
+| Transcoding segments | `RenderQueue`'s own `QThreadPool` | one task per segment runs `ffmpeg` through `QProcess`, polling `waitForFinished(100)` and the job's stop token, so cancelling takes effect within 100 ms |
+| Decoding and scaling video | GStreamer's streaming threads | our code runs there only in the `appsink` callback, which wraps the frame and posts it to the GUI thread |
+| GStreamer bus messages | `GstSegmentSource` thread | a `std::jthread` pops bus messages with a 100 ms timeout until stopped, and forwards them as queued calls (Qt's event loop on macOS is not a GLib main loop) |
+| GStreamer initialisation | any | `gst_init()` runs once, under `std::call_once` |
+
+State written by one thread and read by another, and how it is protected:
+
+| State | Protection |
+| --- | --- |
+| `RunData`, `LogIndex` | immutable after construction; shared through `shared_ptr<const T>` |
+| `QPromise` progress and result | thread-safe by design (`QFutureInterface`) |
+| log filter generation, render progress | `std::atomic` |
+| `RenderQueue` job queue | `std::mutex` and `std::condition_variable_any` |
+| `RenderCache` (rendered files and jobs in progress) | `std::mutex`; claims released by `ClaimGuard` |
+| `GstSegmentSource` latest frame | `std::mutex`, plus a `std::atomic<bool>` so that at most one queued delivery is pending |
+
+Rules:
+1. A task receives shared data by value: the lambda captures its own `shared_ptr`, never a
+   reference to a member of a GUI object.
+2. A task that can be cancelled takes a `QPromise` and checks `isCanceled()` between units of
+   work. (Cancelling the future of a plain `QtConcurrent::run` has no effect on the task.)
+3. `Qt::BlockingQueuedConnection` is not used. The GUI thread waits for tasks at shutdown, and
+   a task blocking on the GUI thread at that moment would deadlock.
+4. A pool task never blocks waiting for another pool task; work is joined with
+   `QtFuture::whenAll` and continued with `.then()`.
+5. A class that owns a thread stops and joins it at the start of its destructor, before any
+   member the thread uses is destroyed.
+6. In `GstSegmentSource`, streaming threads touch only the frame slot. The video sink (a
+   `QPointer`, which is not thread-safe) is used only on the GUI thread, and the run can only
+   be replaced while the pipeline is stopped.
+
+Shutdown: `~MainWindow()` first calls `shutdown()`, which cancels and waits for pending loads,
+then destroys the replay engine, then lets its private state (and the `RenderQueue`) be
+destroyed. This order matters: C++ destroys `MainWindow`'s members before the `QWidget` base
+class deletes child widgets, so without `shutdown()` the replay engine would outlive the queue
+it points to. No thread is ever detached.
+
+
+## Ownership and RAII
+
+| Resource | Owner | How it is released |
+| --- | --- | --- |
+| widgets, models, timers, `QMediaPlayer` | Qt parent | deleted by the parent |
+| `MainWindow` private state | `MainWindow` | `std::unique_ptr<Impl>` |
+| `RenderQueue` | `MainWindow::Impl` | `std::unique_ptr` |
+| replay engine | `ReplayPlayer` | `std::unique_ptr<ReplaySource>` |
+| loaded run | panels, tasks, engine | `std::shared_ptr<const RunData>` |
+| log index | `Session`, filter tasks | `std::shared_ptr<const LogIndex>` |
+| library entries | `LibraryModel` | `QList<QSharedPointer<const BundleSummary>>` |
+| widgets used in async callbacks | the callback | `QPointer<T>`, null once the widget is gone |
+| memory-mapped file | `MappedFile` | holds a `std::unique_ptr<QFile>` (a `QFile` cannot be moved) and unmaps in its destructor |
+| pending task | `FutureGuard<T>` | cancels and waits in its destructor |
+| `ffmpeg` process | `ProcessGuard` | kills and waits in its destructor |
+| bundle claimed for rendering | `ClaimGuard` | releases the claim unless the job committed a result |
+| render scratch files | render job | `QTemporaryDir` |
+| rendered video in the cache | render job | written through `QSaveFile`, so a failed job never leaves a partial file |
+| GStreamer objects we own | `GstPtr<T>`, `GstCapsPtr`, `GstSamplePtr`, `GstMessagePtr` | `std::unique_ptr` with a deleter calling the matching `*_unref` |
+| GStreamer pipeline | `PipelineGuard` | sets the state to `NULL` (stopping the streaming threads), then unrefs |
+| mapped video frame | `VideoFrameMapGuard` | `gst_video_frame_unmap` |
+| strings allocated by GLib | `std::unique_ptr<gchar, decltype(&g_free)>` | `g_free` |
+| locks | the enclosing scope | `std::scoped_lock`, `std::unique_lock` |
+
+GStreamer elements need care: `gst_element_factory_make()` returns a floating reference, which
+`gst_bin_add()` takes over. Elements added to the pipeline are kept as plain non-owning
+pointers; `GstPtr` only holds references we own (for example from `gst_element_get_bus()` or
+after `gst_object_ref_sink()`). Wrapping a floating reference and adding it to a bin would
+release it twice.
+
+There is no naked `delete`, and no `new` without a Qt parent or an immediate owner. Raw
+pointers never own.
+
+Copy and move rules. Classes not listed follow the rule of zero. The tests check this table
+with `static_assert`.
+
+| Class | Copyable | Movable |
+| --- | --- | --- |
+| `MappedFile`, `FutureGuard<T>`, `ProcessGuard`, `ClaimGuard` | no | yes |
+| `GstPtr<T>`, `GstCapsPtr`, `GstSamplePtr`, `GstMessagePtr` | no | yes |
+| `PipelineGuard`, `VideoFrameMapGuard` | no | no |
+| `RenderQueue`, `GstSegmentSource` | no | no |
+
+
+## GUI
+
+- `MainWindow`: docks for the library, summary, timeline, charts, logs, player and report.
+  Menus: File (open bundle, open folder), Playback (engine, render video), Help.
+- `Session`: the open run (`shared_ptr<const RunData>`), its `LogIndex`, and the `TimeCursor`.
+  Emits `runChanged`; every panel connects to it.
+- `TimeCursor`: the current simulation time. `setTime(t, source)`; a panel ignores changes it
+  caused itself.
+- `LibraryView`: table of the bundles in a folder (video, link rate, stalls, cut-off).
+- `SummaryPanel`: run information, ladder, warnings.
+- `SegmentTimeline`: painted strip of played rungs, stalls, guard overrides and buffer-full
+  waits; clicking moves the cursor.
+- `ChartsPanel`: buffer (33 ms), throughput and estimate, bitrate, RTT and loss, decision
+  delay; one x-axis and a cursor line.
+- `LogConsole`: table over `LogIndex` with text, UE and level filters; follows the cursor.
+- `ReplayPlayer`: `QVideoWidget`, an overlay (segment, rung, bitrate, resolution, buffer,
+  engine) and the replay engine. Its position and the cursor are kept in sync through
+  `PlaybackClock`.
+- `ReportView`: QoE numbers, compared with `summary.json`.
+
+
+## Replay engines
+
+### Choosing the engine
+
+| Level | Setting | Effect |
+| --- | --- | --- |
+| build | `-DABR_WITH_GSTREAMER=ON` (default) or `OFF` | `ON` builds `media/gst/`; configuring fails with a clear message if GStreamer is not found. `OFF` builds only the pre-rendered engine |
+| launch | `--engine=gstreamer` or `--engine=prerendered` | overrides the saved choice |
+| menu | Playback, Engine (saved with `QSettings`) | the user's choice |
+| fallback | automatic | if the GStreamer pipeline cannot be built, the reason is shown in the status bar and the pre-rendered engine is used |
+
+The default is GStreamer when it is built in.
+
+### `ReplaySource`
+
+```cpp
+class ReplaySource : public QObject {
+    Q_OBJECT
+public:
+    enum class State { Idle, Preparing, Playing, Paused, Stalled, Ended, Error };
+    Q_ENUM(State)
+
+    virtual QString name() const = 0;
+    virtual void setRun(std::shared_ptr<const RunData> run) = 0;
+    virtual void setVideoSink(QVideoSink* sink) = 0;
+    virtual void play() = 0;
+    virtual void pause() = 0;
+    virtual void seek(double replayTime) = 0;
+
+signals:
+    void positionChanged(double replayTime);
+    void stateChanged(abrviz::ReplaySource::State state);
+    void errorOccurred(const QString& message);
+};
+```
+
+Both engines write into the `QVideoSink` of the same `QVideoWidget`, so the overlay and the
+cursor synchronisation are shared. Switching engines destroys the old one before creating the
+new one.
+
+### GStreamer engine (`GstSegmentSource`)
+
+```
+splitmuxsrc ! decodebin3 ! videoconvert ! videoscale
+            ! video/x-raw,format=NV12,width=1920,height=1080 ! appsink
+```
+
+- `splitmuxsrc` plays a list of files as one stream. Its `format-location` signal returns the
+  played segments in order, each at its played rung; seeking across files is handled by
+  `splitmuxsrc`. Resolution changes between files are handled by the decoder.
+- `decodebin3` uses VideoToolbox (`vtdec`) on macOS and `avdec_h264` on Linux.
+- Every rung is scaled to 1080p, so low rungs look as soft as they should.
+- Frames are NV12. The `appsink` callback wraps each sample in a `GstVideoBuffer` (a
+  `QAbstractVideoBuffer`) that maps it with `VideoFrameMapGuard` and releases it in its
+  destructor, so frames are handed to Qt without copying.
+- Stalls: when a frame reaches the media time of a stall, the engine pauses the pipeline for
+  the stall duration; the last frame stays on screen.
+- Cut-off playback: the stop position is set to the media time where playback stopped.
+
+Member order. Members are destroyed in reverse order of declaration, and the streaming threads
+use the frame slot, so the pipeline must stop before the frame slot is destroyed:
+
+```cpp
+class GstSegmentSource final : public ReplaySource {
+    // ...
+private:
+    std::shared_ptr<const RunData> run_;   // replaced only while the pipeline is stopped
+    QPointer<QVideoSink> sink_;            // GUI thread only
+    GstElement* appsink_ = nullptr;        // owned by the pipeline
+    std::mutex frameMutex_;                // frame slot, written by streaming threads
+    QVideoFrame latestFrame_;
+    std::atomic<bool> framePending_{false};
+    PipelineGuard pipeline_;               // stops the streaming threads, then unrefs
+    std::jthread busThread_;               // destroyed first
+};
+```
+
+The destructor also does this explicitly: stop and join the bus thread, stop the pipeline,
+then let the members go. Queued deliveries still pending are dropped by Qt because they are
+posted with the engine as the context object.
+
+### Pre-rendered engine (`PrerenderedSource`)
+
+Plays `experienced.mp4` through `QMediaPlayer`. The file is built by the `RenderQueue`: each
+played segment is transcoded to 1080p at the video's frame rate, the segment before a stall
+is extended with its last frame for the stall duration (`tpad`), a cut-off segment is trimmed,
+and the parts are joined with the concat demuxer. Qt Multimedia uses AVFoundation on macOS and
+its FFmpeg backend on Linux.
+
+
+## Errors
+
+- Parsers return their result together with a list of errors (file, line, message). The loader
+  collects them into `LoadResult::errors`, which the GUI shows.
+- Exceptions do not cross Qt or GStreamer. Callbacks called from C and Qt slots are
+  `noexcept`.
+- Broken invariants are checked with `Q_ASSERT`.
+- Types sent through queued connections are registered: `Q_ENUM` for enums,
+  `Q_DECLARE_METATYPE` for the others.

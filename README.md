@@ -7,14 +7,14 @@ time, and the simulation logs.
 
 Built with **C++20**, **Qt 6** and **GStreamer**.
 
-> Status: early development. See [docs/PLAN.md](docs/PLAN.md) for the step-by-step plan.
+Status: in development, see [docs/development-plan.md](docs/development-plan.md).
 
 ## Documentation
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): design, threading, ownership and RAII
-- [docs/DIAGRAMS.md](docs/DIAGRAMS.md): class and threading diagrams
-- [docs/PLAN.md](docs/PLAN.md): build steps, design fixes, testing
-- [docs/bundle_info.md](docs/bundle_info.md): what the simulation bundles contain
+- [docs/architecture.md](docs/architecture.md): design, threads, ownership
+- [docs/diagrams.md](docs/diagrams.md): class and thread diagrams
+- [docs/development-plan.md](docs/development-plan.md): build steps and testing
+- [docs/simulation-data.md](docs/simulation-data.md): the simulation bundles and their quirks
 
 ## Requirements
 
