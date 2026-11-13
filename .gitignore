@@ -1,0 +1,19 @@
+# Simulation data: 714 MB, distributed as a GitHub Release asset, not in git
+/viewer_bundles/
+/viewer_bundles.tar
+
+# Build output
+/build/
+/out/
+CMakeUserPresets.json
+compile_commands.json
+.cache/
+
+# Rendered experienced-video cache
+*.experienced_cache/
+
+# OS and editors
+.DS_Store
+.vscode/
+.idea/
+*.swp
