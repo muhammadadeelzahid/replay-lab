@@ -44,6 +44,11 @@
 #include <QProcessEnvironment>
 #include <QSettings>
 #include <QSplitter>
+#include <QGuiApplication>
+#include <QEvent>
+#include <QScreen>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QToolBar>
@@ -51,6 +56,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <array>
 #include <tuple>
 
@@ -100,6 +106,77 @@ QWidget* padded(QWidget* content, QWidget* parent, int margin = 16)
     layout->setContentsMargins(margin, margin - 4, margin, 6);
     layout->addWidget(content);
     return page;
+}
+
+/**
+ * @brief A scroll area that scrolls only vertically and is as wide as its content.
+ *
+ * A tall page scrolls instead of making the window taller than the screen, and the content is
+ * never cut off on the right: the area's size hints take the content's width (plus a vertical
+ * scroll bar) and follow it when the content's layout changes.
+ */
+class VerticalScrollArea : public QScrollArea {
+public:
+    /**
+     * @brief Creates the area around content.
+     *
+     * @param content The widget to scroll; reparented to the area.
+     * @param parent The area's parent.
+     */
+    VerticalScrollArea(QWidget* content, QWidget* parent)
+        : QScrollArea(parent)
+    {
+        setFrameShape(QFrame::NoFrame);
+        setWidgetResizable(true);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        viewport()->setAutoFillBackground(false);
+        setWidget(content);
+        content->setAutoFillBackground(false);
+        content->installEventFilter(this);
+    }
+
+    /// The content's minimum width plus a scroll bar; the height of QScrollArea's hint.
+    [[nodiscard]] QSize minimumSizeHint() const override
+    {
+        return {contentWidth(widget()->minimumSizeHint().expandedTo(widget()->minimumSize()).width()),
+                QScrollArea::minimumSizeHint().height()};
+    }
+
+    /// The content's preferred size, plus a scroll bar's width.
+    [[nodiscard]] QSize sizeHint() const override
+    {
+        const QSize content = widget()->sizeHint();
+        return {contentWidth(content.width()), content.height()};
+    }
+
+protected:
+    /// Updates the size hints when the content's layout changes.
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == widget() && event->type() == QEvent::LayoutRequest)
+            updateGeometry();
+        return QScrollArea::eventFilter(watched, event);
+    }
+
+private:
+    /// A content width plus the vertical scroll bar's.
+    [[nodiscard]] int contentWidth(int width) const
+    {
+        return width + verticalScrollBar()->sizeHint().width();
+    }
+};
+
+/**
+ * @brief Puts content in a VerticalScrollArea.
+ *
+ * @param content The widget to scroll; reparented to the area.
+ * @param parent The area's parent.
+ * @return The new area, owned by `parent`.
+ */
+QScrollArea* scrollable(QWidget* content, QWidget* parent)
+{
+    return new VerticalScrollArea(content, parent);
 }
 
 /**
@@ -213,7 +290,12 @@ MainWindow::MainWindow(QWidget* parent)
     // Qt's unified title and toolbar draws the window black around custom widgets; the
     // toolbar sits under the title bar instead, as in Preview or TextEdit.
     setUnifiedTitleAndToolBarOnMac(false);
-    resize(1440, 900);
+    // 1440 x 900, or less on a smaller screen: the window fits the screen's usable area
+    // (without the menu bar and the Dock).
+    QSize size(1440, 900);
+    if (const QScreen* screen = QGuiApplication::primaryScreen())
+        size = size.boundedTo(screen->availableGeometry().size() * 0.92);
+    resize(size);
 
     // The session has no parent while the panels are created and is made a child of the window
     // afterwards. Qt deletes children in the order they were added, so the session, which the
@@ -400,7 +482,9 @@ void MainWindow::createPages()
     d_->moment = new MomentPanel(d_->session, d_->player, this);
 
     d_->pages = new QStackedWidget(this);
-    d_->pages->addWidget(d_->library);
+    // The welcome screen, the library and the charts scroll when the window is short, so the
+    // window's minimum height stays well under a laptop screen's (with the Dock showing).
+    d_->pages->addWidget(scrollable(d_->library, this));
     // The replay, under the path its frames took: server, satellite, IAB relay, viewer.
     auto* replay = new QWidget(this);
     auto* replayLayout = new QVBoxLayout(replay);
@@ -410,7 +494,7 @@ void MainWindow::createPages()
     replayLayout->addWidget(divider(Qt::Horizontal, replay));
     replayLayout->addWidget(d_->player, 1);
     d_->pages->addWidget(replay);
-    d_->pages->addWidget(padded(d_->charts, this));
+    d_->pages->addWidget(scrollable(padded(d_->charts, this), this));
     d_->pages->addWidget(padded(d_->logs, this));
     auto* reportSplit = new QSplitter(Qt::Horizontal, this);
     reportSplit->addWidget(d_->report);
@@ -459,7 +543,7 @@ void MainWindow::createPages()
     inspectorLayout->setContentsMargins(0, 0, 0, 0);
     inspectorLayout->setSpacing(0);
     inspectorLayout->addWidget(divider(Qt::Vertical, d_->inspectorPane));
-    inspectorLayout->addWidget(d_->moment);
+    inspectorLayout->addWidget(scrollable(d_->moment, d_->inspectorPane));
 
     d_->transport = new TransportBar(d_->session, d_->player, d_->timeline,
                                      {d_->previousSegmentAction, d_->stepBackAction, d_->playAction,
@@ -799,8 +883,22 @@ void MainWindow::closeEvent(QCloseEvent* event)
 void MainWindow::restoreSettings()
 {
     const QSettings settings;
-    if (settings.contains(kGeometrySetting))
+    if (settings.contains(kGeometrySetting)) {
         restoreGeometry(settings.value(kGeometrySetting).toByteArray());
+        // A window saved on a bigger screen, or taller than the old minimum size allowed, is
+        // moved and shrunk into the usable area of the screen it is on.
+        if (!isMaximized() && !isFullScreen()) {
+            const QRect available = screen()->availableGeometry();
+            QRect frame = frameGeometry();
+            const QSize extra = frame.size() - geometry().size();  // title bar and borders
+            const QSize size = geometry().size().boundedTo(available.size() - extra);
+            frame.setSize(size + extra);
+            frame.moveTop(std::clamp(frame.top(), available.top(), available.bottom() - frame.height() + 1));
+            frame.moveLeft(std::clamp(frame.left(), available.left(), available.right() - frame.width() + 1));
+            resize(size);
+            move(frame.topLeft());
+        }
+    }
     d_->overlayAction->setChecked(settings.value(kOverlaySetting, false).toBool());
     d_->player->setOverlayVisible(d_->overlayAction->isChecked());
     d_->sidebarAction->setChecked(settings.value(kSidebarSetting, true).toBool());
