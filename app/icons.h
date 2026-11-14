@@ -67,8 +67,7 @@ enum class Glyph {
 [[nodiscard]] QColor accentColor(const QPalette& palette);
 
 /**
- * @brief The application icon: a play symbol beamed down by a satellite, under a magnifying
- *        glass.
+ * @brief The application icon: a play symbol circled by the orbit of a satellite.
  *
  * @return The icon, loaded from the `:/abrviz/app-icon.svg` resource.
  */
