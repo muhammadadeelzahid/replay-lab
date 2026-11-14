@@ -13,3 +13,12 @@ race:QFutureInterface<*>::reportResult
 race:QFutureInterface<*>::resultReference
 race:QFuture<*>::result
 
+
+# A shared_ptr reference count is atomic, but the control block is written with plain stores
+# when the object is created. When the shared_ptr then reaches a pool thread through Qt's queue
+# (whose locks TSan cannot see) and the pool thread copies it before any of our code runs, TSan
+# reports the increment against the creation. Only the increment itself is suppressed; every
+# other access to the object is still checked.
+race:__libcpp_atomic_refcount_increment
+race:std::__1::__shared_count::__add_shared
+race:std::__1::__shared_weak_count::__add_shared
