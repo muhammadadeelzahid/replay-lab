@@ -485,11 +485,12 @@ void GstSegmentSource::tick()
     const Span& span = spans_[spanAt(now)];
     const State running = span.stall ? State::Stalled : State::Playing;
     const bool changed = running != state();
+    // The state changes before the frame and the position are updated, so a listener never sees
+    // a frame from after a stall paired with the Stalled state (or the reverse) when a tick is
+    // late. The position at a stall's start or end is reported at once.
+    setState(running);
     if (!awaitingSeekFrame_)
         presentUpTo(mediaFor(now));
-    if (changed)
-        setPosition(now);  // the position at a stall's start or end is reported at once
-    setState(running);
     if (changed || positionClock_.elapsed() >= kPositionIntervalMs) {
         positionClock_.start();
         setPosition(now);
