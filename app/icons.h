@@ -34,7 +34,7 @@ enum class Glyph {
 /// themes), sharp at every size Qt asks for. `selected` (if valid) is used for selected items.
 [[nodiscard]] QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected = QColor());
 
-/// The application icon (a display showing a bitrate ladder).
+/// The application icon (a play symbol under a magnifying glass).
 [[nodiscard]] QIcon appIcon();
 
 } // namespace abrviz
