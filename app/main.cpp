@@ -83,6 +83,9 @@ int main(int argc, char* argv[])
         if (parts.size() == 2)
             window.resize(parts[0].toInt(), parts[1].toInt());
     }
+    // A screenshot run lays the window out and paints it without putting it on the screen.
+    if (parser.isSet(screenshotOption))
+        window.setAttribute(Qt::WA_DontShowOnScreen);
     window.show();
 
     const QStringList paths = parser.positionalArguments();

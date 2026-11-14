@@ -118,7 +118,8 @@ LibraryView::LibraryView(QWidget* parent)
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->verticalHeader()->hide();
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    table_->horizontalHeader()->setStretchLastSection(true);
+    table_->horizontalHeader()->setSectionResizeMode(LibraryModel::Video, QHeaderView::Stretch);
+    table_->setTextElideMode(Qt::ElideRight);
     table_->setAlternatingRowColors(true);
 
     header_->setText(tr("Open a folder of bundles (File, Open Folder)."));

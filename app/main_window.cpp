@@ -3,6 +3,7 @@
 #include "charts_panel.h"
 #include "library_view.h"
 #include "log_console.h"
+#include "replay_player.h"
 #include "segment_timeline.h"
 #include "session.h"
 #include "summary_panel.h"
@@ -11,6 +12,7 @@
 #include "abrviz/core/load/bundle_loader.h"
 #include "abrviz/core/load/bundle_reader.h"
 #include "abrviz/core/logs/log_index.h"
+#include "abrviz/core/render/render_queue.h"
 #include "abrviz/core/util/future_guard.h"
 #include "abrviz/core/version.h"
 #include "abrviz/media/engine_support.h"
@@ -25,6 +27,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressBar>
+#include <QProcessEnvironment>
 #include <QStatusBar>
 
 #include <tuple>
@@ -32,6 +35,10 @@
 namespace abrviz {
 
 struct MainWindow::Impl {
+    // Renders the experienced video for the pre-rendered engine. Destroyed with Impl, after
+    // shutdown() has destroyed the engine that uses it and before the child widgets.
+    std::unique_ptr<RenderQueue> renderQueue;
+
     // Widgets and watchers are owned by the window through Qt's parent-child tree.
     Session* session = nullptr;
     LibraryView* library = nullptr;
@@ -39,7 +46,9 @@ struct MainWindow::Impl {
     SegmentTimeline* timeline = nullptr;
     ChartsPanel* charts = nullptr;
     LogConsole* logs = nullptr;
-    QLabel* placeholder = nullptr;
+    ReplayPlayer* player = nullptr;
+    QAction* playAction = nullptr;
+    QAction* renderAction = nullptr;
     QLabel* versionLabel = nullptr;
     QProgressBar* progress = nullptr;
     QFutureWatcher<QList<BundleSummaryPtr>>* scanWatcher = nullptr;
@@ -69,10 +78,16 @@ MainWindow::MainWindow(QWidget* parent)
     auto session = std::make_unique<Session>();
     d_->session = session.get();
 
-    d_->placeholder = new QLabel(tr("Open a folder of bundles to begin."), this);
-    d_->placeholder->setAlignment(Qt::AlignCenter);
-    d_->placeholder->setWordWrap(true);
-    setCentralWidget(d_->placeholder);
+    // ABRVIZ_RENDER_CACHE and ABRVIZ_FFMPEG override where rendered videos are kept and which
+    // ffmpeg renders them (the tests use both).
+    const auto environment = QProcessEnvironment::systemEnvironment();
+    RenderQueue::Options renderOptions;
+    renderOptions.cacheDirectory = environment.value(QStringLiteral("ABRVIZ_RENDER_CACHE"));
+    renderOptions.ffmpeg = environment.value(QStringLiteral("ABRVIZ_FFMPEG"), QStringLiteral("ffmpeg"));
+    d_->renderQueue = std::make_unique<RenderQueue>(renderOptions);
+
+    d_->player = new ReplayPlayer(d_->session, d_->renderQueue.get(), this);
+    setCentralWidget(d_->player);
 
     createDocks();
     createMenus();
@@ -109,10 +124,12 @@ MainWindow::MainWindow(QWidget* parent)
         const auto& run = d_->session->run();
         setWindowTitle(run ? QStringLiteral("%1 - abr-viz").arg(run->info.runId)
                            : QStringLiteral("abr-viz"));
-        d_->placeholder->setText(run ? tr("%1\n\nThe replay player is added in a later step.")
-                                           .arg(run->info.runId)
-                                     : tr("Open a folder of bundles to begin."));
+        updateActions();
     });
+    connect(d_->player, &ReplayPlayer::stateChanged, this, &MainWindow::updateActions);
+    connect(d_->player, &ReplayPlayer::engineChanged, this, &MainWindow::updateActions);
+    d_->player->setEngine(ReplaySourceFactory::defaultEngine());
+    updateActions();
 }
 
 MainWindow::~MainWindow()
@@ -133,12 +150,16 @@ void MainWindow::shutdown()
     d_->scan.reset();
     d_->load.reset();
     d_->logIndex.reset();
+    // The engine may run a job on the render queue, which `d_` destroys next.
+    d_->player->releaseEngine();
 }
 
 Session* MainWindow::session() const { return d_->session; }
 LibraryView* MainWindow::library() const { return d_->library; }
 SegmentTimeline* MainWindow::timeline() const { return d_->timeline; }
 ChartsPanel* MainWindow::charts() const { return d_->charts; }
+ReplayPlayer* MainWindow::player() const { return d_->player; }
+RenderQueue* MainWindow::renderQueue() const { return d_->renderQueue.get(); }
 LogConsole* MainWindow::logs() const { return d_->logs; }
 SummaryPanel* MainWindow::summary() const { return d_->summary; }
 
@@ -173,7 +194,7 @@ void MainWindow::createDocks()
     splitDockWidget(timeline, logs, Qt::Vertical);
     auto* charts = addDock(tr("Charts"), QStringLiteral("chartsDock"), d_->charts,
                            Qt::RightDockWidgetArea);
-    resizeDocks({library, charts}, {520, 620}, Qt::Horizontal);
+    resizeDocks({library, charts}, {440, 520}, Qt::Horizontal);
     resizeDocks({logs}, {220}, Qt::Vertical);
 }
 
@@ -190,6 +211,14 @@ void MainWindow::createMenus()
     auto* quitAction = fileMenu->addAction(tr("&Quit"));
     quitAction->setShortcut(QKeySequence::Quit);
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
+
+    auto* playbackMenu = menuBar()->addMenu(tr("&Playback"));
+    d_->playAction = playbackMenu->addAction(tr("&Play"));
+    d_->playAction->setShortcut(Qt::Key_Space);
+    connect(d_->playAction, &QAction::triggered, d_->player, &ReplayPlayer::togglePlay);
+    d_->renderAction = playbackMenu->addAction(tr("&Render Video"));
+    d_->renderAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    connect(d_->renderAction, &QAction::triggered, d_->player, &ReplayPlayer::prepare);
 
     auto* viewMenu = menuBar()->addMenu(tr("&View"));
     for (auto* dock : findChildren<QDockWidget*>())
@@ -307,6 +336,18 @@ void MainWindow::logIndexFinished()
     // The session ignores an index for a run that is no longer open.
     d_->session->setLogIndex(future.result(), run.get());
     emit logIndexReady();
+}
+
+void MainWindow::updateActions()
+{
+    const ReplaySource* engine = d_->player->engine();
+    const bool run = d_->session->run() != nullptr;
+    const bool ready = engine && engine->isReady() && run;
+    d_->playAction->setEnabled(ready);
+    d_->playAction->setText(engine && engine->state() == ReplaySource::State::Playing ? tr("&Pause")
+                                                                                      : tr("&Play"));
+    d_->renderAction->setEnabled(engine && run && !engine->isReady()
+                                 && engine->state() != ReplaySource::State::Preparing);
 }
 
 void MainWindow::updateStatus()

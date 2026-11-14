@@ -2,14 +2,16 @@
 # Builds one Qt Test executable and registers it with CTest. GUI tests run offscreen.
 function(abrviz_add_test name)
     cmake_parse_arguments(ARG "" "" "SOURCES;LIBS" ${ARGN})
-    qt_add_executable(${name} ${ARG_SOURCES} test_paths.h)
+    qt_add_executable(${name} ${ARG_SOURCES} test_paths.h synthetic_run.h)
     target_link_libraries(${name} PRIVATE Qt6::Test ${ARG_LIBS})
     target_compile_definitions(${name} PRIVATE
         ABRVIZ_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
         ABRVIZ_BUNDLES_DIR="${PROJECT_SOURCE_DIR}/viewer_bundles")
     abrviz_set_warnings(${name})
     add_test(NAME ${name} COMMAND ${name})
-    set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    # Rendered videos go to the build folder, never to the user's cache.
+    set_tests_properties(${name} PROPERTIES TIMEOUT 300 ENVIRONMENT
+        "QT_QPA_PLATFORM=offscreen;ABRVIZ_RENDER_CACHE=${CMAKE_CURRENT_BINARY_DIR}/render-cache")
 endfunction()
 
 abrviz_add_test(tst_core_version
@@ -59,3 +61,29 @@ abrviz_add_test(tst_charts_panel
 abrviz_add_test(tst_log_console
     SOURCES tst_log_console.cpp
     LIBS abrviz_gui)
+
+abrviz_add_test(tst_replay_source
+    SOURCES tst_replay_source.cpp
+    LIBS abrviz_media)
+if(APPLE)
+    # Qt's AVFoundation backend delivers media through the Cocoa run loop, which the offscreen
+    # platform does not run.
+    set_tests_properties(tst_replay_source PROPERTIES ENVIRONMENT
+        "QT_QPA_PLATFORM=cocoa;ABRVIZ_RENDER_CACHE=${CMAKE_CURRENT_BINARY_DIR}/render-cache")
+endif()
+
+abrviz_add_test(tst_replay_player
+    SOURCES tst_replay_player.cpp
+    LIBS abrviz_gui)
+if(APPLE)
+    set_tests_properties(tst_replay_player PROPERTIES ENVIRONMENT
+        "QT_QPA_PLATFORM=cocoa;ABRVIZ_RENDER_CACHE=${CMAKE_CURRENT_BINARY_DIR}/render-cache")
+endif()
+
+if(APPLE AND CMAKE_CXX_FLAGS MATCHES "sanitize=thread")
+    # Under ThreadSanitizer on macOS the TSan runtime can deadlock inside itself when CoreMedia
+    # threads exit (pthread_exit -> free -> SlotLock while AppKit holds the ObjC weak table
+    # lock). The tests pass under the debug and ASan builds; the GStreamer engine tests cover
+    # engine threading under TSan.
+    set_tests_properties(tst_replay_source tst_replay_player PROPERTIES DISABLED TRUE)
+endif()

@@ -39,6 +39,14 @@ replay engines (GStreamer and pre-rendered). Comparing runs side by side is not 
   releasing on failure, `static_assert`s on the copy and move rules.
 - GStreamer tests: pipeline with `fakesink`, segment order and rungs, stalls, seeking.
 - GUI tests run offscreen: opening a bundle fills the panels; moving the cursor updates them.
+  The tests that play video (`tst_replay_source`, `tst_replay_player`) use the Cocoa platform
+  on macOS, because Qt's AVFoundation backend delivers media through the Cocoa run loop, which
+  the offscreen platform does not run. Their window is marked `Qt::WA_DontShowOnScreen`, so
+  nothing appears on the desktop. They are disabled in the TSan build on macOS: the TSan
+  runtime can deadlock inside itself when CoreMedia threads exit. Every test has a 300 s
+  timeout.
+- Tests keep rendered videos in the build folder (`ABRVIZ_RENDER_CACHE`); stand-in `ffmpeg`
+  scripts (`ABRVIZ_FFMPEG`, or `RenderQueue::Options`) test failures and cancellation.
 
 
 ## Commands

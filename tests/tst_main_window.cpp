@@ -74,12 +74,15 @@ private slots:
     {
         MainWindow window;
         const auto menus = window.menuBar()->actions();
-        QCOMPARE(menus.size(), 3);
+        QCOMPARE(menus.size(), 4);
         QCOMPARE(menus[0]->text(), QStringLiteral("&File"));
         QCOMPARE(menuTexts(menus[0]->menu()),
                  (QStringList{QStringLiteral("Open &Folder..."), QStringLiteral("Open &Bundle..."),
                               QStringLiteral("&Quit")}));
-        QCOMPARE(menus[1]->menu()->actions().size(), 5);  // one per dock
+        QCOMPARE(menus[1]->text(), QStringLiteral("&Playback"));
+        QCOMPARE(menuTexts(menus[1]->menu()),
+                 (QStringList{QStringLiteral("&Play"), QStringLiteral("&Render Video")}));
+        QCOMPARE(menus[2]->menu()->actions().size(), 5);  // one per dock
     }
 
     void timeCursorClampsAndSkipsNoOps()

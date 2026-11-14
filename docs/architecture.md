@@ -217,9 +217,11 @@ with `static_assert`.
 - `ChartsPanel`: buffer (33 ms), throughput and estimate, bitrate, RTT and loss, decision
   delay; one x-axis and a cursor line.
 - `LogConsole`: table over `LogIndex` with text, UE and level filters; follows the cursor.
-- `ReplayPlayer`: `QVideoWidget`, an overlay (segment, rung, bitrate, resolution, buffer,
-  engine) and the replay engine. Its position and the cursor are kept in sync through
-  `PlaybackClock`.
+- `ReplayPlayer`: a `QGraphicsVideoItem` in a scene, an overlay drawn on top of it (segment,
+  rung, bitrate, resolution, buffer, state, engine) and the replay engine. Moving the cursor
+  elsewhere seeks the engine; while the engine plays, its position moves the cursor. Both go
+  through `PlaybackClock`. (A `QVideoWidget` renders into a native child window, which other
+  widgets cannot draw over, so the overlay could not be shown on top of it.)
 - `ReportView`: QoE numbers, compared with `summary.json`.
 
 
@@ -259,8 +261,8 @@ signals:
 };
 ```
 
-Both engines write into the `QVideoSink` of the same `QVideoWidget`, so the overlay and the
-cursor synchronisation are shared. Switching engines destroys the old one before creating the
+Both engines write into the `QVideoSink` of the same `QGraphicsVideoItem`, so the overlay and
+the cursor synchronisation are shared. Switching engines destroys the old one before creating the
 new one.
 
 ### GStreamer engine (`GstSegmentSource`)
@@ -311,6 +313,15 @@ played segment is transcoded to 1080p at the video's frame rate, the segment bef
 is extended with its last frame for the stall duration (`tpad`), a cut-off segment is trimmed,
 and the parts are joined with the concat demuxer. Qt Multimedia uses AVFoundation on macOS and
 its FFmpeg backend on Linux.
+
+The render is not started by opening a run: it uses every core for several seconds (12 s for
+Big Buck Bunny at 36 Mbps on 10 cores), so it is started from Playback, Render Video. Finished
+files stay in the cache (`QStandardPaths::CacheLocation`/`renders`, keyed by the run id and a
+hash of the render plan) and are used at once the next time.
+
+AVFoundation shows no picture for a seek while paused. After such a seek the engine plays until
+the first frame arrives (at most 500 ms) and pauses again, keeping its own state `Paused`, so
+the cursor does not follow these internal plays.
 
 
 ## Errors

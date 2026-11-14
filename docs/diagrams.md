@@ -160,7 +160,7 @@ classDiagram
     -condition_variable_any wake
     -deque~RenderJob~ jobs
     -jthread worker
-    +enqueue(RenderRequest request) QFuture~QString~
+    +enqueue(RenderRequest request) QFuture~RenderResult~
     -workerLoop(stop_token stop)
     +dtor() stop and join the worker first
   }
@@ -217,7 +217,7 @@ classDiagram
   class PrerenderedSource {
     -QMediaPlayer* player
     -RenderQueue* queue
-    -FutureGuard~QString~ render
+    -FutureGuard~RenderResult~ render
   }
   class GstSegmentSource {
     -shared_ptr~RunData~ run
@@ -236,7 +236,7 @@ classDiagram
   }
   class ReplaySourceFactory {
     +available()$ QList~Engine~
-    +create(Engine engine, RenderQueue* queue, QObject* parent)$ unique_ptr~ReplaySource~
+    +create(Engine engine, RenderQueue* queue)$ unique_ptr~ReplaySource~
   }
   class GstRuntime {
     +ensureInitialized()$
@@ -310,7 +310,7 @@ classDiagram
   class ChartsPanel
   class LogConsole
   class ReplayPlayer {
-    -QVideoWidget* video
+    -QGraphicsVideoItem* video
     -unique_ptr~ReplaySource~ engine
     +setEngine(Engine engine)
     +releaseEngine()

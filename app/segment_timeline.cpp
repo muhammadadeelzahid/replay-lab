@@ -281,7 +281,9 @@ void SegmentTimeline::paintEvent(QPaintEvent* /*event*/)
     // Lane labels and backgrounds.
     for (const Lane lane : kLanes) {
         const QRectF r = laneRect(lane);
-        painter.fillRect(r, palette().alternateBase());
+        QColor tint = text;
+        tint.setAlphaF(0.06F);
+        painter.fillRect(r, tint);
         painter.setPen(text);
         painter.drawText(QRectF(4, r.top(), kLabelWidth - 8, r.height()),
                          Qt::AlignVCenter | Qt::AlignLeft, laneName(lane));

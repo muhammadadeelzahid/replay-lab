@@ -9,16 +9,19 @@ namespace abrviz {
 class ChartsPanel;
 class LibraryView;
 class LogConsole;
+class RenderQueue;
+class ReplayPlayer;
 class Session;
 class SegmentTimeline;
 class SummaryPanel;
 
-/// The application window: docks for the library, the run summary, the timeline, the charts and
-/// the log, and the loading of folders and bundles in the background.
+/// The application window: the replay player, docks for the library, the run summary, the
+/// timeline, the charts and the log, and the loading of folders and bundles in the background.
 ///
 /// Shutdown order: the destructor calls `shutdown()` first, which cancels and waits for the
-/// pending scan, load and log indexing. Only then are the private state and the child widgets
-/// destroyed, so no task finishes into a half-destroyed window.
+/// pending scan, load and log indexing, and then destroys the replay engine. Only then is the
+/// private state destroyed (with the render queue the engine used), and after it the child
+/// widgets, so no task finishes into a half-destroyed window.
 class MainWindow final : public QMainWindow {
     Q_OBJECT
 
@@ -48,6 +51,8 @@ public:
     [[nodiscard]] SegmentTimeline* timeline() const;
     [[nodiscard]] ChartsPanel* charts() const;
     [[nodiscard]] LogConsole* logs() const;
+    [[nodiscard]] ReplayPlayer* player() const;
+    [[nodiscard]] RenderQueue* renderQueue() const;
     [[nodiscard]] SummaryPanel* summary() const;
     [[nodiscard]] bool isBusy() const;
 
@@ -69,6 +74,7 @@ private:
     void startLogIndex();
     void logIndexFinished();
     void updateStatus();
+    void updateActions();
 
     struct Impl;
     std::unique_ptr<Impl> d_;

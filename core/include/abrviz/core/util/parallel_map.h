@@ -20,7 +20,8 @@ namespace abrviz {
 ///
 /// Each task writes only its own output slot; an atomic countdown (acq_rel) lets the last task
 /// to finish see every slot and publish the list, so no thread waits for another. This uses
-/// only standard synchronisation, which ThreadSanitizer can check.
+/// only standard synchronisation, which ThreadSanitizer can check. Tasks read the inputs
+/// through `at()`: the non-const `operator[]` would detach the shared list in several threads.
 template <typename Input, typename Fn>
     requires std::invocable<Fn&, const Input&>
 [[nodiscard]] auto parallelMap(QList<Input> inputs, Fn fn, QThreadPool* pool = nullptr)
@@ -62,7 +63,7 @@ template <typename Input, typename Fn>
             [[maybe_unused]] const bool ready = state->ready.load(std::memory_order_acquire);
             if (!state->promise.isCanceled()) {
                 state->outputs[static_cast<std::size_t>(i)] =
-                    (*fnShared)(state->inputs[i]);
+                    (*fnShared)(state->inputs.at(i));  // const access: never detaches
                 const std::scoped_lock lock(state->progressMutex);
                 state->promise.setProgressValue(++state->progress);
             }

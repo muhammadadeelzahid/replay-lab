@@ -1,6 +1,11 @@
 add_library(abrviz_media STATIC
     include/abrviz/media/engine_support.h
-    src/engine_support.cpp)
+    include/abrviz/media/replay_source.h
+    include/abrviz/media/prerendered_source.h
+    include/abrviz/media/replay_source_factory.h
+    src/engine_support.cpp
+    src/prerendered_source.cpp
+    src/replay_source_factory.cpp)
 
 target_include_directories(abrviz_media PUBLIC include)
 target_link_libraries(abrviz_media PUBLIC abrviz_core Qt6::Multimedia)

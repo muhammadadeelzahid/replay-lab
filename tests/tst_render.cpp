@@ -1,3 +1,4 @@
+#include "synthetic_run.h"
 #include "test_paths.h"
 
 #include "abrviz/core/io/mp4_duration.h"
@@ -75,32 +76,6 @@ QString fakeFfmpeg(const QTemporaryDir& dir, const QString& name, double sleepSe
     return path;
 }
 
-/// A run of three 2.5 s segments from tests/data/media, a 0.5 s stall after the second, and
-/// playback cut off half way through the third.
-std::shared_ptr<const RunData> syntheticRun()
-{
-    auto run = std::make_shared<RunData>();
-    run->info.runId = QStringLiteral("synthetic");
-    run->info.playerSegmentDuration = 3.3;
-    run->video.frameRate = 30.0;
-    run->video.segmentCount = 3;
-    run->video.ladder = {{0, 1'000'000, 64, 36}};
-    const QString media = test::dataPath(QStringLiteral("media/two_and_a_half_seconds.mp4"));
-    for (int i = 0; i < 3; ++i) {
-        Segment segment;
-        segment.index = i;
-        segment.mediaPath = media;
-        segment.mediaDuration = 2.5;
-        run->segments.push_back(segment);
-    }
-    run->playback = {{0, 1.0, 4.267, 100, 1'000'000},
-                     {1, 4.3, 7.567, 100, 1'000'000},
-                     {2, 8.1, 9.733, 50, 1'000'000}};
-    run->stalls = {{7.6, 8.1, false}};
-    run->playbackStart = 1.0;
-    run->playbackEnd = 9.766;
-    return run;
-}
 
 } // namespace
 
@@ -334,7 +309,7 @@ private slots:
         const QString ffmpeg = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
         if (ffmpeg.isEmpty())
             QSKIP("ffmpeg not found");
-        const auto run = syntheticRun();
+        const auto run = test::syntheticRun(0.5);
         const PlaybackClock clock(*run);
         QVERIFY(std::abs(clock.replayDuration() - (2.5 + 2.5 + 0.5 + 1.25)) < 1e-9);
 
