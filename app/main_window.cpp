@@ -1,44 +1,275 @@
 #include "main_window.h"
 
+#include "library_view.h"
+#include "segment_timeline.h"
+#include "session.h"
+#include "summary_panel.h"
+
+#include "abrviz/core/load/bundle_library.h"
+#include "abrviz/core/load/bundle_loader.h"
+#include "abrviz/core/util/future_guard.h"
 #include "abrviz/core/version.h"
 #include "abrviz/media/engine_support.h"
 
 #include <QApplication>
+#include <QDir>
+#include <QDockWidget>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QFutureWatcher>
 #include <QLabel>
 #include <QMenuBar>
+#include <QMessageBox>
+#include <QProgressBar>
 #include <QStatusBar>
+
+#include <tuple>
 
 namespace abrviz {
 
+struct MainWindow::Impl {
+    // Widgets and watchers are owned by the window through Qt's parent-child tree.
+    Session* session = nullptr;
+    LibraryView* library = nullptr;
+    SummaryPanel* summary = nullptr;
+    SegmentTimeline* timeline = nullptr;
+    QLabel* placeholder = nullptr;
+    QLabel* versionLabel = nullptr;
+    QProgressBar* progress = nullptr;
+    QFutureWatcher<QList<BundleSummaryPtr>>* scanWatcher = nullptr;
+    QFutureWatcher<LoadResult>* loadWatcher = nullptr;
+
+    // Pending tasks. The guards cancel and wait when replaced or destroyed.
+    FutureGuard<QList<BundleSummaryPtr>> scan;
+    FutureGuard<LoadResult> load;
+    QString scanningFolder;
+    QString loadingBundle;
+    bool shutDown = false;
+};
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
+    , d_(std::make_unique<Impl>())
 {
     setWindowTitle(QStringLiteral("abr-viz"));
-    resize(1280, 800);
+    resize(1400, 900);
 
-    // Owned by the window through Qt's parent-child tree.
-    auto* placeholder = new QLabel(tr("Open a bundle folder to begin."), this);
-    placeholder->setAlignment(Qt::AlignCenter);
-    setCentralWidget(placeholder);
+    // The session has no parent while the panels are created and is made a child of the window
+    // afterwards. Qt deletes children in the order they were added, so the session, which the
+    // panels point to, is deleted after them.
+    auto session = std::make_unique<Session>();
+    d_->session = session.get();
 
+    d_->placeholder = new QLabel(tr("Open a folder of bundles to begin."), this);
+    d_->placeholder->setAlignment(Qt::AlignCenter);
+    d_->placeholder->setWordWrap(true);
+    setCentralWidget(d_->placeholder);
+
+    createDocks();
     createMenus();
+    session.release()->setParent(this);
 
+    d_->versionLabel = new QLabel(this);
     const auto engines = media::engineSupport();
-    const QString engineText = engines.gstreamer
-        ? engines.gstreamerVersion
-        : tr("GStreamer engine not built");
-    statusBar()->showMessage(
-        tr("abr-viz %1 · %2").arg(versionString(), engineText));
+    const QString engineText = engines.gstreamer ? engines.gstreamerVersion
+                                                 : tr("GStreamer engine not built");
+    d_->versionLabel->setText(tr("abr-viz %1 · %2").arg(versionString(), engineText));
+    statusBar()->addPermanentWidget(d_->versionLabel);
+
+    d_->progress = new QProgressBar(this);
+    d_->progress->setMaximumWidth(220);
+    d_->progress->setTextVisible(false);
+    d_->progress->hide();
+    statusBar()->addPermanentWidget(d_->progress);
+
+    d_->scanWatcher = new QFutureWatcher<QList<BundleSummaryPtr>>(this);
+    connect(d_->scanWatcher, &QFutureWatcherBase::finished, this, &MainWindow::scanFinished);
+
+    d_->loadWatcher = new QFutureWatcher<LoadResult>(this);
+    connect(d_->loadWatcher, &QFutureWatcherBase::finished, this, &MainWindow::loadFinished);
+    connect(d_->loadWatcher, &QFutureWatcherBase::progressRangeChanged, d_->progress,
+            &QProgressBar::setRange);
+    connect(d_->loadWatcher, &QFutureWatcherBase::progressValueChanged, d_->progress,
+            &QProgressBar::setValue);
+
+    connect(d_->library, &LibraryView::openRequested, this, &MainWindow::openBundle);
+    connect(d_->session, &Session::runChanged, this, [this] {
+        const auto& run = d_->session->run();
+        setWindowTitle(run ? QStringLiteral("%1 - abr-viz").arg(run->info.runId)
+                           : QStringLiteral("abr-viz"));
+        d_->placeholder->setText(run ? tr("%1\n\nThe replay player is added in a later step.")
+                                           .arg(run->info.runId)
+                                     : tr("Open a folder of bundles to begin."));
+    });
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    // Tasks first; then `d_` and, after it, the child widgets.
+    shutdown();
+}
+
+void MainWindow::shutdown()
+{
+    if (d_->shutDown)
+        return;
+    d_->shutDown = true;
+    // No result may arrive once shutdown has started.
+    d_->scanWatcher->disconnect(this);
+    d_->loadWatcher->disconnect(this);
+    d_->scan.reset();
+    d_->load.reset();
+}
+
+Session* MainWindow::session() const { return d_->session; }
+LibraryView* MainWindow::library() const { return d_->library; }
+SegmentTimeline* MainWindow::timeline() const { return d_->timeline; }
+SummaryPanel* MainWindow::summary() const { return d_->summary; }
+
+bool MainWindow::isBusy() const
+{
+    return d_->scan.isRunning() || d_->load.isRunning();
+}
+
+void MainWindow::createDocks()
+{
+    auto addDock = [this](const QString& title, const QString& name, QWidget* widget,
+                          Qt::DockWidgetArea area) {
+        auto* dock = new QDockWidget(title, this);
+        dock->setObjectName(name);
+        dock->setWidget(widget);
+        addDockWidget(area, dock);
+        return dock;
+    };
+
+    d_->library = new LibraryView(this);
+    d_->summary = new SummaryPanel(d_->session, this);
+    d_->timeline = new SegmentTimeline(d_->session, this);
+
+    auto* library = addDock(tr("Library"), QStringLiteral("libraryDock"), d_->library,
+                            Qt::LeftDockWidgetArea);
+    addDock(tr("Run"), QStringLiteral("summaryDock"), d_->summary, Qt::LeftDockWidgetArea);
+    addDock(tr("Timeline"), QStringLiteral("timelineDock"), d_->timeline,
+            Qt::BottomDockWidgetArea);
+    resizeDocks({library}, {520}, Qt::Horizontal);
+}
 
 void MainWindow::createMenus()
 {
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
+    auto* openFolderAction = fileMenu->addAction(tr("Open &Folder..."));
+    openFolderAction->setShortcut(QKeySequence::Open);
+    connect(openFolderAction, &QAction::triggered, this, &MainWindow::chooseFolder);
+    auto* openBundleAction = fileMenu->addAction(tr("Open &Bundle..."));
+    openBundleAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
+    connect(openBundleAction, &QAction::triggered, this, &MainWindow::chooseBundle);
+    fileMenu->addSeparator();
     auto* quitAction = fileMenu->addAction(tr("&Quit"));
     quitAction->setShortcut(QKeySequence::Quit);
-    connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
+    connect(quitAction, &QAction::triggered, this, &QWidget::close);
+
+    auto* viewMenu = menuBar()->addMenu(tr("&View"));
+    for (auto* dock : findChildren<QDockWidget*>())
+        viewMenu->addAction(dock->toggleViewAction());
+
+    auto* helpMenu = menuBar()->addMenu(tr("&Help"));
+    auto* aboutAction = helpMenu->addAction(tr("&About abr-viz"));
+    connect(aboutAction, &QAction::triggered, this, [this] {
+        QMessageBox::about(this, tr("About abr-viz"),
+                           tr("abr-viz %1\nViewer for ns-3 adaptive bitrate run bundles.")
+                               .arg(versionString()));
+    });
+}
+
+void MainWindow::chooseFolder()
+{
+    const QString folder = QFileDialog::getExistingDirectory(this, tr("Open Folder of Bundles"));
+    if (!folder.isEmpty())
+        openFolder(folder);
+}
+
+void MainWindow::chooseBundle()
+{
+    const QString bundle = QFileDialog::getExistingDirectory(this, tr("Open Bundle"));
+    if (!bundle.isEmpty())
+        openPath(bundle);
+}
+
+void MainWindow::openPath(const QString& path)
+{
+    openFolder(path);
+    if (QFileInfo::exists(QDir(path).filePath(QStringLiteral("run.json"))))
+        openBundle(path);
+}
+
+void MainWindow::openFolder(const QString& folder)
+{
+    if (d_->shutDown)
+        return;
+    d_->scanningFolder = QDir(folder).absolutePath();
+    d_->library->setScanning(d_->scanningFolder);
+    auto future = scanLibrary(d_->scanningFolder);
+    d_->scan.reset(future);
+    d_->scanWatcher->setFuture(future);
+    updateStatus();
+}
+
+void MainWindow::openBundle(const QString& directory)
+{
+    if (d_->shutDown)
+        return;
+    d_->loadingBundle = QDir(directory).absolutePath();
+    auto future = loadBundle(d_->loadingBundle);
+    d_->load.reset(future);
+    d_->progress->setRange(0, 0);
+    d_->progress->show();
+    d_->loadWatcher->setFuture(future);
+    updateStatus();
+}
+
+void MainWindow::scanFinished()
+{
+    const auto future = d_->scanWatcher->future();
+    // Finished: stop guarding it. `reset()` would cancel it, which discards the result.
+    std::ignore = d_->scan.release();
+    if (future.isCanceled() || future.resultCount() == 0) {
+        updateStatus();
+        return;
+    }
+    d_->library->setBundles(future.result(), d_->scanningFolder);
+    if (d_->session->run())
+        d_->library->setOpenBundle(d_->session->run()->info.bundleDirectory);
+    updateStatus();
+    emit folderScanned(d_->scanningFolder);
+}
+
+void MainWindow::loadFinished()
+{
+    const auto future = d_->loadWatcher->future();
+    std::ignore = d_->load.release();
+    d_->progress->hide();
+    if (future.isCanceled() || future.resultCount() == 0) {
+        updateStatus();
+        return;
+    }
+    LoadResult result = future.result();
+    const bool ok = result.run != nullptr;
+    d_->session->setRun(std::move(result.run), std::move(result.errors));
+    d_->library->setOpenBundle(d_->loadingBundle);
+    updateStatus();
+    if (!ok)
+        statusBar()->showMessage(tr("Could not open %1").arg(QDir(d_->loadingBundle).dirName()));
+    emit bundleOpened(d_->loadingBundle, ok);
+}
+
+void MainWindow::updateStatus()
+{
+    if (d_->load.isRunning())
+        statusBar()->showMessage(tr("Loading %1 ...").arg(QDir(d_->loadingBundle).dirName()));
+    else if (d_->scan.isRunning())
+        statusBar()->showMessage(tr("Reading %1 ...").arg(QDir(d_->scanningFolder).dirName()));
+    else
+        statusBar()->clearMessage();
 }
 
 } // namespace abrviz

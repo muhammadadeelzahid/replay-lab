@@ -14,7 +14,6 @@ namespace abrviz {
 
 namespace {
 
-constexpr int kFramesPerSegment = 100;
 constexpr double kStallTolerance = 0.01;  // seconds
 
 QString bundlePath(const QString& directory, const QString& relative)

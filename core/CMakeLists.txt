@@ -14,6 +14,8 @@ add_library(abrviz_core STATIC
     include/abrviz/core/load/bundle_reader.h
     include/abrviz/core/load/bundle_loader.h
     include/abrviz/core/util/future_guard.h
+    include/abrviz/core/util/parallel_map.h
+    include/abrviz/core/load/bundle_library.h
     include/abrviz/core/playback/playback_clock.h
     include/abrviz/core/metrics/qoe_metrics.h
     src/version.cpp
@@ -27,6 +29,7 @@ add_library(abrviz_core STATIC
     src/load/segment_shift.cpp
     src/load/bundle_reader.cpp
     src/load/bundle_loader.cpp
+    src/load/bundle_library.cpp
     src/playback/playback_clock.cpp
     src/metrics/qoe_metrics.cpp)
 

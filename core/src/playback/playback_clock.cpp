@@ -7,7 +7,6 @@ namespace abrviz {
 namespace {
 
 constexpr double kFrameDuration = 0.033;
-constexpr int kFramesPerSegment = 100;
 
 double start(const PlaybackClock::Piece& p, int axis)
 {

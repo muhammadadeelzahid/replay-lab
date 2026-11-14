@@ -8,8 +8,6 @@ namespace abrviz {
 
 namespace {
 
-constexpr int kFramesPerSegment = 100;
-
 template <typename T>
 std::span<const T> between(const std::vector<T>& items, double from, double to)
 {

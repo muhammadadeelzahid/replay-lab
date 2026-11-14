@@ -28,6 +28,10 @@ abrviz_add_test(tst_bundle_loader
     SOURCES tst_bundle_loader.cpp
     LIBS abrviz_core)
 
+abrviz_add_test(tst_bundle_library
+    SOURCES tst_bundle_library.cpp
+    LIBS abrviz_core)
+
 abrviz_add_test(tst_playback_metrics
     SOURCES tst_playback_metrics.cpp
     LIBS abrviz_core)

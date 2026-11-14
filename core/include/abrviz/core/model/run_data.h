@@ -9,6 +9,9 @@
 
 namespace abrviz {
 
+/// Frames in every segment of the simulated player (`FrameId` 0 to 99).
+inline constexpr int kFramesPerSegment = 100;
+
 /// One rung of the bitrate ladder.
 struct Rung {
     int index = 0;

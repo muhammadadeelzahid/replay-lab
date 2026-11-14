@@ -1,7 +1,19 @@
 # The GUI is a library so the tests can create the same widgets the executable uses.
 add_library(abrviz_gui STATIC
+    format.h
+    rung_colors.h
     main_window.h
-    main_window.cpp)
+    main_window.cpp
+    session.h
+    session.cpp
+    time_cursor.h
+    time_cursor.cpp
+    library_view.h
+    library_view.cpp
+    summary_panel.h
+    summary_panel.cpp
+    segment_timeline.h
+    segment_timeline.cpp)
 
 target_include_directories(abrviz_gui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(abrviz_gui PUBLIC
