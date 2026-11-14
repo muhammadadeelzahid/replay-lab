@@ -40,6 +40,7 @@ enum class Glyph {
     Relay,
     Server,
     Device,
+    Laptop,
 };
 
 /**
@@ -55,6 +56,16 @@ enum class Glyph {
  * @return The icon.
  */
 [[nodiscard]] QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected = QColor());
+
+/**
+ * @brief A node of the network path drawn in full colour: a server rack, a satellite, an IAB
+ *        relay mast or a laptop.
+ *
+ * @param glyph Glyph::Server, Glyph::Satellite, Glyph::Relay or Glyph::Laptop (Glyph::Device
+ *              gives the laptop too); other glyphs fall back to glyphIcon() in white.
+ * @return The icon; it renders sharply at any size.
+ */
+[[nodiscard]] QIcon nodeIcon(Glyph glyph);
 
 /**
  * @brief The accent colour for icons and highlights: Apple's system blue for the appearance.

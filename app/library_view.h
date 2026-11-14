@@ -16,8 +16,13 @@ class QPushButton;
 class QSortFilterProxyModel;
 class QStackedWidget;
 class QTableView;
+class QVBoxLayout;
 
 namespace abrviz {
+
+class FeaturedBanner;
+class RunCard;
+class ThumbnailCache;
 
 /**
  * @brief The rows of the library: one per bundle, sorted by video and link rate.
@@ -224,6 +229,13 @@ signals:
      */
     void recentFolderRequested(const QString& folder);
 
+    /**
+     * @brief More Info was clicked on the featured run: open it and show its report.
+     *
+     * @param directory The bundle's folder.
+     */
+    void infoRequested(const QString& directory);
+
 protected:
     /**
      * @brief Opens the selected run when Return or Enter is pressed in the table.
@@ -237,7 +249,34 @@ protected:
      */
     bool eventFilter(QObject* watched, QEvent* event) override;
 
+public:
+    /**
+     * @brief Makes stills of the runs' videos for the cards and the featured run.
+     *
+     * Without this the cards are plain.
+     *
+     * @param ffmpeg The `ffmpeg` program that takes the stills.
+     * @param folder Where to keep them; empty for the user's cache folder.
+     */
+    void setThumbnailSource(const QString& ffmpeg, const QString& folder);
+
+    /// @return The featured run's banner, for tests.
+    [[nodiscard]] FeaturedBanner* featuredBanner() const { return banner_; }
+
+    /// @return The run cards, in row order, for tests.
+    [[nodiscard]] const QList<RunCard*>& runCards() const { return cards_; }
+
+    /**
+     * @brief Shows a run in the banner above the rows and outlines its card.
+     *
+     * @param bundle The run; null to clear the banner.
+     */
+    void feature(const BundleSummaryPtr& bundle);
+
 private:
+    /// Rebuilds the rows of cards from bundles_ and picks the featured run.
+    void rebuildHome();
+
     /**
      * @brief Shows the details of the newly selected run.
      */
@@ -270,6 +309,12 @@ private:
     QLabel* details_;               ///< Rich-text details of the selected run.
     /** @brief Opens the selected run; enabled only for a run without load errors. */
     QPushButton* openButton_;
+    QWidget* home_;                 ///< The banner and the rows of cards, on a dark ground.
+    FeaturedBanner* banner_;        ///< The featured run.
+    QVBoxLayout* rows_;             ///< One row of cards per video.
+    QList<RunCard*> cards_;         ///< Every card, in row order.
+    QList<BundleSummaryPtr> bundles_;  ///< The runs listed.
+    ThumbnailCache* thumbnails_ = nullptr;  ///< Makes the stills; null until setThumbnailSource().
 };
 
 } // namespace abrviz

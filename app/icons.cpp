@@ -91,6 +91,8 @@ QString glyphBody(Glyph glyph)
             <path d="M11.5 7.3h5M11.5 16.7h5"/>)");
     case Glyph::Device:
         return QStringLiteral(R"(<rect x="7" y="2.6" width="10" height="18.8" rx="2.2"/><path d="M10.6 18.4h2.8"/>)");
+    case Glyph::Laptop:
+        return QStringLiteral(R"(<rect x="4.5" y="5" width="15" height="10.5" rx="1.6"/><path d="M2.2 18.6h19.6"/>)");
     case Glyph::Search:
         return QStringLiteral(R"(<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>)");
     case Glyph::Overlay:
@@ -197,11 +199,143 @@ private:
     QColor selected_;  ///< Colour for selected items; invalid means use color_.
 };
 
+/**
+ * @brief The full-colour drawing of a node of the network path, as SVG in a 48 x 48 view box.
+ *
+ * @param glyph Glyph::Server, Glyph::Satellite, Glyph::Relay, or Glyph::Laptop (also used for
+ *              Glyph::Device).
+ * @return The SVG document; empty for other glyphs.
+ */
+QString nodeSvg(Glyph glyph)
+{
+    switch (glyph) {
+    case Glyph::Server:
+        return QStringLiteral(R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs><linearGradient id="u" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#66779b"/><stop offset="1" stop-color="#2c3650"/></linearGradient></defs>
+  <rect x="8" y="5" width="32" height="11.5" rx="3" fill="url(#u)"/>
+  <rect x="8" y="18.5" width="32" height="11.5" rx="3" fill="url(#u)"/>
+  <rect x="8" y="32" width="32" height="11.5" rx="3" fill="url(#u)"/>
+  <circle cx="13.5" cy="10.75" r="2" fill="#30d158"/>
+  <circle cx="13.5" cy="24.25" r="2" fill="#30d158"/>
+  <circle cx="13.5" cy="37.75" r="2" fill="#0a84ff"/>
+  <rect x="20" y="9.75" width="15" height="2" rx="1" fill="#1a2133"/>
+  <rect x="20" y="23.25" width="15" height="2" rx="1" fill="#1a2133"/>
+  <rect x="20" y="36.75" width="15" height="2" rx="1" fill="#1a2133"/>
+  <path d="M11 6h26M11 19.5h26M11 33h26" stroke="#ffffff" stroke-opacity="0.25" stroke-width="1"/>
+</svg>)svg");
+    case Glyph::Satellite:
+        return QStringLiteral(R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#4fb0ff"/><stop offset="1" stop-color="#0a4fd6"/></linearGradient></defs>
+  <g transform="rotate(-35 24 24)">
+    <path d="M17 24h-2M31 24h2" stroke="#d1d5db" stroke-width="2"/>
+    <rect x="2" y="18.5" width="13.5" height="11" rx="1.6" fill="url(#p)"/>
+    <rect x="32.5" y="18.5" width="13.5" height="11" rx="1.6" fill="url(#p)"/>
+    <path d="M6.5 18.5v11M11 18.5v11M2 24h13.5M37 18.5v11M41.5 18.5v11M32.5 24h13.5"
+          stroke="#ffffff" stroke-opacity="0.4" stroke-width="0.9"/>
+    <rect x="17" y="15.5" width="14" height="17" rx="2.6" fill="#f2f2f7"/>
+    <rect x="17" y="21.5" width="14" height="5" fill="#ffc53d"/>
+    <path d="M24 32.5v4" stroke="#d1d5db" stroke-width="2"/>
+    <ellipse cx="24" cy="38" rx="5" ry="2" fill="#f2f2f7"/>
+  </g>
+</svg>)svg");
+    case Glyph::Relay:
+        return QStringLiteral(R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <path d="M16.5 44L24 15.5L31.5 44" fill="none" stroke="#9aa6bd" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M20.6 29h6.8M19.2 35h9.6M17.9 40.5h12.2M17.9 40.5l9.5-11.5M30.1 40.5l-9.5-11.5"
+        fill="none" stroke="#9aa6bd" stroke-width="1.4"/>
+  <rect x="21" y="10.5" width="6" height="8" rx="1.5" fill="#f2f2f7"/>
+  <circle cx="24" cy="7.5" r="2.2" fill="#ff453a"/>
+  <path d="M15.5 9.5a10 10 0 0 0 0 10M32.5 9.5a10 10 0 0 1 0 10" fill="none" stroke="#64d2ff"
+        stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M10.5 5.5a16 16 0 0 0 0 18M37.5 5.5a16 16 0 0 1 0 18" fill="none" stroke="#64d2ff"
+        stroke-opacity="0.55" stroke-width="2.6" stroke-linecap="round"/>
+  <rect x="13" y="43" width="22" height="2.6" rx="1.3" fill="#66779b"/>
+</svg>)svg");
+    case Glyph::Device:
+    case Glyph::Laptop:
+        return QStringLiteral(R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="s" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#5e5ce6"/></linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eceef2"/><stop offset="1" stop-color="#a9b0bc"/></linearGradient>
+  </defs>
+  <rect x="8" y="9" width="32" height="22.5" rx="2.6" fill="#2b2f3a"/>
+  <rect x="10.5" y="11.5" width="27" height="17.5" rx="1.2" fill="url(#s)"/>
+  <path d="M21.5 15.8L28.5 20.25L21.5 24.7Z" fill="#ffffff"/>
+  <path d="M3.5 33h41l-2.6 4.4c-0.4 0.7-1.1 1.1-1.9 1.1H8c-0.8 0-1.5-0.4-1.9-1.1Z" fill="url(#b)"/>
+  <rect x="20" y="33" width="8" height="1.6" rx="0.8" fill="#8d94a1"/>
+</svg>)svg");
+    default:
+        return {};
+    }
+}
+
+/**
+ * @brief An icon engine that renders a full-colour SVG at whatever size is asked for.
+ */
+class SvgEngine final : public QIconEngine {
+public:
+    /// @param svg The SVG document.
+    explicit SvgEngine(QString svg) : svg_(std::move(svg)) {}
+
+    /**
+     * @brief Renders the drawing into `rect`, at 40% opacity in QIcon::Disabled mode.
+     *
+     * @param painter The painter; its state is restored afterwards.
+     * @param rect The area to fill.
+     * @param mode The icon mode.
+     */
+    void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode, QIcon::State) override
+    {
+        QSvgRenderer renderer(svg_.toUtf8());
+        painter->save();
+        if (mode == QIcon::Disabled)
+            painter->setOpacity(painter->opacity() * 0.4);
+        renderer.render(painter, rect);
+        painter->restore();
+    }
+
+    /// @return The drawing in a pixmap of `size` at a device pixel ratio of 1.
+    QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override
+    {
+        return scaledPixmap(size, mode, state, 1.0);
+    }
+
+    /// @return The drawing in a pixmap of `size` for the device pixel ratio `scale`.
+    QPixmap scaledPixmap(const QSize& size, QIcon::Mode mode, QIcon::State state, qreal scale) override
+    {
+        QPixmap pixmap(size * scale);
+        pixmap.setDevicePixelRatio(scale);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        paint(&painter, QRect(QPoint(0, 0), size), mode, state);
+        return pixmap;
+    }
+
+    /// @return A copy of the engine; the caller owns it.
+    [[nodiscard]] QIconEngine* clone() const override { return new SvgEngine(svg_); }
+
+private:
+    QString svg_;  ///< The SVG document.
+};
+
 } // namespace
 
 QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected)
 {
     return QIcon(new GlyphEngine(glyph, color, selected));  // QIcon takes ownership of the engine
+}
+
+QIcon nodeIcon(Glyph glyph)
+{
+    const QString svg = nodeSvg(glyph);
+    if (svg.isEmpty())
+        return glyphIcon(glyph, Qt::white);
+    return QIcon(new SvgEngine(svg));  // QIcon takes ownership of the engine
 }
 
 QColor accentColor(const QPalette& palette)

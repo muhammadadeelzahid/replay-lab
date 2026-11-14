@@ -39,7 +39,11 @@ add_library(abrviz_gui STATIC
     network_path_view.h
     network_path_view.cpp
     welcome_scene.h
-    welcome_scene.cpp)
+    welcome_scene.cpp
+    thumbnail_cache.h
+    thumbnail_cache.cpp
+    home_widgets.h
+    home_widgets.cpp)
 
 qt_add_resources(abrviz_gui "abrviz_resources"
     PREFIX "/abrviz"

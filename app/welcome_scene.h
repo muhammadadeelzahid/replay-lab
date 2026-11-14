@@ -40,7 +40,7 @@ public:
     /**
      * @brief The smallest useful size.
      *
-     * @return 340 x 420 pixels.
+     * @return 260 x 420 pixels.
      */
     QSize minimumSizeHint() const override;
 

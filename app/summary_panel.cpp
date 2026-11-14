@@ -54,7 +54,7 @@ void SummaryPanel::refresh()
     html += row(tr("Feeder link"),
                 info.feederLinkRate ? format::bitrate(static_cast<double>(*info.feederLinkRate))
                                     : tr("uncongested"));
-    html += row(tr("UEs"), tr("%1 simulated, %2 in this bundle (node %3)")
+    html += row(tr("Users"), tr("%1 simulated, %2 in this bundle (node %3)")
                                .arg(info.simulatedUes)
                                .arg(info.numUes)
                                .arg(info.nodeId));

@@ -278,6 +278,8 @@ struct MainWindow::Impl {
     std::shared_ptr<const RunData> logIndexRun;  ///< The run the pending index is for.
     QString scanningFolder;  ///< Absolute path of the folder last scanned.
     QString loadingBundle;   ///< Absolute path of the bundle last loaded.
+    /** @brief The page to show once the bundle being loaded opens (More Info: the report). */
+    std::optional<Page> pageAfterOpen;
     bool shutDown = false;   ///< Set by shutdown(); no new tasks start after it.
 };
 
@@ -326,6 +328,16 @@ MainWindow::MainWindow(QWidget* parent)
     connect(d_->logWatcher, &QFutureWatcherBase::finished, this, &MainWindow::logIndexFinished);
 
     connect(d_->library, &LibraryView::openRequested, this, &MainWindow::openBundle);
+    connect(d_->library, &LibraryView::infoRequested, this, [this](const QString& directory) {
+        d_->pageAfterOpen = Page::Report;
+        openBundle(directory);
+    });
+    // Stills of the runs' videos for the library's cards, kept beside the rendered videos when
+    // ABRVIZ_RENDER_CACHE says where those go.
+    d_->library->setThumbnailSource(
+        renderOptions.ffmpeg,
+        renderOptions.cacheDirectory.isEmpty() ? QString()
+                                               : QDir(renderOptions.cacheDirectory).filePath(QStringLiteral("thumbnails")));
     connect(d_->library, &LibraryView::openFolderRequested, this, &MainWindow::chooseFolder);
     connect(d_->library, &LibraryView::openBundleRequested, this, &MainWindow::chooseBundle);
     connect(d_->library, &LibraryView::recentFolderRequested, this, &MainWindow::openFolder);
@@ -1047,6 +1059,7 @@ void MainWindow::loadFinished()
 {
     const auto future = d_->loadWatcher->future();
     std::ignore = d_->load.release();
+    const std::optional<Page> pageAfterOpen = std::exchange(d_->pageAfterOpen, std::nullopt);
     if (future.isCanceled() || future.resultCount() == 0) {
         updateStatus();
         return;
@@ -1057,7 +1070,9 @@ void MainWindow::loadFinished()
     d_->library->setOpenBundle(d_->loadingBundle);
     if (ok) {
         startLogIndex();
-        if (currentPage() == Page::Library)
+        if (pageAfterOpen)
+            showPage(*pageAfterOpen);
+        else if (currentPage() == Page::Library)
             showPage(Page::Replay);
     }
     updateStatus();

@@ -1,0 +1,490 @@
+#include "home_widgets.h"
+
+#include "branding.h"
+#include "format.h"
+#include "icons.h"
+
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPushButton>
+#include <QTimer>
+#include <QVBoxLayout>
+
+#include <array>
+
+namespace abrviz {
+
+namespace {
+
+const QColor kInk(0x0b, 0x0d, 0x14);  ///< The banner's dark background.
+
+/**
+ * @brief Draws an image so that it covers a rectangle, cropping what does not fit.
+ *
+ * @param painter The painter.
+ * @param target The rectangle to cover.
+ * @param image The image.
+ */
+void drawCover(QPainter& painter, const QRectF& target, const QImage& image)
+{
+    const double scale = std::max(target.width() / image.width(), target.height() / image.height());
+    const QSizeF size(image.width() * scale, image.height() * scale);
+    const QRectF source((size.width() - target.width()) / 2.0 / scale,
+                        (size.height() - target.height()) / 2.0 / scale,
+                        target.width() / scale, target.height() / scale);
+    painter.drawImage(target, image, source);
+}
+
+/**
+ * @brief The feeder link rate, e.g. "36 Mbps".
+ *
+ * @param bundle The run.
+ * @return The rate, or an empty string if the link was uncongested.
+ */
+QString feederRate(const BundleSummary& bundle)
+{
+    return bundle.linkRate ? format::bitrate(static_cast<double>(*bundle.linkRate)) : QString();
+}
+
+/**
+ * @brief A count with its noun, singular or plural.
+ *
+ * @param n The count.
+ * @param one The noun for one, e.g. "stall".
+ * @param many The noun for other counts, e.g. "stalls".
+ * @return For example "1 stall" or "59 segments".
+ */
+QString counted(int n, const QString& one, const QString& many)
+{
+    return QStringLiteral("%1 %2").arg(n).arg(n == 1 ? one : many);
+}
+
+/**
+ * @brief How playback went, in a few words.
+ *
+ * @param bundle The run.
+ * @return "1 stall", "cut off" or "no stalls".
+ */
+QString outcome(const BundleSummary& bundle)
+{
+    if (bundle.stalls > 0)
+        return counted(bundle.stalls, QObject::tr("stall"), QObject::tr("stalls"));
+    return bundle.cutOff ? QObject::tr("cut off") : QObject::tr("no stalls");
+}
+
+/**
+ * @brief Styles a label for the banner: white text at some opacity.
+ *
+ * @param label The label.
+ * @param scale The font size relative to the default.
+ * @param bold Whether the text is bold.
+ * @param alpha The text's opacity, 0 to 255.
+ */
+void bannerText(QLabel* label, double scale, bool bold, int alpha)
+{
+    QFont font = format::scaled(label->font(), scale);
+    font.setBold(bold);
+    label->setFont(font);
+    label->setStyleSheet(QStringLiteral("color: rgba(255, 255, 255, %1); background: transparent;").arg(alpha));
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------------------------
+
+PathPanel::PathPanel(QWidget* parent)
+    : QWidget(parent)
+    , animation_(new QTimer(this))
+{
+    setObjectName(QStringLiteral("pathPanel"));
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    animation_->setInterval(33);
+    connect(animation_, &QTimer::timeout, this, [this] {
+        phase_ += 0.6;
+        update();
+    });
+}
+
+void PathPanel::setDetails(const QString& feeder, const QString& satellite, const QString& backhaul)
+{
+    feeder_ = feeder;
+    satellite_ = satellite;
+    backhaul_ = backhaul;
+    update();
+}
+
+QSize PathPanel::sizeHint() const
+{
+    return {520, 124};
+}
+
+QStringList PathPanel::texts() const
+{
+    return {tr("How this run was streamed"), tr("Video server"), tr("LEO satellite gNB"), tr("IAB relay"),
+            tr("User"), feeder_.isEmpty() ? tr("Feeder link") : feeder_,
+            backhaul_.isEmpty() ? tr("Satellite backhaul") : backhaul_, tr("5G access")};
+}
+
+void PathPanel::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    animation_->start();
+}
+
+void PathPanel::hideEvent(QHideEvent* event)
+{
+    QWidget::hideEvent(event);
+    animation_->stop();
+}
+
+void PathPanel::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QRectF frame = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+    painter.setPen(QPen(QColor(255, 255, 255, 40), 1.0));
+    painter.setBrush(QColor(8, 12, 24, 165));
+    painter.drawRoundedRect(frame, 14, 14);
+
+    const QStringList text = texts();
+    QFont heading = format::scaled(font(), 0.75);
+    heading.setBold(true);
+    heading.setCapitalization(QFont::AllUppercase);
+    heading.setLetterSpacing(QFont::PercentageSpacing, 108);
+    painter.setFont(heading);
+    painter.setPen(QColor(255, 255, 255, 150));
+    painter.drawText(QRectF(16, 10, width() - 32, 16), Qt::AlignLeft | Qt::AlignVCenter, text[0]);
+
+    // Four nodes across; the satellite a little higher than the others.
+    const double y = height() * 0.55;
+    const double left = 48.0;
+    const double step = (width() - 2.0 * left) / 3.0;
+    const std::array<QPointF, 4> centre{QPointF(left, y + 4), QPointF(left + step, y - 8),
+                                        QPointF(left + 2 * step, y + 4), QPointF(left + 3 * step, y + 4)};
+    const std::array<Glyph, 4> glyphs{Glyph::Server, Glyph::Satellite, Glyph::Relay, Glyph::Laptop};
+    constexpr double radius = 17.0;
+
+    QFont small = format::scaled(font(), 0.8);
+    for (int i = 0; i < 3; ++i) {
+        const QPointF from = centre[static_cast<std::size_t>(i)] + QPointF(radius + 4, 0);
+        const QPointF to = centre[static_cast<std::size_t>(i + 1)] - QPointF(radius + 4, 0);
+        QPen pen(QColor(0x64, 0xd2, 0xff), 2.0, Qt::SolidLine, Qt::RoundCap);
+        pen.setDashPattern({3.0, 3.0});
+        pen.setDashOffset(-phase_);
+        painter.setPen(pen);
+        painter.drawLine(from, to);
+        painter.setFont(small);
+        painter.setPen(QColor(255, 255, 255, 190));
+        const QRectF label(QPointF(from.x(), std::min(from.y(), to.y()) - 22), QPointF(to.x(), std::min(from.y(), to.y()) - 6));
+        painter.drawText(label, Qt::AlignCenter, QFontMetricsF(small).elidedText(text[5 + i], Qt::ElideRight, label.width()));
+    }
+    QFont name = format::scaled(font(), 0.85);
+    name.setBold(true);
+    for (std::size_t i = 0; i < centre.size(); ++i) {
+        painter.setPen(QPen(QColor(255, 255, 255, 200), 1.4));
+        painter.setBrush(QColor(255, 255, 255, 18));
+        painter.drawEllipse(centre[i], radius, radius);
+        nodeIcon(glyphs[i]).paint(&painter, QRectF(centre[i].x() - 13, centre[i].y() - 13, 26, 26).toRect());
+        painter.setFont(name);
+        painter.setPen(Qt::white);
+        const QRectF below(centre[i].x() - 80, centre[i].y() + radius + 3, 160, 16);
+        painter.drawText(below, Qt::AlignCenter, text[static_cast<qsizetype>(i) + 1]);
+        if (i == 1 && !satellite_.isEmpty()) {
+            painter.setFont(small);
+            painter.setPen(QColor(255, 255, 255, 150));
+            painter.drawText(below.translated(0, 15), Qt::AlignCenter, satellite_);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+
+RunCard::RunCard(BundleSummaryPtr bundle, QWidget* parent)
+    : QAbstractButton(parent)
+    , bundle_(std::move(bundle))
+{
+    setObjectName(QStringLiteral("runCard"));
+    setCursor(Qt::PointingHandCursor);
+    setFocusPolicy(Qt::NoFocus);
+    setFixedSize(sizeHint());
+    const QString rate = feederRate(*bundle_);
+    setToolTip(tr("%1 · %2 feeder · %3\nClick to feature it, double-click to open it.")
+                   .arg(bundle_->videoTitle.isEmpty() ? bundle_->videoName : bundle_->videoTitle,
+                        rate.isEmpty() ? tr("uncongested") : rate, outcome(*bundle_)));
+}
+
+void RunCard::setImage(const QImage& image)
+{
+    image_ = image;
+    update();
+}
+
+void RunCard::setFeatured(bool featured)
+{
+    featured_ = featured;
+    update();
+}
+
+QSize RunCard::sizeHint() const
+{
+    return {256, 144};
+}
+
+void RunCard::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
+        emit opened();
+}
+
+void RunCard::enterEvent(QEnterEvent* event)
+{
+    hovered_ = true;
+    update();
+    QAbstractButton::enterEvent(event);
+}
+
+void RunCard::leaveEvent(QEvent* event)
+{
+    hovered_ = false;
+    update();
+    QAbstractButton::leaveEvent(event);
+}
+
+void RunCard::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    const QRectF frame = QRectF(rect()).adjusted(1.5, 1.5, -1.5, -1.5);
+    QPainterPath shape;
+    shape.addRoundedRect(frame, 10, 10);
+    painter.save();
+    painter.setClipPath(shape);
+    if (image_.isNull()) {
+        QLinearGradient plain(frame.topLeft(), frame.bottomRight());
+        plain.setColorAt(0, QColor(0x22, 0x3a, 0x6e));
+        plain.setColorAt(1, QColor(0x0d, 0x12, 0x22));
+        painter.fillRect(frame, plain);
+    } else {
+        drawCover(painter, frame, image_);
+    }
+    QLinearGradient shade(0, frame.top() + frame.height() * 0.35, 0, frame.bottom());
+    shade.setColorAt(0, QColor(0, 0, 0, 0));
+    shade.setColorAt(1, QColor(0, 0, 0, 200));
+    painter.fillRect(frame, shade);
+    painter.restore();
+
+    // The feeder rate, large, and the outcome under it.
+    QFont title = format::scaled(font(), 1.15);
+    title.setBold(true);
+    painter.setFont(title);
+    painter.setPen(Qt::white);
+    const QString rate = feederRate(*bundle_);
+    painter.drawText(QRectF(frame.left() + 12, frame.bottom() - 44, frame.width() - 24, 22),
+                     Qt::AlignLeft | Qt::AlignVCenter, rate.isEmpty() ? tr("Uncongested") : tr("%1 feeder").arg(rate));
+    QFont small = format::scaled(font(), 0.85);
+    painter.setFont(small);
+    painter.setPen(QColor(255, 255, 255, 190));
+    painter.drawText(QRectF(frame.left() + 12, frame.bottom() - 24, frame.width() - 24, 16),
+                     Qt::AlignLeft | Qt::AlignVCenter, counted(bundle_->segments, tr("segment"), tr("segments")));
+
+    // A badge for how playback went: red for stalls, orange for a cut-off, green otherwise.
+    const QString badge = outcome(*bundle_);
+    const QColor badgeColor = bundle_->stalls > 0 ? QColor(0xff, 0x45, 0x3a)
+                              : bundle_->cutOff   ? QColor(0xff, 0x9f, 0x0a)
+                                                  : QColor(0x30, 0xd1, 0x58);
+    const double badgeWidth = QFontMetricsF(small).horizontalAdvance(badge) + 16;
+    const QRectF badgeRect(frame.left() + 10, frame.top() + 10, badgeWidth, 20);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(badgeColor);
+    painter.drawRoundedRect(badgeRect, 10, 10);
+    painter.setPen(bundle_->stalls > 0 || bundle_->cutOff ? Qt::white : QColor(0x0b, 0x2a, 0x12));
+    painter.drawText(badgeRect, Qt::AlignCenter, badge);
+
+    if (featured_ || hovered_) {
+        painter.setPen(QPen(featured_ ? accentColor(palette()) : QColor(255, 255, 255, 200), featured_ ? 3.0 : 2.0));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPath(shape);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+
+FeaturedBanner::FeaturedBanner(QWidget* parent)
+    : QWidget(parent)
+    , title_(new QLabel(this))
+    , meta_(new QLabel(this))
+    , highlight_(new QLabel(this))
+    , description_(new QLabel(this))
+    , play_(new QPushButton(tr("Play"), this))
+    , info_(new QPushButton(tr("More Info"), this))
+    , path_(new PathPanel(this))
+{
+    setObjectName(QStringLiteral("featuredBanner"));
+    setFixedHeight(460);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    auto* brand = new QWidget(this);
+    auto* brandLayout = new QHBoxLayout(brand);
+    brandLayout->setContentsMargins(0, 0, 0, 0);
+    brandLayout->setSpacing(8);
+    auto* icon = new QLabel(brand);
+    icon->setPixmap(appIcon().pixmap(26, 26));
+    auto* brandText = new QLabel(tr("<b>%1</b> run").arg(appDisplayName().toHtmlEscaped()), brand);
+    bannerText(brandText, 1.1, false, 235);
+    brandLayout->addWidget(icon);
+    brandLayout->addWidget(brandText);
+    brandLayout->addStretch(1);
+
+    bannerText(title_, 3.0, true, 255);
+    title_->setWordWrap(true);
+    bannerText(meta_, 1.0, false, 220);
+    meta_->setTextFormat(Qt::RichText);
+    auto* policy = new QLabel(tr("LLM ABR"), this);
+    policy->setStyleSheet(QStringLiteral("color: white; background: transparent; border: 1px solid rgba(255,255,255,170);"
+                                         " border-radius: 5px; padding: 1px 7px;"));
+    auto* metaRow = new QHBoxLayout();
+    metaRow->setSpacing(14);
+    metaRow->addWidget(meta_);
+    metaRow->addWidget(policy);
+    metaRow->addStretch(1);
+    bannerText(highlight_, 1.25, true, 255);
+    bannerText(description_, 1.0, false, 205);
+    description_->setWordWrap(true);
+
+    const QColor accent = accentColor(palette());
+    play_->setIcon(glyphIcon(Glyph::Play, Qt::white));
+    play_->setIconSize({18, 18});
+    play_->setCursor(Qt::PointingHandCursor);
+    play_->setStyleSheet(QStringLiteral(
+        "QPushButton { color: white; background: %1; border: none; border-radius: 22px; padding: 0 26px;"
+        " font-weight: 600; min-height: 44px; }"
+        "QPushButton:hover { background: %2; } QPushButton:pressed { background: %3; }")
+                             .arg(accent.name(), accent.lighter(115).name(), accent.darker(115).name()));
+    info_->setIcon(glyphIcon(Glyph::Report, Qt::white));
+    info_->setIconSize({18, 18});
+    info_->setCursor(Qt::PointingHandCursor);
+    info_->setStyleSheet(QStringLiteral(
+        "QPushButton { color: white; background: rgba(255,255,255,46); border: none; border-radius: 22px;"
+        " padding: 0 22px; font-weight: 600; min-height: 44px; }"
+        "QPushButton:hover { background: rgba(255,255,255,70); } QPushButton:pressed { background: rgba(255,255,255,30); }"));
+    connect(play_, &QPushButton::clicked, this, &FeaturedBanner::playRequested);
+    connect(info_, &QPushButton::clicked, this, &FeaturedBanner::infoRequested);
+
+    auto* buttons = new QHBoxLayout();
+    buttons->setSpacing(12);
+    buttons->addWidget(play_);
+    buttons->addWidget(info_);
+    buttons->addStretch(1);
+
+    auto* column = new QVBoxLayout();
+    column->setSpacing(0);
+    column->addStretch(1);
+    column->addWidget(brand);
+    column->addSpacing(10);
+    column->addWidget(title_);
+    column->addSpacing(8);
+    column->addLayout(metaRow);
+    column->addSpacing(18);
+    column->addWidget(highlight_);
+    column->addSpacing(12);
+    column->addWidget(description_);
+    column->addSpacing(24);
+    column->addLayout(buttons);
+    column->addStretch(1);
+    auto* text = new QWidget(this);
+    text->setLayout(column);
+    text->setMaximumWidth(540);
+
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(44, 20, 44, 24);
+    layout->addWidget(text, 1);
+    layout->addStretch(1);
+    setBundle(nullptr, {}, {});
+}
+
+void FeaturedBanner::setBundle(BundleSummaryPtr bundle, const QString& satellite, const QString& backhaul)
+{
+    bundle_ = std::move(bundle);
+    image_ = QImage();
+    const bool has = bundle_ != nullptr;
+    for (QWidget* widget : std::initializer_list<QWidget*>{play_, info_})
+        widget->setVisible(has);
+    path_->setVisible(has && width() >= 560 + path_->sizeHint().width());
+    if (!has) {
+        title_->clear();
+        meta_->clear();
+        highlight_->clear();
+        description_->clear();
+        update();
+        return;
+    }
+    const BundleSummary& run = *bundle_;
+    title_->setText(run.videoTitle.isEmpty() ? run.videoName : run.videoTitle);
+    const QString rate = feederRate(run);
+    meta_->setText(QStringLiteral("%1 &nbsp;&nbsp;&nbsp; %2")
+                       .arg(rate.isEmpty() ? tr("Uncongested feeder") : tr("%1 feeder").arg(rate),
+                            counted(run.segments, tr("segment"), tr("segments"))));
+    if (run.stalls > 0)
+        highlight_->setText(run.stalls == 1 ? tr("Stalled once over the satellite")
+                                            : tr("Stalled %1 times over the satellite").arg(run.stalls));
+    else if (run.cutOff)
+        highlight_->setText(tr("The simulation stopped during playback"));
+    else
+        highlight_->setText(tr("Played without a stall"));
+    description_->setText(tr("Streamed to one of the users of a LEO satellite 5G network, through an IAB "
+                             "relay. An LLM chose the quality of every segment as the buffer rose and fell."));
+    path_->setDetails(rate.isEmpty() ? QString() : tr("%1 feeder").arg(rate), satellite, backhaul);
+    update();
+}
+
+void FeaturedBanner::setImage(const QImage& image)
+{
+    image_ = image;
+    update();
+}
+
+void FeaturedBanner::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    const QSize size = path_->sizeHint();
+    path_->setGeometry(width() - 44 - size.width(), height() - 28 - size.height(), size.width(), size.height());
+    // Beside the text only when there is room for both.
+    path_->setVisible(bundle_ && width() >= 560 + size.width());
+}
+
+void FeaturedBanner::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    const QRectF all(rect());
+    painter.fillRect(all, kInk);
+    if (!image_.isNull()) {
+        // The still on the right two thirds, fading into the dark on the left.
+        const QRectF picture(all.width() * 0.30, 0, all.width() * 0.70, all.height());
+        drawCover(painter, picture, image_);
+        QLinearGradient fade(picture.left(), 0, picture.left() + picture.width() * 0.45, 0);
+        fade.setColorAt(0, kInk);
+        fade.setColorAt(1, QColor(kInk.red(), kInk.green(), kInk.blue(), 0));
+        painter.fillRect(picture, fade);
+    } else {
+        QRadialGradient glow(all.width() * 0.75, all.height() * 0.3, all.width() * 0.6);
+        glow.setColorAt(0, QColor(0x1d, 0x3f, 0x86));
+        glow.setColorAt(1, kInk);
+        painter.fillRect(all, glow);
+    }
+    // A soft shade along the top and the bottom.
+    QLinearGradient top(0, 0, 0, 70);
+    top.setColorAt(0, QColor(kInk.red(), kInk.green(), kInk.blue(), 170));
+    top.setColorAt(1, QColor(kInk.red(), kInk.green(), kInk.blue(), 0));
+    painter.fillRect(QRectF(0, 0, all.width(), 70), top);
+    QLinearGradient bottom(0, all.height() - 110, 0, all.height());
+    bottom.setColorAt(0, QColor(kInk.red(), kInk.green(), kInk.blue(), 0));
+    bottom.setColorAt(1, kInk);
+    painter.fillRect(QRectF(0, all.height() - 110, all.width(), 110), bottom);
+}
+
+} // namespace abrviz

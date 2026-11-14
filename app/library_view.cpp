@@ -2,8 +2,13 @@
 
 #include "branding.h"
 #include "format.h"
+#include "home_widgets.h"
 #include "icons.h"
+#include "thumbnail_cache.h"
 #include "welcome_scene.h"
+
+#include "abrviz/core/io/topology_reader.h"
+#include "abrviz/core/load/bundle_reader.h"
 
 #include "abrviz/core/version.h"
 
@@ -16,6 +21,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSortFilterProxyModel>
 #include <QStackedWidget>
 #include <QTableView>
@@ -205,6 +211,9 @@ LibraryView::LibraryView(QWidget* parent)
     , table_(new QTableView(this))
     , details_(new QLabel(this))
     , openButton_(new QPushButton(tr("Open Run"), this))
+    , home_(new QWidget(this))
+    , banner_(new FeaturedBanner(this))
+    , rows_(new QVBoxLayout())
 {
     setObjectName(QStringLiteral("libraryView"));
 
@@ -251,7 +260,8 @@ LibraryView::LibraryView(QWidget* parent)
         column->addLayout(actions);
         column->addWidget(recentBox_);
         column->addStretch(3);
-        intro->setFixedWidth(500);
+        intro->setMaximumWidth(500);
+        intro->setMinimumWidth(380);
 
         auto* row = new QHBoxLayout(welcome_);
         row->setContentsMargins(0, 0, 0, 0);
@@ -316,11 +326,43 @@ LibraryView::LibraryView(QWidget* parent)
         body->addWidget(table_, 1);
         body->addWidget(card);
 
+        // The home: the featured run and a row of cards for each video, on a dark ground, then
+        // the table of every run.
+        home_->setObjectName(QStringLiteral("home"));
+        home_->setAutoFillBackground(true);
+        QPalette dark = home_->palette();
+        dark.setColor(QPalette::Window, QColor(0x0b, 0x0d, 0x14));
+        dark.setColor(QPalette::WindowText, Qt::white);
+        home_->setPalette(dark);
+        auto* homeLayout = new QVBoxLayout(home_);
+        homeLayout->setContentsMargins(0, 0, 0, 28);
+        homeLayout->setSpacing(0);
+        homeLayout->addWidget(banner_);
+        homeLayout->addLayout(rows_);
+        rows_->setContentsMargins(44, 4, 0, 0);
+        rows_->setSpacing(22);
+        connect(banner_, &FeaturedBanner::playRequested, this, [this] {
+            if (banner_->bundle())
+                emit openRequested(banner_->bundle()->directory);
+        });
+        connect(banner_, &FeaturedBanner::infoRequested, this, [this] {
+            if (banner_->bundle())
+                emit infoRequested(banner_->bundle()->directory);
+        });
+
+        auto* list = new QWidget(browser_);
+        auto* listLayout = new QVBoxLayout(list);
+        listLayout->setContentsMargins(20, 16, 20, 16);
+        listLayout->setSpacing(12);
+        listLayout->addLayout(header);
+        listLayout->addLayout(body, 1);
+        list->setMinimumHeight(420);
+
         auto* layout = new QVBoxLayout(browser_);
-        layout->setContentsMargins(20, 16, 20, 16);
-        layout->setSpacing(12);
-        layout->addLayout(header);
-        layout->addLayout(body, 1);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(0);
+        layout->addWidget(home_);
+        layout->addWidget(list, 1);
 
         connect(table_, &QTableView::activated, this, [this](const QModelIndex&) {
             if (const BundleSummaryPtr bundle = selectedBundle())
@@ -347,6 +389,8 @@ void LibraryView::setBundles(QList<BundleSummaryPtr> bundles, const QString& fol
 {
     path_->setText(tr("%n run(s) in %1", nullptr, static_cast<int>(bundles.size()))
                        .arg(QDir::toNativeSeparators(folder)));
+    bundles_ = bundles;
+    rebuildHome();
     model_->setBundles(std::move(bundles));
     stack_->setCurrentWidget(browser_);
     if (proxy_->rowCount() > 0 && !table_->currentIndex().isValid())
@@ -398,6 +442,121 @@ void LibraryView::setRecentFolders(const QStringList& folders)
                                     QDir::toNativeSeparators(QDir(folder).absolutePath()),
                                     [this, folder] { emit recentFolderRequested(folder); }, recentBox_));
     }
+}
+
+void LibraryView::setThumbnailSource(const QString& ffmpeg, const QString& folder)
+{
+    delete thumbnails_;
+    thumbnails_ = new ThumbnailCache(ffmpeg, folder, this);
+    connect(thumbnails_, &ThumbnailCache::ready, this, [this](const QString& directory) {
+        const QImage image = thumbnails_->image(directory);
+        for (RunCard* card : std::as_const(cards_)) {
+            if (card->bundle()->directory == directory)
+                card->setImage(image);
+        }
+        if (banner_->bundle() && banner_->bundle()->directory == directory)
+            banner_->setImage(image);
+    });
+    rebuildHome();
+}
+
+void LibraryView::rebuildHome()
+{
+    while (QLayoutItem* item = rows_->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    cards_.clear();
+    // One row per video, in the order the videos first appear, its runs by feeder rate.
+    QStringList titles;
+    QHash<QString, QList<BundleSummaryPtr>> byTitle;
+    for (const BundleSummaryPtr& bundle : std::as_const(bundles_)) {
+        if (!bundle->errors.isEmpty())
+            continue;
+        const QString title = bundle->videoTitle.isEmpty() ? bundle->videoName : bundle->videoTitle;
+        if (!byTitle.contains(title))
+            titles << title;
+        byTitle[title] << bundle;
+    }
+    for (const QString& title : std::as_const(titles)) {
+        auto runs = byTitle.value(title);
+        std::ranges::stable_sort(runs, {}, [](const BundleSummaryPtr& b) { return b->linkRate.value_or(0); });
+        auto* heading = new QLabel(title, home_);
+        QFont font = format::scaled(heading->font(), 1.25);
+        font.setBold(true);
+        heading->setFont(font);
+        auto* strip = new QWidget(home_);
+        auto* stripLayout = new QHBoxLayout(strip);
+        stripLayout->setContentsMargins(0, 0, 0, 0);
+        stripLayout->setSpacing(12);
+        for (const BundleSummaryPtr& bundle : std::as_const(runs)) {
+            auto* card = new RunCard(bundle, strip);
+            connect(card, &RunCard::clicked, this, [this, bundle] { feature(bundle); });
+            connect(card, &RunCard::opened, this, [this, bundle] { emit openRequested(bundle->directory); });
+            stripLayout->addWidget(card);
+            cards_ << card;
+            if (thumbnails_) {
+                card->setImage(thumbnails_->image(bundle->directory));
+                // A different moment of the video on each card of the row.
+                const double position = 0.25 + 0.2 * static_cast<double>(stripLayout->count() - 1);
+                thumbnails_->request(bundle->directory, bundle->videoName, bundle->segments, position);
+            }
+        }
+        stripLayout->addStretch(1);
+        auto* section = new QWidget(home_);
+        auto* sectionLayout = new QVBoxLayout(section);
+        sectionLayout->setContentsMargins(0, 0, 0, 0);
+        sectionLayout->setSpacing(10);
+        sectionLayout->addWidget(heading);
+        auto* scroller = new QScrollArea(section);
+        scroller->setFrameShape(QFrame::NoFrame);
+        scroller->setWidget(strip);
+        scroller->setWidgetResizable(true);
+        scroller->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        scroller->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        scroller->setFixedHeight(strip->sizeHint().height() + 14);
+        // The row scrolls sideways rather than widening the window to fit every card.
+        scroller->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        scroller->setMinimumWidth(1);
+        scroller->viewport()->setAutoFillBackground(false);
+        strip->setAutoFillBackground(false);
+        sectionLayout->addWidget(scroller);
+        rows_->addWidget(section);
+    }
+    // Keep the featured run if it is still listed; otherwise the first run that stalled, or
+    // the first run.
+    BundleSummaryPtr featured;
+    for (RunCard* card : std::as_const(cards_)) {
+        if (banner_->bundle() && card->bundle()->directory == banner_->bundle()->directory)
+            featured = card->bundle();
+    }
+    for (RunCard* card : std::as_const(cards_)) {
+        if (!featured && card->bundle()->stalls > 0)
+            featured = card->bundle();
+    }
+    if (!featured && !cards_.isEmpty())
+        featured = cards_.first()->bundle();
+    feature(featured);
+    home_->setVisible(!cards_.isEmpty());
+}
+
+void LibraryView::feature(const BundleSummaryPtr& bundle)
+{
+    QString satellite;
+    QString backhaul;
+    if (bundle) {
+        // The numbers of the satellite path, from the header of the run's sim.log.
+        const NetworkTopology topology = readNetworkTopology(simLogPath(bundle->directory), -1);
+        if (topology.satelliteAltitude)
+            satellite = tr("%1 km up").arg(*topology.satelliteAltitude / 1000.0, 0, 'f', 0);
+        if (topology.carrierFrequencyGHz)
+            backhaul = tr("%1 GHz backhaul").arg(*topology.carrierFrequencyGHz, 0, 'g', 3);
+    }
+    banner_->setBundle(bundle, satellite, backhaul);
+    if (bundle && thumbnails_)
+        banner_->setImage(thumbnails_->image(bundle->directory));
+    for (RunCard* card : std::as_const(cards_))
+        card->setFeatured(bundle && card->bundle()->directory == bundle->directory);
 }
 
 bool LibraryView::eventFilter(QObject* watched, QEvent* event)

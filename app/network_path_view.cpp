@@ -160,7 +160,7 @@ QStringList NetworkPathView::labels() const
     list << tr("Video server");
     QString feeder = tr("Feeder link");
     if (run_ && run_->info.feederLinkRate)
-        feeder += QStringLiteral(" · %1, shared by %2 UEs")
+        feeder += QStringLiteral(" · %1, shared by %2 users")
                       .arg(format::bitrate(static_cast<double>(*run_->info.feederLinkRate)))
                       .arg(run_->info.simulatedUes);
     list << feeder;
@@ -177,7 +177,7 @@ QStringList NetworkPathView::labels() const
     if (topology && topology->accessDistance)
         access += QStringLiteral(" · %1 m").arg(*topology->accessDistance, 0, 'f', 0);
     list << access;
-    list << (run_ ? tr("Viewer · UE %1").arg(run_->info.nodeId) : tr("Viewer"));
+    list << tr("User");
     return list;
 }
 
@@ -214,7 +214,7 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         {Glyph::Server, label[0], {left, ground}},
         {Glyph::Satellite, label[2], {left + (right - left) * 0.34, sky}},
         {Glyph::Relay, label[4], {left + (right - left) * 0.70, ground}},
-        {Glyph::Device, label[6], {right, ground}},
+        {Glyph::Laptop, label[6], {right, ground}},
     }};
 
     // Links: up to the satellite, down to the relay, across to the viewer.
@@ -265,15 +265,15 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const Node& node = nodes[i];
         const bool viewer = i == 3;
-        QColor fill = viewer && stalled_ ? red : accent;
-        fill.setAlphaF(dark ? 0.22F : 0.14F);
+        QColor fill = viewer && stalled_ ? red : (dark ? QColor(255, 255, 255) : QColor(0x1c, 0x2a, 0x48));
+        fill.setAlphaF(viewer && stalled_ ? 0.25F : (dark ? 0.08F : 0.85F));
         QColor ring = viewer && stalled_ ? red : (run_ ? accent : idle);
         painter.setPen(QPen(ring, 1.6));
         painter.setBrush(fill);
         painter.drawEllipse(node.centre, kNodeRadius, kNodeRadius);
-        const QIcon icon = glyphIcon(node.glyph, viewer && stalled_ ? red : text);
-        const QRectF iconRect(node.centre.x() - 12, node.centre.y() - 12, 24, 24);
-        icon.paint(&painter, iconRect.toRect());
+        // The node in full colour, a little larger than the disc's inside.
+        const QRectF iconRect(node.centre.x() - 15, node.centre.y() - 15, 30, 30);
+        nodeIcon(node.glyph).paint(&painter, iconRect.toRect());
 
         painter.setFont(bold);
         painter.setPen(viewer && stalled_ ? red : text);
@@ -281,7 +281,7 @@ void NetworkPathView::paintEvent(QPaintEvent*)
                                        : node.centre.y() + kNodeRadius + 4.0;
         const QRectF labelRect(node.centre.x() - 150.0, labelTop, 300.0, kLabelHeight);
         painter.drawText(labelRect, Qt::AlignHCenter | Qt::AlignVCenter,
-                         viewer && stalled_ ? tr("Viewer · stalled") : node.title);
+                         viewer && stalled_ ? tr("User · stalled") : node.title);
     }
 
     // What is happening at the cursor, top right.

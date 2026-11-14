@@ -121,7 +121,7 @@ QSize WelcomeScene::sizeHint() const
 
 QSize WelcomeScene::minimumSizeHint() const
 {
-    return {340, 420};
+    return {260, 420};
 }
 
 bool WelcomeScene::isAnimating() const
@@ -297,11 +297,11 @@ void WelcomeScene::paintEvent(QPaintEvent*)
     painter.setBrush(QColor(0xff, 0x45, 0x3a, static_cast<int>(120 + 135 * blink)));
     painter.drawEllipse(mastTop - QPointF(0, 3.0), 2.6, 2.6);
 
-    // The viewer: a frosted disc with a phone.
+    // The user: a frosted disc with a laptop.
     painter.setPen(QPen(kLink, 1.6));
     painter.setBrush(QColor(255, 255, 255, 220));
     painter.drawEllipse(viewer, 20.0, 20.0);
-    glyphIcon(Glyph::Device, kNavy).paint(&painter, QRectF(viewer.x() - 11, viewer.y() - 11, 22, 22).toRect());
+    nodeIcon(Glyph::Laptop).paint(&painter, QRectF(viewer.x() - 15, viewer.y() - 15, 30, 30).toRect());
 
     // The satellite: a body with two solar panels, turned along its orbit.
     painter.save();
@@ -329,7 +329,7 @@ void WelcomeScene::paintEvent(QPaintEvent*)
                 tr("Sends the video in segments"), kNavy, kSlate, w);
     drawCaption(painter, mastBase + QPointF(0, 10.0), tr("IAB relay"), tr("Backhauled by satellite"),
                 kNavy, kSlate, w);
-    drawCaption(painter, viewer + QPointF(0, 26.0), tr("Viewer"), tr("An LLM picks the quality"),
+    drawCaption(painter, viewer + QPointF(0, 26.0), tr("User"), tr("An LLM picks the quality"),
                 kNavy, kSlate, w);
 }
 

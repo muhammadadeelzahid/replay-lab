@@ -186,7 +186,7 @@ void MomentPanel::refresh()
         estimate_->setText(format::bitrate(*estimate));
     const NetworkTopology& net = run->topology;
     if (run->info.feederLinkRate)
-        feeder_->setText(tr("%1, shared by %2 UEs")
+        feeder_->setText(tr("%1, shared by %2 users")
                              .arg(format::bitrate(static_cast<double>(*run->info.feederLinkRate)))
                              .arg(run->info.simulatedUes));
     if (net.satelliteAltitude)
@@ -198,7 +198,7 @@ void MomentPanel::refresh()
         carrier_->setText(carrier);
     }
     if (net.viaRelay && net.accessDistance)
-        relay_->setText(tr("IAB, %1 m from the viewer").arg(*net.accessDistance, 0, 'f', 0));
+        relay_->setText(tr("IAB, %1 m from the user").arg(*net.accessDistance, 0, 'f', 0));
     else if (net.relayCount > 0)
         relay_->setText(tr("IAB (%n relay(s))", nullptr, net.relayCount));
     if (rtt)
