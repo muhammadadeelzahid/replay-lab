@@ -48,7 +48,15 @@ public:
         future_ = std::move(future);
     }
 
-    /// Stops guarding the task without cancelling it.
+    /// Asks the task to stop without waiting for it; the destructor (or `reset`) still waits.
+    void cancel()
+    {
+        if (future_)
+            future_->cancel();
+    }
+
+    /// Stops guarding the task without cancelling it. Use this once the task has finished:
+    /// cancelling a finished future discards its result.
     [[nodiscard]] std::optional<QFuture<T>> release() { return std::exchange(future_, std::nullopt); }
 
     [[nodiscard]] bool isRunning() const { return future_ && future_->isRunning(); }

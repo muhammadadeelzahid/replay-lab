@@ -32,6 +32,10 @@ abrviz_add_test(tst_bundle_library
     SOURCES tst_bundle_library.cpp
     LIBS abrviz_core)
 
+abrviz_add_test(tst_log_index
+    SOURCES tst_log_index.cpp
+    LIBS abrviz_core)
+
 abrviz_add_test(tst_playback_metrics
     SOURCES tst_playback_metrics.cpp
     LIBS abrviz_core)
@@ -46,4 +50,8 @@ abrviz_add_test(tst_main_window
 
 abrviz_add_test(tst_charts_panel
     SOURCES tst_charts_panel.cpp
+    LIBS abrviz_gui)
+
+abrviz_add_test(tst_log_console
+    SOURCES tst_log_console.cpp
     LIBS abrviz_gui)

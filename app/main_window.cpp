@@ -2,12 +2,15 @@
 
 #include "charts_panel.h"
 #include "library_view.h"
+#include "log_console.h"
 #include "segment_timeline.h"
 #include "session.h"
 #include "summary_panel.h"
 
 #include "abrviz/core/load/bundle_library.h"
 #include "abrviz/core/load/bundle_loader.h"
+#include "abrviz/core/load/bundle_reader.h"
+#include "abrviz/core/logs/log_index.h"
 #include "abrviz/core/util/future_guard.h"
 #include "abrviz/core/version.h"
 #include "abrviz/media/engine_support.h"
@@ -35,15 +38,19 @@ struct MainWindow::Impl {
     SummaryPanel* summary = nullptr;
     SegmentTimeline* timeline = nullptr;
     ChartsPanel* charts = nullptr;
+    LogConsole* logs = nullptr;
     QLabel* placeholder = nullptr;
     QLabel* versionLabel = nullptr;
     QProgressBar* progress = nullptr;
     QFutureWatcher<QList<BundleSummaryPtr>>* scanWatcher = nullptr;
     QFutureWatcher<LoadResult>* loadWatcher = nullptr;
+    QFutureWatcher<LogIndexPtr>* logWatcher = nullptr;
 
     // Pending tasks. The guards cancel and wait when replaced or destroyed.
     FutureGuard<QList<BundleSummaryPtr>> scan;
     FutureGuard<LoadResult> load;
+    FutureGuard<LogIndexPtr> logIndex;
+    std::shared_ptr<const RunData> logIndexRun;  // the run the pending index is for
     QString scanningFolder;
     QString loadingBundle;
     bool shutDown = false;
@@ -94,6 +101,9 @@ MainWindow::MainWindow(QWidget* parent)
     connect(d_->loadWatcher, &QFutureWatcherBase::progressValueChanged, d_->progress,
             &QProgressBar::setValue);
 
+    d_->logWatcher = new QFutureWatcher<LogIndexPtr>(this);
+    connect(d_->logWatcher, &QFutureWatcherBase::finished, this, &MainWindow::logIndexFinished);
+
     connect(d_->library, &LibraryView::openRequested, this, &MainWindow::openBundle);
     connect(d_->session, &Session::runChanged, this, [this] {
         const auto& run = d_->session->run();
@@ -119,19 +129,22 @@ void MainWindow::shutdown()
     // No result may arrive once shutdown has started.
     d_->scanWatcher->disconnect(this);
     d_->loadWatcher->disconnect(this);
+    d_->logWatcher->disconnect(this);
     d_->scan.reset();
     d_->load.reset();
+    d_->logIndex.reset();
 }
 
 Session* MainWindow::session() const { return d_->session; }
 LibraryView* MainWindow::library() const { return d_->library; }
 SegmentTimeline* MainWindow::timeline() const { return d_->timeline; }
 ChartsPanel* MainWindow::charts() const { return d_->charts; }
+LogConsole* MainWindow::logs() const { return d_->logs; }
 SummaryPanel* MainWindow::summary() const { return d_->summary; }
 
 bool MainWindow::isBusy() const
 {
-    return d_->scan.isRunning() || d_->load.isRunning();
+    return d_->scan.isRunning() || d_->load.isRunning() || d_->logIndex.isRunning();
 }
 
 void MainWindow::createDocks()
@@ -149,15 +162,19 @@ void MainWindow::createDocks()
     d_->summary = new SummaryPanel(d_->session, this);
     d_->timeline = new SegmentTimeline(d_->session, this);
     d_->charts = new ChartsPanel(d_->session, this);
+    d_->logs = new LogConsole(d_->session, this);
 
     auto* library = addDock(tr("Library"), QStringLiteral("libraryDock"), d_->library,
                             Qt::LeftDockWidgetArea);
     addDock(tr("Run"), QStringLiteral("summaryDock"), d_->summary, Qt::LeftDockWidgetArea);
-    addDock(tr("Timeline"), QStringLiteral("timelineDock"), d_->timeline,
-            Qt::BottomDockWidgetArea);
+    auto* timeline = addDock(tr("Timeline"), QStringLiteral("timelineDock"), d_->timeline,
+                             Qt::BottomDockWidgetArea);
+    auto* logs = addDock(tr("Log"), QStringLiteral("logDock"), d_->logs, Qt::BottomDockWidgetArea);
+    splitDockWidget(timeline, logs, Qt::Vertical);
     auto* charts = addDock(tr("Charts"), QStringLiteral("chartsDock"), d_->charts,
                            Qt::RightDockWidgetArea);
     resizeDocks({library, charts}, {520, 620}, Qt::Horizontal);
+    resizeDocks({logs}, {220}, Qt::Vertical);
 }
 
 void MainWindow::createMenus()
@@ -262,10 +279,34 @@ void MainWindow::loadFinished()
     const bool ok = result.run != nullptr;
     d_->session->setRun(std::move(result.run), std::move(result.errors));
     d_->library->setOpenBundle(d_->loadingBundle);
+    if (ok)
+        startLogIndex();
     updateStatus();
     if (!ok)
         statusBar()->showMessage(tr("Could not open %1").arg(QDir(d_->loadingBundle).dirName()));
     emit bundleOpened(d_->loadingBundle, ok);
+}
+
+void MainWindow::startLogIndex()
+{
+    const auto& run = d_->session->run();
+    d_->logIndexRun = run;
+    const QString directory = run->info.bundleDirectory;
+    auto future = buildLogIndex(simLogPath(directory), policyLogPath(directory), run->info.nodeId);
+    d_->logIndex.reset(future);
+    d_->logWatcher->setFuture(future);
+}
+
+void MainWindow::logIndexFinished()
+{
+    const auto future = d_->logWatcher->future();
+    std::ignore = d_->logIndex.release();
+    const auto run = std::exchange(d_->logIndexRun, nullptr);
+    if (future.isCanceled() || future.resultCount() == 0 || !run)
+        return;
+    // The session ignores an index for a run that is no longer open.
+    d_->session->setLogIndex(future.result(), run.get());
+    emit logIndexReady();
 }
 
 void MainWindow::updateStatus()

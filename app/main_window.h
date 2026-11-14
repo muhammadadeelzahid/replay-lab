@@ -8,16 +8,17 @@ namespace abrviz {
 
 class ChartsPanel;
 class LibraryView;
+class LogConsole;
 class Session;
 class SegmentTimeline;
 class SummaryPanel;
 
-/// The application window: docks for the library, the run summary, the timeline and the charts,
-/// and the loading of folders and bundles in the background.
+/// The application window: docks for the library, the run summary, the timeline, the charts and
+/// the log, and the loading of folders and bundles in the background.
 ///
 /// Shutdown order: the destructor calls `shutdown()` first, which cancels and waits for the
-/// pending scan and load. Only then are the private state and the child widgets destroyed, so
-/// no task finishes into a half-destroyed window.
+/// pending scan, load and log indexing. Only then are the private state and the child widgets
+/// destroyed, so no task finishes into a half-destroyed window.
 class MainWindow final : public QMainWindow {
     Q_OBJECT
 
@@ -46,6 +47,7 @@ public:
     [[nodiscard]] LibraryView* library() const;
     [[nodiscard]] SegmentTimeline* timeline() const;
     [[nodiscard]] ChartsPanel* charts() const;
+    [[nodiscard]] LogConsole* logs() const;
     [[nodiscard]] SummaryPanel* summary() const;
     [[nodiscard]] bool isBusy() const;
 
@@ -54,6 +56,8 @@ signals:
     void folderScanned(const QString& folder);
     /// A load finished; the session holds the new run, or no run if the load failed.
     void bundleOpened(const QString& directory, bool ok);
+    /// The log index of the open run was built and handed to the session.
+    void logIndexReady();
 
 private:
     void createMenus();
@@ -62,6 +66,8 @@ private:
     void chooseBundle();
     void scanFinished();
     void loadFinished();
+    void startLogIndex();
+    void logIndexFinished();
     void updateStatus();
 
     struct Impl;

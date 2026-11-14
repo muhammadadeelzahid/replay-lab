@@ -18,11 +18,23 @@ void Session::setRun(std::shared_ptr<const RunData> run, QStringList loadErrors)
 {
     run_ = std::move(run);
     loadErrors_ = std::move(loadErrors);
+    const bool hadIndex = logIndex_ != nullptr;
+    logIndex_.reset();
     clock_ = run_ ? PlaybackClock(*run_) : PlaybackClock();
     report_ = run_ ? computeQoe(*run_) : QoeReport();
     cursor_->setRange(0.0, endTime());
     cursor_->setTime(run_ ? run_->playbackStart : 0.0, TimeCursor::Source::Program);
     emit runChanged();
+    if (hadIndex)
+        emit logIndexChanged();
+}
+
+void Session::setLogIndex(LogIndexPtr index, const RunData* forRun)
+{
+    if (!run_ || run_.get() != forRun)
+        return;
+    logIndex_ = std::move(index);
+    emit logIndexChanged();
 }
 
 void Session::clear()

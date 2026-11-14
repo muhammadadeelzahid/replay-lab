@@ -79,7 +79,7 @@ private slots:
         QCOMPARE(menuTexts(menus[0]->menu()),
                  (QStringList{QStringLiteral("Open &Folder..."), QStringLiteral("Open &Bundle..."),
                               QStringLiteral("&Quit")}));
-        QCOMPARE(menus[1]->menu()->actions().size(), 4);  // one per dock
+        QCOMPARE(menus[1]->menu()->actions().size(), 5);  // one per dock
     }
 
     void timeCursorClampsAndSkipsNoOps()

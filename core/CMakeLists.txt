@@ -18,6 +18,8 @@ add_library(abrviz_core STATIC
     include/abrviz/core/load/bundle_library.h
     include/abrviz/core/playback/playback_clock.h
     include/abrviz/core/metrics/qoe_metrics.h
+    include/abrviz/core/logs/log_index.h
+    include/abrviz/core/logs/log_filter.h
     src/version.cpp
     src/model/run_data.cpp
     src/io/mapped_file.cpp
@@ -31,7 +33,9 @@ add_library(abrviz_core STATIC
     src/load/bundle_loader.cpp
     src/load/bundle_library.cpp
     src/playback/playback_clock.cpp
-    src/metrics/qoe_metrics.cpp)
+    src/metrics/qoe_metrics.cpp
+    src/logs/log_index.cpp
+    src/logs/log_filter.cpp)
 
 target_include_directories(abrviz_core PUBLIC include)
 target_link_libraries(abrviz_core PUBLIC Qt6::Core Qt6::Concurrent)
