@@ -71,7 +71,8 @@ public:
     [[nodiscard]] QComboBox* ueBox() const { return ue_; }
     [[nodiscard]] QComboBox* levelBox() const { return level_; }
     [[nodiscard]] QTableView* table() const { return table_; }
-    /// True while a request is pending (including the debounce delay).
+    /// True from a change of the filter until its result is in the table (including the
+    /// debounce delay and the hand-over of the result to the GUI thread).
     [[nodiscard]] bool isFiltering() const;
     /// Results that arrived after a newer request and were dropped.
     [[nodiscard]] int discardedResults() const { return discarded_; }
@@ -103,6 +104,7 @@ private:
     QCheckBox* follow_;
     QLabel* status_;
     QTableView* table_;
+    bool pending_ = false;    // a request was made and its result is not applied yet
     bool selecting_ = false;  // the console is selecting a row itself
     int discarded_ = 0;
 };

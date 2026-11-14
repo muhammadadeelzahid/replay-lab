@@ -5,3 +5,7 @@ abrviz_set_warnings(validate_bundle)
 qt_add_executable(print_report print_report.cpp bundle_paths.h)
 target_link_libraries(print_report PRIVATE abrviz_core)
 abrviz_set_warnings(print_report)
+
+qt_add_executable(render_experienced render_experienced.cpp)
+target_link_libraries(render_experienced PRIVATE abrviz_core)
+abrviz_set_warnings(render_experienced)

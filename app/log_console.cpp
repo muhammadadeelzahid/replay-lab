@@ -227,7 +227,7 @@ LogFilterSpec LogConsole::spec() const
 
 bool LogConsole::isFiltering() const
 {
-    return debounce_->isActive() || current_.isRunning();
+    return debounce_->isActive() || pending_;
 }
 
 void LogConsole::setFollowCursor(bool follow)
@@ -244,6 +244,7 @@ void LogConsole::indexChanged()
     current_.cancel();
     retiring_.push_back(std::move(current_));
     model_->setIndex(index_);
+    pending_ = false;
 
     // UE choices: all, or one UE (with the lines that belong to no UE).
     const QSignalBlocker blocker(ue_);
@@ -273,6 +274,7 @@ void LogConsole::requestFilter()
 
     auto future = filter_.request(index_, spec());
     current_ = FutureGuard<LogFilterResult>(future);
+    pending_ = true;
     watcher_->setFuture(future);
     updateStatus();
 }
@@ -281,6 +283,8 @@ void LogConsole::filterFinished()
 {
     const auto future = watcher_->future();
     if (future.isCanceled() || future.resultCount() == 0) {
+        // Stopped: the watcher only watches the newest request, so nothing else is coming.
+        pending_ = false;
         updateStatus();
         return;
     }
@@ -290,6 +294,7 @@ void LogConsole::filterFinished()
         return;
     }
     std::ignore = current_.release();
+    pending_ = false;
     model_->setRows(std::move(result.rows));
     updateStatus();
     emit filterApplied(result.generation);
