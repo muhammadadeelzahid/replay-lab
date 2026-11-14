@@ -20,7 +20,9 @@ add_library(abrviz_gui STATIC
     log_console.h
     log_console.cpp
     replay_player.h
-    replay_player.cpp)
+    replay_player.cpp
+    report_view.h
+    report_view.cpp)
 
 target_include_directories(abrviz_gui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(abrviz_gui PUBLIC

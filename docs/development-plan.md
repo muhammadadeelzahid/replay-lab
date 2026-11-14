@@ -67,6 +67,24 @@ cmake --preset nogst && cmake --build --preset nogst && ctest --preset nogst
 ```
 
 
+## Profiling
+
+Measure with the release build. The numbers in the README come from:
+
+```sh
+B=build/release
+time $B/tools/print_report viewer_bundles > /dev/null
+$B/tools/render_experienced --cache /tmp/abrviz-cold viewer_bundles/big_buck_bunny_llm_36Mbps_run_2
+$B/app/abrviz viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine gstreamer --time 50 --profile 10
+$B/app/abrviz viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine prerendered --time 50 --profile 10
+```
+
+`--profile` prints when the bundle and the log index were ready, how long the engine took to
+show its first picture (rendering first if it has to), the frames shown per second over the
+played seconds, CPU time as a share of one core, and peak memory. The README pictures are made
+with `--screenshot` (no window appears).
+
+
 ## Setup
 
 macOS: `brew install qt cmake ninja gstreamer ffmpeg`. Linux packages are listed in

@@ -8,9 +8,14 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QDockWidget>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QTimer>
+
+#include <QVideoSink>
+
+#include <sys/resource.h>
 
 #include <cstdio>
 #include <memory>
@@ -61,6 +66,97 @@ void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool wa
     }
 }
 
+double cpuSeconds()
+{
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    const auto seconds = [](const timeval& t) {
+        return static_cast<double>(t.tv_sec) + static_cast<double>(t.tv_usec) / 1e6;
+    };
+    return seconds(usage.ru_utime) + seconds(usage.ru_stime);
+}
+
+double peakMemoryMb()
+{
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+#ifdef Q_OS_MACOS
+    return static_cast<double>(usage.ru_maxrss) / (1024.0 * 1024.0);  // bytes
+#else
+    return static_cast<double>(usage.ru_maxrss) / 1024.0;  // kilobytes
+#endif
+}
+
+/// `--profile`: once the bundle and its log index are ready, plays `seconds` of the replay with
+/// the current engine (rendering first if the engine needs it) and prints load, render and
+/// playback numbers, then quits.
+void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<double> time)
+{
+    auto clock = std::make_shared<QElapsedTimer>();
+    clock->start();
+    auto loadMs = std::make_shared<qint64>(0);
+    QObject::connect(&window, &abrviz::MainWindow::bundleOpened, &window,
+                     [clock, loadMs](const QString& directory, bool ok) {
+                         *loadMs = clock->elapsed();
+                         if (!ok) {
+                             std::fprintf(stderr, "could not open %s\n", qPrintable(directory));
+                             QApplication::exit(1);
+                         }
+                     });
+    QObject::connect(&window, &abrviz::MainWindow::logIndexReady, &window, [&window, clock, loadMs, seconds, time] {
+        const qint64 indexMs = clock->elapsed();
+        if (time)
+            window.session()->cursor()->setTime(*time);
+        auto* player = window.player();
+        auto renderClock = std::make_shared<QElapsedTimer>();
+        renderClock->start();
+        if (!player->engine()->isReady())
+            player->prepare();
+        auto* poll = new QTimer(&window);
+        QObject::connect(poll, &QTimer::timeout, &window, [&window, player, poll, renderClock, indexMs, loadMs, seconds] {
+            const auto* engine = player->engine();
+            if (engine->state() == abrviz::ReplaySource::State::Error) {
+                std::fprintf(stderr, "engine error\n");
+                QApplication::exit(1);
+                return;
+            }
+            if (!engine->isReady() || engine->state() != abrviz::ReplaySource::State::Paused)
+                return;
+            poll->deleteLater();
+            const qint64 readyMs = renderClock->elapsed();
+            auto frames = std::make_shared<int>(0);
+            QObject::connect(player->videoSink(), &QVideoSink::videoFrameChanged, &window,
+                             [frames] { ++*frames; });
+            const double cpuBefore = cpuSeconds();
+            const double startPosition = engine->position();
+            auto playClock = std::make_shared<QElapsedTimer>();
+            playClock->start();
+            player->play();
+            QTimer::singleShot(static_cast<int>(seconds * 1000.0), &window,
+                               [&window, player, frames, cpuBefore, playClock, startPosition, indexMs, loadMs, readyMs] {
+                const double wall = static_cast<double>(playClock->elapsed()) / 1000.0;
+                const double cpu = cpuSeconds() - cpuBefore;
+                const double end = player->engine()->position();
+                player->pause();
+                const auto& run = window.session()->run();
+                std::printf("run              %s\n", qPrintable(run->info.runId));
+                std::printf("engine           %s\n", qPrintable(player->engine()->name()));
+                std::printf("bundle loaded    %lld ms\n", static_cast<long long>(*loadMs));
+                std::printf("log index ready  %lld ms\n", static_cast<long long>(indexMs));
+                std::printf("engine ready     %lld ms after that\n", static_cast<long long>(readyMs));
+                std::printf("played           %.2f s of replay (%.2f to %.2f) in %.2f s\n",
+                            end - startPosition, startPosition, end, wall);
+                std::printf("frames shown     %d (%.1f per second; the video has %.2f)\n", *frames,
+                            *frames / wall, run->video.frameRate);
+                std::printf("CPU while playing %.0f %% of one core\n", 100.0 * cpu / wall);
+                std::printf("peak memory      %.0f MB\n", peakMemoryMb());
+                QApplication::exit(0);
+            });
+        });
+        poll->start(20);
+    });
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -94,7 +190,14 @@ int main(int argc, char* argv[])
         QStringLiteral("engine"),
         QStringLiteral("Replay engine: gstreamer or prerendered (overrides the saved choice)."),
         QStringLiteral("name"));
-    parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption, engineOption});
+    const QCommandLineOption reportOption(
+        QStringLiteral("report"), QStringLiteral("Show the QoE report tab instead of the run summary."));
+    const QCommandLineOption profileOption(
+        QStringLiteral("profile"),
+        QStringLiteral("Open the bundle, play this many seconds of the replay, print timings and quit."),
+        QStringLiteral("seconds"));
+    parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption, engineOption,
+                       reportOption, profileOption});
     parser.process(app);
 
     abrviz::MainWindow window;
@@ -111,8 +214,13 @@ int main(int argc, char* argv[])
         if (parts.size() == 2)
             window.resize(parts[0].toInt(), parts[1].toInt());
     }
-    // A screenshot run lays the window out and paints it without putting it on the screen.
-    if (parser.isSet(screenshotOption))
+    if (parser.isSet(reportOption)) {
+        if (auto* dock = window.findChild<QDockWidget*>(QStringLiteral("reportDock")))
+            dock->raise();
+    }
+    // Screenshot and profile runs lay the window out and paint it without putting it on the
+    // screen.
+    if (parser.isSet(screenshotOption) || parser.isSet(profileOption))
         window.setAttribute(Qt::WA_DontShowOnScreen);
     window.show();
 
@@ -127,7 +235,11 @@ int main(int argc, char* argv[])
     std::optional<double> time;
     if (parser.isSet(timeOption))
         time = parser.value(timeOption).toDouble();
-    if (parser.isSet(screenshotOption)) {
+    if (parser.isSet(profileOption)) {
+        if (bundle.isEmpty())
+            parser.showHelp(1);
+        scheduleProfile(window, parser.value(profileOption).toDouble(), time);
+    } else if (parser.isSet(screenshotOption)) {
         if (path.isEmpty())
             parser.showHelp(1);
         scheduleScreenshot(window, parser.value(screenshotOption), !bundle.isEmpty(), time);

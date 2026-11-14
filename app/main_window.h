@@ -13,12 +13,13 @@ class LibraryView;
 class LogConsole;
 class RenderQueue;
 class ReplayPlayer;
+class ReportView;
 class Session;
 class SegmentTimeline;
 class SummaryPanel;
 
-/// The application window: the replay player, docks for the library, the run summary, the
-/// timeline, the charts and the log, and the loading of folders and bundles in the background.
+/// The application window: the replay player, docks for the library, the run summary, the QoE
+/// report, the timeline, the charts and the log, and the loading of folders and bundles in the background.
 ///
 /// Shutdown order: the destructor calls `shutdown()` first, which cancels and waits for the
 /// pending scan, load and log indexing, and then destroys the replay engine. Only then is the
@@ -62,6 +63,7 @@ public:
     [[nodiscard]] ReplayPlayer* player() const;
     [[nodiscard]] RenderQueue* renderQueue() const;
     [[nodiscard]] SummaryPanel* summary() const;
+    [[nodiscard]] ReportView* report() const;
     [[nodiscard]] bool isBusy() const;
 
 signals:

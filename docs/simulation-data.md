@@ -136,8 +136,10 @@ The viewer reports where playback stopped and ends the replay there.
 
 In `pexels_34797065` at 36 Mbps the simulated player never shows segment 13: its download in
 `segments.jsonl` takes no time (`request_s` equals `done_s`), `sim.log` has no decision after
-segment 13, and playback goes from segment 12 straight to segment 14 (the simulated play time
-jumps by 3.3 s). The viewer marks segment 13 as not played and leaves it out of the replay.
+segment 13, and playback goes from segment 12 straight to segment 14. No simulation time is
+lost (segment 14's first frame follows segment 12's last frame after 33 ms, at 44.45 s), but
+the `PlayTime` field of the `PLAYING FRAME` lines jumps by 3.3 s, from 42.867 to 46.2. The viewer
+marks segment 13 as not played and leaves it out of the replay.
 
 
 ## Stalls

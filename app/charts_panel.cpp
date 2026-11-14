@@ -52,6 +52,20 @@ QString swatch(const QColor& color, const QString& label, bool hollow = false)
              label.toHtmlEscaped());
 }
 
+/// The smallest of 1, 2, 2.5, 4, 5 or 8 times a power of ten that is at least `value`, so that
+/// the axis maximum and its half (the tick labels) are round numbers.
+double niceCeiling(double value)
+{
+    if (value <= 0.0)
+        return 1.0;
+    const double power = std::pow(10.0, std::floor(std::log10(value)));
+    for (const double factor : {1.0, 2.0, 2.5, 4.0, 5.0, 8.0, 10.0}) {
+        if (factor * power >= value * (1.0 - 1e-9))
+            return factor * power;
+    }
+    return 10.0 * power;
+}
+
 double niceStep(double range)
 {
     static constexpr std::array steps = {1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0};
@@ -177,9 +191,9 @@ struct ChartsPanel::Plot {
 
     void finishRanges()
     {
-        y->setRange(0.0, yMax > 0.0 ? yMax * 1.1 : 1.0);
+        y->setRange(0.0, niceCeiling(yMax * 1.05));
         if (y2)
-            y2->setRange(0.0, y2Max > 0.0 ? y2Max * 1.1 : 1.0);
+            y2->setRange(0.0, niceCeiling(y2Max * 1.05));
     }
 };
 
@@ -227,11 +241,11 @@ ChartsPanel::ChartsPanel(Session* session, QWidget* parent)
         plot->x->setLabelFormat(QStringLiteral("%.0f s"));
         plot->y = makeAxis(Qt::AlignLeft);
         plot->y->setTickCount(3);
-        plot->y->setLabelFormat(QStringLiteral("%.4g"));
+        plot->y->setLabelFormat(QStringLiteral("%g"));
         if (static_cast<Chart>(i) == Chart::RttLoss) {
             plot->y2 = makeAxis(Qt::AlignRight);
             plot->y2->setTickCount(3);
-            plot->y2->setLabelFormat(QStringLiteral("%.2g"));
+            plot->y2->setLabelFormat(QStringLiteral("%g"));
         }
         const bool last = i == kChartCount - 1;
         plot->x->setLabelsVisible(last);

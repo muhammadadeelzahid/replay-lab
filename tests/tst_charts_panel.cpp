@@ -141,7 +141,8 @@ private slots:
         QVERIFY(std::ranges::any_of(measured, [](const QPointF& p) { return p.y() > 100.0; }));
         const auto* axis = static_cast<QValueAxis*>(
             f.panel.chart(Chart::Throughput)->axes(Qt::Vertical).first());
-        QVERIFY2(axis->max() <= 36.0 * 1.1 * 1.1 + 1e-9, qPrintable(QString::number(axis->max())));
+        // Values are cut at 1.1 x the link (39.6 Mbps) and the axis ends at the next round number.
+        QVERIFY2(axis->max() >= 39.6 && axis->max() <= 50.0, qPrintable(QString::number(axis->max())));
         QVERIFY(!pointsOf(f.panel.chart(Chart::DecisionDelay), QStringLiteral("delay")).isEmpty());
     }
 

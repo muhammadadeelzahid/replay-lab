@@ -3,6 +3,7 @@
 #include "library_view.h"
 #include "main_window.h"
 #include "replay_player.h"
+#include "report_view.h"
 #include "segment_timeline.h"
 #include "session.h"
 #include "summary_panel.h"
@@ -91,7 +92,7 @@ private slots:
         for (QAction* action : engines->actions())
             checked += action->isChecked() ? 1 : 0;
         QCOMPARE(checked, 1);
-        QCOMPARE(menus[2]->menu()->actions().size(), 5);  // one per dock
+        QCOMPARE(menus[2]->menu()->actions().size(), 6);  // one per dock
     }
 
     void engineCanBeSwitched()
@@ -285,7 +286,27 @@ private slots:
             });
             QCOMPARE(window.timeline()->count(SegmentTimeline::Kind::BufferFullWait),
                      static_cast<int>(waits));
+            // The report is shown for every bundle and agrees with summary.json.
+            QVERIFY2(window.report()->report().agreesWithSummary(), qPrintable(directory));
+            QVERIFY2(window.report()->verdict().startsWith(QStringLiteral("All 6 numbers")),
+                     qPrintable(window.report()->verdict()));
         }
+    }
+
+    void reportShowsTheOpenRun()
+    {
+        MainWindow window;
+        QVERIFY(window.report()->verdict().contains(QStringLiteral("No run")));
+        QVERIFY(open(window, test::dataPath(QStringLiteral("bbb_36"))));
+        const QStringList rows = window.report()->rows();
+        QVERIFY(rows.contains(QStringLiteral("What the viewer saw |  |  | ")));
+        const auto stalls = std::ranges::find_if(rows, [](const QString& row) {
+            return row.startsWith(QStringLiteral("  Stalls |"));
+        });
+        QVERIFY(stalls != rows.end());
+        QVERIFY2(stalls->endsWith(QStringLiteral("| agrees")), qPrintable(*stalls));
+        QCOMPARE(window.report()->report().stallCount,
+                 static_cast<int>(window.session()->run()->stalls.size()));
     }
 };
 

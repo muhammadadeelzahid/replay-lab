@@ -4,6 +4,7 @@
 #include "library_view.h"
 #include "log_console.h"
 #include "replay_player.h"
+#include "report_view.h"
 #include "segment_timeline.h"
 #include "session.h"
 #include "summary_panel.h"
@@ -45,6 +46,7 @@ struct MainWindow::Impl {
     Session* session = nullptr;
     LibraryView* library = nullptr;
     SummaryPanel* summary = nullptr;
+    ReportView* report = nullptr;
     SegmentTimeline* timeline = nullptr;
     ChartsPanel* charts = nullptr;
     LogConsole* logs = nullptr;
@@ -205,6 +207,7 @@ void MainWindow::updateEngineActions()
 RenderQueue* MainWindow::renderQueue() const { return d_->renderQueue.get(); }
 LogConsole* MainWindow::logs() const { return d_->logs; }
 SummaryPanel* MainWindow::summary() const { return d_->summary; }
+ReportView* MainWindow::report() const { return d_->report; }
 
 bool MainWindow::isBusy() const
 {
@@ -224,13 +227,17 @@ void MainWindow::createDocks()
 
     d_->library = new LibraryView(this);
     d_->summary = new SummaryPanel(d_->session, this);
+    d_->report = new ReportView(d_->session, this);
     d_->timeline = new SegmentTimeline(d_->session, this);
     d_->charts = new ChartsPanel(d_->session, this);
     d_->logs = new LogConsole(d_->session, this);
 
     auto* library = addDock(tr("Library"), QStringLiteral("libraryDock"), d_->library,
                             Qt::LeftDockWidgetArea);
-    addDock(tr("Run"), QStringLiteral("summaryDock"), d_->summary, Qt::LeftDockWidgetArea);
+    auto* summary = addDock(tr("Run"), QStringLiteral("summaryDock"), d_->summary, Qt::LeftDockWidgetArea);
+    auto* report = addDock(tr("Report"), QStringLiteral("reportDock"), d_->report, Qt::LeftDockWidgetArea);
+    tabifyDockWidget(summary, report);
+    summary->raise();
     auto* timeline = addDock(tr("Timeline"), QStringLiteral("timelineDock"), d_->timeline,
                              Qt::BottomDockWidgetArea);
     auto* logs = addDock(tr("Log"), QStringLiteral("logDock"), d_->logs, Qt::BottomDockWidgetArea);
