@@ -17,7 +17,9 @@ namespace abrviz {
 
 namespace {
 
-constexpr int kHeight = 150;          ///< Fixed height of the strip, in pixels.
+constexpr int kHeight = 184;          ///< Fixed height of the strip, in pixels.
+constexpr double kPadding = 14.0;     ///< Space between the drawing and the edges of the strip.
+constexpr double kLabelHeight = 20.0; ///< Height of a node's name.
 constexpr double kNodeRadius = 21.0;  ///< Radius of a node's disc, in pixels.
 
 /**
@@ -202,10 +204,12 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     QFont bold = base;
     bold.setBold(true);
     const double w = width();
-    const double ground = height() - 44.0;
-    const double sky = 42.0;
-    const double left = 70.0;
-    const double right = w - 70.0;
+    // The satellite's name sits above its disc and the other names below theirs; the padding
+    // keeps all of them clear of the edges.
+    const double sky = kPadding + kLabelHeight + 4.0 + kNodeRadius;
+    const double ground = height() - kPadding - kLabelHeight - 4.0 - kNodeRadius;
+    const double left = 80.0;
+    const double right = w - 80.0;
     const std::array<Node, 4> nodes{{
         {Glyph::Server, label[0], {left, ground}},
         {Glyph::Satellite, label[2], {left + (right - left) * 0.34, sky}},
@@ -257,7 +261,7 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         painter.drawText(box, Qt::AlignCenter, links[i].label);
     }
 
-    // Nodes: a disc with the glyph, the name underneath (beside it for the satellite).
+    // Nodes: a disc with the glyph, the name underneath (above it for the satellite).
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const Node& node = nodes[i];
         const bool viewer = i == 3;
@@ -273,13 +277,10 @@ void NetworkPathView::paintEvent(QPaintEvent*)
 
         painter.setFont(bold);
         painter.setPen(viewer && stalled_ ? red : text);
-        QRectF labelRect;
-        if (i == 1)
-            labelRect = QRectF(node.centre.x() + kNodeRadius + 8, node.centre.y() - 10, 260, 20);
-        else
-            labelRect = QRectF(node.centre.x() - 110, node.centre.y() + kNodeRadius + 4, 220, 20);
-        const Qt::Alignment align = (i == 1 ? Qt::AlignLeft : Qt::AlignHCenter) | Qt::AlignVCenter;
-        painter.drawText(labelRect, static_cast<int>(align.toInt()),
+        const double labelTop = i == 1 ? node.centre.y() - kNodeRadius - 4.0 - kLabelHeight
+                                       : node.centre.y() + kNodeRadius + 4.0;
+        const QRectF labelRect(node.centre.x() - 150.0, labelTop, 300.0, kLabelHeight);
+        painter.drawText(labelRect, Qt::AlignHCenter | Qt::AlignVCenter,
                          viewer && stalled_ ? tr("Viewer · stalled") : node.title);
     }
 
@@ -288,7 +289,7 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         painter.setFont(base);
         const QFontMetricsF metrics(base);
         const double textWidth = std::min(metrics.horizontalAdvance(activity_) + 4.0, w * 0.42);
-        const QRectF box(w - 16.0 - textWidth, 8, textWidth, 20);
+        const QRectF box(w - kPadding - textWidth, kPadding, textWidth, kLabelHeight);
         const QColor dot = stalled_ ? red : (downloading_ ? accent : secondary);
         painter.setPen(Qt::NoPen);
         painter.setBrush(dot);
