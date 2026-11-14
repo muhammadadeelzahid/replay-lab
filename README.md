@@ -50,17 +50,6 @@ its video is rendered (a few seconds) and cached. Build from source for the GStr
 
 Select the engine in Settings or with `--engine gstreamer|prerendered`.
 
-## Performance
-
-Apple M4, release build, Big Buck Bunny at 36 Mbps (4K top rung, 111 s):
-
-| | |
-| --- | --- |
-| Open the run | 0.11 s |
-| GStreamer playback | 30 fps, 60 % of one core |
-| Pre-rendered playback | 30 fps, 57 % of one core |
-| Render the experienced video | 13.7 s |
-
 ## Requirements
 
 - CMake 3.24+, Ninja, a C++20 compiler
