@@ -1,3 +1,7 @@
 qt_add_executable(validate_bundle validate_bundle.cpp bundle_paths.h)
 target_link_libraries(validate_bundle PRIVATE abrviz_core)
 abrviz_set_warnings(validate_bundle)
+
+qt_add_executable(print_report print_report.cpp bundle_paths.h)
+target_link_libraries(print_report PRIVATE abrviz_core)
+abrviz_set_warnings(print_report)

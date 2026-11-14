@@ -156,6 +156,18 @@ the stall comes from a re-run of the same configuration. The viewer shows the ag
 next to the stall data.
 
 
+## What `summary.json` measures
+
+The exporter's numbers describe the policy's choices as recorded, not what was played:
+`avg_bitrate_bps` is the mean bitrate over all records of `segments.jsonl` (including the
+decision for the segment after the end), `switch_count` counts rung changes between records,
+`avg_throughput_bps` is the mean of `samples.jsonl`, and `startup_delay_s` is
+`playback_start - stream_start`. The viewer reproduces these exactly as a check, and also
+reports the values as played: only the segments that were shown, at their played rungs. For BBB
+at 18 Mbps, for example, the policy chose 8.12 Mbps on average with 21 switches, while the user
+saw 7.92 Mbps with 22 switches.
+
+
 ## Samples
 
 `samples.jsonl` has one sample per decision, usually 2 to 3 s apart, with gaps of up to 42 s

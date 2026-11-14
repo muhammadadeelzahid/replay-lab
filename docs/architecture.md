@@ -75,7 +75,8 @@ Pure functions, with no threads and no QObjects:
 - `applySegmentShift()` turns the bundle records into played segments and decisions
   ([simulation-data.md](simulation-data.md), "Rungs are shifted by one segment").
 - `PlaybackClock` maps between simulation time and replay time (below).
-- `computeQoe()` computes the report numbers.
+- `computeQoe()` computes the report numbers, both as chosen by the policy (the definitions
+  `summary.json` uses, checked against it) and as played.
 
 
 ## Playback clock
