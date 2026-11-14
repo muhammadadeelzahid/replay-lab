@@ -43,3 +43,7 @@ abrviz_add_test(tst_media_engine_support
 abrviz_add_test(tst_main_window
     SOURCES tst_main_window.cpp
     LIBS abrviz_gui)
+
+abrviz_add_test(tst_charts_panel
+    SOURCES tst_charts_panel.cpp
+    LIBS abrviz_gui)

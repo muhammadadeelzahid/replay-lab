@@ -6,13 +6,14 @@
 
 namespace abrviz {
 
+class ChartsPanel;
 class LibraryView;
 class Session;
 class SegmentTimeline;
 class SummaryPanel;
 
-/// The application window: docks for the library, the run summary and the timeline, and the
-/// loading of folders and bundles in the background.
+/// The application window: docks for the library, the run summary, the timeline and the charts,
+/// and the loading of folders and bundles in the background.
 ///
 /// Shutdown order: the destructor calls `shutdown()` first, which cancels and waits for the
 /// pending scan and load. Only then are the private state and the child widgets destroyed, so
@@ -44,6 +45,7 @@ public:
     [[nodiscard]] Session* session() const;
     [[nodiscard]] LibraryView* library() const;
     [[nodiscard]] SegmentTimeline* timeline() const;
+    [[nodiscard]] ChartsPanel* charts() const;
     [[nodiscard]] SummaryPanel* summary() const;
     [[nodiscard]] bool isBusy() const;
 

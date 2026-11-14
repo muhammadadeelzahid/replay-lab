@@ -13,7 +13,10 @@ add_library(abrviz_gui STATIC
     summary_panel.h
     summary_panel.cpp
     segment_timeline.h
-    segment_timeline.cpp)
+    segment_timeline.cpp
+    chart_series.h
+    charts_panel.h
+    charts_panel.cpp)
 
 target_include_directories(abrviz_gui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(abrviz_gui PUBLIC

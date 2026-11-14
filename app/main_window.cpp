@@ -1,5 +1,6 @@
 #include "main_window.h"
 
+#include "charts_panel.h"
 #include "library_view.h"
 #include "segment_timeline.h"
 #include "session.h"
@@ -33,6 +34,7 @@ struct MainWindow::Impl {
     LibraryView* library = nullptr;
     SummaryPanel* summary = nullptr;
     SegmentTimeline* timeline = nullptr;
+    ChartsPanel* charts = nullptr;
     QLabel* placeholder = nullptr;
     QLabel* versionLabel = nullptr;
     QProgressBar* progress = nullptr;
@@ -124,6 +126,7 @@ void MainWindow::shutdown()
 Session* MainWindow::session() const { return d_->session; }
 LibraryView* MainWindow::library() const { return d_->library; }
 SegmentTimeline* MainWindow::timeline() const { return d_->timeline; }
+ChartsPanel* MainWindow::charts() const { return d_->charts; }
 SummaryPanel* MainWindow::summary() const { return d_->summary; }
 
 bool MainWindow::isBusy() const
@@ -145,13 +148,16 @@ void MainWindow::createDocks()
     d_->library = new LibraryView(this);
     d_->summary = new SummaryPanel(d_->session, this);
     d_->timeline = new SegmentTimeline(d_->session, this);
+    d_->charts = new ChartsPanel(d_->session, this);
 
     auto* library = addDock(tr("Library"), QStringLiteral("libraryDock"), d_->library,
                             Qt::LeftDockWidgetArea);
     addDock(tr("Run"), QStringLiteral("summaryDock"), d_->summary, Qt::LeftDockWidgetArea);
     addDock(tr("Timeline"), QStringLiteral("timelineDock"), d_->timeline,
             Qt::BottomDockWidgetArea);
-    resizeDocks({library}, {520}, Qt::Horizontal);
+    auto* charts = addDock(tr("Charts"), QStringLiteral("chartsDock"), d_->charts,
+                           Qt::RightDockWidgetArea);
+    resizeDocks({library, charts}, {520, 620}, Qt::Horizontal);
 }
 
 void MainWindow::createMenus()
