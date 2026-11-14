@@ -225,7 +225,7 @@ LibraryView::LibraryView(QWidget* parent)
         tagline->setFixedWidth(520);
         tagline->setMinimumHeight(tagline->heightForWidth(520));
         auto* path = new NetworkPathView(nullptr, nullptr, welcome_);
-        path->setFixedWidth(720);
+        path->setFixedWidth(760);
 
         auto* actions = new QVBoxLayout();
         actions->setSpacing(4);

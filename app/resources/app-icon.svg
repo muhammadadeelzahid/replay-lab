@@ -14,10 +14,6 @@
       <stop offset="0" stop-color="#64d2ff" stop-opacity="0.55"/>
       <stop offset="1" stop-color="#64d2ff"/>
     </linearGradient>
-    <!-- The half of the orbit nearer the viewer: everything below the orbit's long axis. -->
-    <clipPath id="front">
-      <rect x="-600" y="0" width="1200" height="400" transform="translate(512 512) rotate(-22)"/>
-    </clipPath>
     <filter id="shadow" x="-60%" y="-60%" width="220%" height="220%">
       <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.5"/>
     </filter>
@@ -42,8 +38,8 @@
   <path d="M392 318 Q392 270 434 294 L708 466 Q748 491 708 516 L434 688 Q392 712 392 664 Z"
         fill="url(#play)" filter="url(#shadow)"/>
   <!-- The near half of the orbit, in front of it. -->
-  <ellipse cx="512" cy="512" rx="350" ry="112" transform="rotate(-22 512 512)" fill="none"
-           stroke="url(#orbit)" stroke-width="18" clip-path="url(#front)"/>
+  <path d="M-350 0 A350 112 0 0 0 350 0" transform="translate(512 512) rotate(-22)" fill="none"
+        stroke="url(#orbit)" stroke-width="18"/>
   <!-- The satellite, on the near half of the orbit. -->
   <g transform="translate(787 478) rotate(-30) scale(0.74)" filter="url(#shadow)">
     <rect x="-30" y="-36" width="60" height="72" rx="12" fill="#f2f2f7"/>

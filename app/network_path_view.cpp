@@ -21,6 +21,9 @@ constexpr int kHeight = 184;          ///< Fixed height of the strip, in pixels.
 constexpr double kPadding = 14.0;     ///< Space between the drawing and the edges of the strip.
 constexpr double kLabelHeight = 20.0; ///< Height of a node's name.
 constexpr double kNodeRadius = 21.0;  ///< Radius of a node's disc, in pixels.
+constexpr int kHeaderHeight = 26;     ///< Height of the static diagram's heading.
+constexpr int kNoteHeight = 26;       ///< Height of the notes under the static diagram's nodes.
+constexpr double kCardRadius = 14.0;  ///< Corner radius of the static diagram's card.
 
 /**
  * @brief A node of the path as painted: a disc with a glyph and a name.
@@ -74,7 +77,7 @@ NetworkPathView::NetworkPathView(Session* session, ReplayPlayer* player, QWidget
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     animation_->setInterval(33);
     connect(animation_, &QTimer::timeout, this, [this] {
-        phase_ += 1.4;
+        phase_ += isStaticDiagram() ? 0.5 : 1.4;  // the static diagram drifts slowly
         update();
     });
     if (session_) {
@@ -88,12 +91,17 @@ NetworkPathView::NetworkPathView(Session* session, ReplayPlayer* player, QWidget
 
 QSize NetworkPathView::sizeHint() const
 {
-    return {900, kHeight};
+    return {900, isStaticDiagram() ? kHeight + kHeaderHeight + kNoteHeight + 18 : kHeight};
 }
 
 QSize NetworkPathView::minimumSizeHint() const
 {
-    return {520, kHeight};
+    return {520, sizeHint().height()};
+}
+
+bool NetworkPathView::isAnimating() const
+{
+    return animation_->isActive();
 }
 
 void NetworkPathView::refresh()
@@ -135,7 +143,7 @@ void NetworkPathView::refresh()
 
 void NetworkPathView::updateAnimation()
 {
-    if (isVisible() && downloading_ && running_)
+    if (isVisible() && (isStaticDiagram() || (downloading_ && running_)))
         animation_->start();
     else
         animation_->stop();
@@ -194,26 +202,80 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     QColor idle = text;
     idle.setAlphaF(0.28F);
 
-    // Background: a quiet band, slightly set off from the window.
-    QColor band = dark ? QColor(255, 255, 255, 10) : QColor(0, 0, 0, 8);
-    painter.fillRect(rect(), band);
+    const bool card = isStaticDiagram();
+    const double w = width();
+    // The static diagram leaves room for its heading above and the notes below the nodes.
+    const double top = card ? kPadding + kHeaderHeight : kPadding;
+    const double bottom = height() - kPadding - (card ? kNoteHeight : 0);
+    // The static diagram's satellite has a note under its name, above the disc.
+    const double sky = top + kLabelHeight + (card ? 18.0 : 0.0) + 4.0 + kNodeRadius;
+    const double ground = bottom - kLabelHeight - 4.0 - kNodeRadius;
+
+    if (card) {
+        // A card with a night sky over the Earth's horizon; the satellite is in the sky, the
+        // other nodes stand on the ground.
+        const QRectF frame = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        QPainterPath outline;
+        outline.addRoundedRect(frame, kCardRadius, kCardRadius);
+        QLinearGradient skyFill(0, 0, 0, height());
+        skyFill.setColorAt(0, dark ? QColor(0x17, 0x2a, 0x52) : QColor(0xe6, 0xee, 0xfb));
+        skyFill.setColorAt(1, dark ? QColor(0x10, 0x14, 0x22) : QColor(0xf6, 0xf7, 0xfa));
+        painter.fillPath(outline, skyFill);
+        painter.save();
+        painter.setClipPath(outline);
+        // Stars, at fixed places in the upper half.
+        painter.setPen(Qt::NoPen);
+        QColor star = dark ? QColor(255, 255, 255) : accent;
+        const std::array<std::array<double, 3>, 9> stars{{{0.06, 0.30, 1.6}, {0.14, 0.62, 1.2},
+            {0.22, 0.50, 1.4}, {0.45, 0.46, 1.1}, {0.58, 0.18, 1.6}, {0.66, 0.40, 1.2},
+            {0.79, 0.27, 1.5}, {0.88, 0.55, 1.1}, {0.95, 0.20, 1.3}}};
+        for (const auto& [x, y, r] : stars) {
+            star.setAlphaF(dark ? 0.45F : 0.25F);
+            painter.setBrush(star);
+            painter.drawEllipse(QPointF(x * w, top + y * (ground - top)), r, r);
+        }
+        // The horizon: a shallow arc of a large circle, its top just under the ground nodes.
+        const double radius = w * 12.0;
+        const QPointF earth(w / 2.0, ground + kNodeRadius + 1.0 + radius);
+        QRadialGradient land(earth, radius);
+        QColor glow = accent;
+        glow.setAlphaF(dark ? 0.16F : 0.10F);
+        QColor deep = accent;
+        deep.setAlphaF(0.0F);
+        land.setColorAt(1.0, glow);
+        land.setColorAt(1.0 - 60.0 / radius, deep);
+        painter.setBrush(land);
+        painter.drawEllipse(earth, radius, radius);
+        QColor rim = accent;
+        rim.setAlphaF(dark ? 0.45F : 0.35F);
+        painter.setPen(QPen(rim, 1.4));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(earth, radius, radius);
+        painter.restore();
+        QColor border = text;
+        border.setAlphaF(0.10F);
+        painter.setPen(QPen(border, 1.0));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPath(outline);
+    } else {
+        // A quiet band, slightly set off from the window.
+        painter.fillRect(rect(), dark ? QColor(255, 255, 255, 10) : QColor(0, 0, 0, 8));
+    }
 
     const QStringList label = labels();
     const QFont base = font();
     QFont small = format::scaled(base, 0.85);
     QFont bold = base;
     bold.setBold(true);
-    const double w = width();
     // The satellite's name sits above its disc and the other names below theirs; the padding
     // keeps all of them clear of the edges.
-    const double sky = kPadding + kLabelHeight + 4.0 + kNodeRadius;
-    const double ground = height() - kPadding - kLabelHeight - 4.0 - kNodeRadius;
     const double left = 80.0;
     const double right = w - 80.0;
     const std::array<Node, 4> nodes{{
         {Glyph::Server, label[0], {left, ground}},
-        {Glyph::Satellite, label[2], {left + (right - left) * 0.34, sky}},
-        {Glyph::Relay, label[4], {left + (right - left) * 0.70, ground}},
+        // The static diagram leaves more room between the relay and the viewer for their notes.
+        {Glyph::Satellite, label[2], {left + (right - left) * (card ? 0.32 : 0.34), sky}},
+        {Glyph::Relay, label[4], {left + (right - left) * (card ? 0.64 : 0.70), ground}},
         {Glyph::Device, label[6], {right, ground}},
     }};
 
@@ -233,11 +295,13 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     access.lineTo(nodes[3].centre);
 
     const bool active = run_ && downloading_;
+    QColor drift = accent;  // the static diagram's slowly flowing dashes
+    drift.setAlphaF(0.75F);
     for (std::size_t i = 0; i < links.size(); ++i) {
         const QPainterPath& path = i == 2 ? access : links[i].path;
-        QPen pen(active ? accent : idle, active ? 2.6 : 1.6);
+        QPen pen(active ? accent : (card ? drift : idle), active ? 2.6 : (card ? 2.0 : 1.6));
         pen.setCapStyle(Qt::RoundCap);
-        if (active) {
+        if (active || card) {
             pen.setDashPattern({3.0, 3.0});
             pen.setDashOffset(-phase_);  // moves from the server towards the viewer
         }
@@ -255,7 +319,10 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         if (i == 2)
             box.moveTop(middle.y() - metrics.height() - 12.0);
         painter.setPen(Qt::NoPen);
-        painter.setBrush(pal.color(QPalette::Window));
+        QColor chip = pal.color(QPalette::Window);
+        if (card)
+            chip.setAlphaF(0.85F);
+        painter.setBrush(chip);
         painter.drawRoundedRect(box, 5, 5);
         painter.setPen(active ? accent : secondary);
         painter.drawText(box, Qt::AlignCenter, links[i].label);
@@ -278,10 +345,46 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         painter.setFont(bold);
         painter.setPen(viewer && stalled_ ? red : text);
         const double labelTop = i == 1 ? node.centre.y() - kNodeRadius - 4.0 - kLabelHeight
+                                             - (card ? 18.0 : 0.0)
                                        : node.centre.y() + kNodeRadius + 4.0;
         const QRectF labelRect(node.centre.x() - 150.0, labelTop, 300.0, kLabelHeight);
         painter.drawText(labelRect, Qt::AlignHCenter | Qt::AlignVCenter,
                          viewer && stalled_ ? tr("Viewer · stalled") : node.title);
+    }
+
+    if (card) {
+        // The heading, and what each node does in a note under its name (beside the satellite,
+        // whose name is above it).
+        QFont heading = format::scaled(base, 0.8);
+        heading.setBold(true);
+        heading.setLetterSpacing(QFont::PercentageSpacing, 108);
+        heading.setCapitalization(QFont::AllUppercase);
+        painter.setFont(heading);
+        painter.setPen(secondary);
+        painter.drawText(QRectF(kPadding + 6.0, kPadding, w - 2.0 * kPadding, kHeaderHeight),
+                         Qt::AlignLeft | Qt::AlignVCenter, tr("How every run was streamed"));
+        painter.setFont(small);
+        const std::array<QString, 4> notes{tr("Sends the video in segments"),
+                                           tr("A 5G base station in orbit"),
+                                           tr("Backhauled by satellite"),
+                                           tr("An LLM picks the quality")};
+        for (std::size_t i = 0; i < nodes.size(); ++i) {
+            const Node& node = nodes[i];
+            QRectF noteRect;
+            const Qt::Alignment align = Qt::AlignHCenter;
+            if (i == 1) {
+                noteRect = QRectF(node.centre.x() - 110.0, node.centre.y() - kNodeRadius - 4.0 - 18.0,
+                                  220.0, 18.0);
+            } else {
+                noteRect = QRectF(node.centre.x() - 110.0, node.centre.y() + kNodeRadius + 4.0 + kLabelHeight,
+                                  220.0, 18.0);
+            }
+            if (i == 3)  // keep the last note inside the card
+                noteRect.moveRight(std::min(noteRect.right(), w - kPadding));
+            if (i == 0)
+                noteRect.moveLeft(std::max(noteRect.left(), kPadding));
+            painter.drawText(noteRect, static_cast<int>((align | Qt::AlignVCenter).toInt()), notes[i]);
+        }
     }
 
     // What is happening at the cursor, top right.
