@@ -1,0 +1,154 @@
+# Builds Stream Inspector for macOS, Windows and Linux and attaches the packages to a draft
+# GitHub release. Runs when a version tag is pushed (git tag v0.1.0 && git push origin v0.1.0)
+# or by hand from the Actions tab. The simulation data (viewer_bundles.tar) is not in git; add
+# it to the draft release by hand before publishing it.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: "6.9.3"
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: "qtcharts qtmultimedia"
+          cache: true
+
+      - name: Install ffmpeg and Ninja
+        run: brew install ninja ffmpeg
+
+      - name: Build
+        run: |
+          cmake --preset dist -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+          cmake --build --preset dist
+
+      - name: Package
+        run: packaging/macos/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.zip
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: "qtcharts qtmultimedia"
+          cache: true
+
+      - name: Set up the compiler
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install ffmpeg and Ninja
+        run: choco install ffmpeg ninja -y --no-progress
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --preset dist -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+          cmake --build --preset dist
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $ffmpeg = Get-ChildItem C:\ProgramData\chocolatey\lib\ffmpeg -Recurse -Filter ffmpeg.exe |
+              Select-Object -First 1
+          ./packaging/windows/package.ps1 -Ffmpeg $ffmpeg.FullName
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: "qtcharts qtmultimedia"
+          cache: true
+
+      - name: Install ffmpeg, Ninja and the AppImage tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build ffmpeg libfuse2 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libgl1-mesa-dev
+          mkdir -p "$HOME/bin"
+          base=https://github.com/linuxdeploy
+          curl -sSL -o "$HOME/bin/linuxdeploy" \
+            $base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -sSL -o "$HOME/bin/linuxdeploy-plugin-qt" \
+            $base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x "$HOME/bin/linuxdeploy" "$HOME/bin/linuxdeploy-plugin-qt"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: |
+          cmake --preset dist -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+          cmake --build --preset dist
+
+      - name: Package
+        run: packaging/linux/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.AppImage
+
+  release:
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd packages && sha256sum * > SHA256SUMS.txt
+
+      - name: Draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: packages/*
+          body: |
+            Stream Inspector for macOS (Apple silicon), Windows (x64) and Linux (x86_64).
+
+            Download the package for your system and `viewer_bundles.tar` (the simulation runs).
+            Extract the runs, open the app and choose the `viewer_bundles` folder.
+
+            - macOS: unzip and move the app to Applications. The app is not notarised: the
+              first time, right-click it and choose Open.
+            - Windows: unzip and run `stream-inspector.exe`. If SmartScreen warns, choose More
+              info, then Run anyway.
+            - Linux: `chmod +x` the AppImage and run it.
+
+            These packages use the pre-rendered engine: the first time a run is played, its video
+            is rendered with the bundled ffmpeg (a few seconds) and kept in the cache. Build from
+            source to use the GStreamer engine.

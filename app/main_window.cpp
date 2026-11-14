@@ -117,12 +117,31 @@ QFrame* divider(Qt::Orientation orientation, QWidget* parent)
     return line;
 }
 
-} // namespace
+
 
 /**
  * @brief The window's private state: the render queue, the widgets, the actions and the
  *        pending background tasks.
  */
+/**
+ * @brief The ffmpeg to render with: the one shipped next to the executable in the release
+ *        packages if there is one, otherwise the one on the PATH.
+ *
+ * @return The path of the bundled `ffmpeg` (`ffmpeg.exe` on Windows), or "ffmpeg".
+ */
+QString bundledFfmpeg()
+{
+#ifdef Q_OS_WIN
+    const QString name = QStringLiteral("ffmpeg.exe");
+#else
+    const QString name = QStringLiteral("ffmpeg");
+#endif
+    const QString bundled = QDir(QCoreApplication::applicationDirPath()).filePath(name);
+    return QFileInfo(bundled).isExecutable() ? bundled : QStringLiteral("ffmpeg");
+}
+
+} // namespace
+
 struct MainWindow::Impl {
     /**
      * @brief Renders the experienced video for the pre-rendered engine.
@@ -207,7 +226,7 @@ MainWindow::MainWindow(QWidget* parent)
     const auto environment = QProcessEnvironment::systemEnvironment();
     RenderQueue::Options renderOptions;
     renderOptions.cacheDirectory = environment.value(QStringLiteral("ABRVIZ_RENDER_CACHE"));
-    renderOptions.ffmpeg = environment.value(QStringLiteral("ABRVIZ_FFMPEG"), QStringLiteral("ffmpeg"));
+    renderOptions.ffmpeg = environment.value(QStringLiteral("ABRVIZ_FFMPEG"), bundledFfmpeg());
     d_->renderQueue = std::make_unique<RenderQueue>(renderOptions);
 
     d_->player = new ReplayPlayer(d_->session, d_->renderQueue.get(), this);

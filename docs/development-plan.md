@@ -30,7 +30,7 @@ replay engines (GStreamer and pre-rendered). Comparing runs side by side is not 
 | Step | Work | Done when |
 | --- | --- | --- |
 | 12 | API documentation: Doxygen comments on every function, class and file; `docs` build target | `cmake --build --preset release --target docs` builds the HTML with no undocumented-member warnings |
-| 13 | Let people see it without building: a short screen recording or GIF in the README, and the prebuilt Mac app (`Stream Inspector.app`, zipped) attached to a GitHub Release together with `viewer_bundles.tar` | the README shows the app in motion; the release has the app and the data |
+| 13 | Let people run it without building: release packages for macOS (`.app`, zipped), Windows (`.exe` with Qt, zipped) and Linux (AppImage), built by `.github/workflows/release.yml` on a `v*` tag with the scripts in `packaging/`, each with ffmpeg inside and the pre-rendered engine; `viewer_bundles.tar` added to the draft release by hand; a short screen recording or GIF in the README | the draft release has the three packages and the data; the README shows the app in motion |
 | 14 | Web build with Qt for WebAssembly: the `nogst` configuration compiled to `.wasm`; the pre-rendered engine plays videos rendered ahead of time with `render_experienced` and hosted next to the app; a few sample runs bundled or fetched at start (file reading without memory mapping); Qt's multithreaded WebAssembly build, with the COOP/COEP headers provided by a service worker on GitHub Pages | a sample run opens and plays in a browser from GitHub Pages |
 
 Step 13 is about an hour of work; step 14 is two to four days, mostly data loading and the

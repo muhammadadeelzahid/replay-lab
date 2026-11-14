@@ -14,6 +14,21 @@ Built with C++20, Qt 6 and GStreamer.
 
 ![Replay of Big Buck Bunny at 36 Mbps](docs/images/replay.jpg)
 
+## Download
+
+Packages for macOS (Apple silicon), Windows and Linux are on the
+[Releases](https://github.com/muhammadadeelzahid/abr-viz/releases) page, with the simulation
+runs (`viewer_bundles.tar`). Extract the runs, open the app and choose the `viewer_bundles`
+folder.
+
+- macOS: unzip and move the app to Applications. The first time, right-click it and choose
+  Open (the app is not notarised).
+- Windows: unzip and run `stream-inspector.exe`.
+- Linux: `chmod +x` the AppImage and run it.
+
+The packages include ffmpeg and use the pre-rendered engine: the first time a run is played,
+its video is rendered (a few seconds) and cached. Build from source for the GStreamer engine.
+
 ## Features
 
 - Library of runs grouped by video and feeder link rate, with stalls and cut-off playback marked
@@ -67,7 +82,9 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-Other presets: `debug`, `nogst` (without GStreamer), `asan`, `tsan`.
+Other presets: `debug`, `nogst` (without GStreamer), `asan`, `tsan`, and `dist` for the release
+packages (see `packaging/` and `.github/workflows/release.yml`; pushing a `v*` tag builds all
+three and drafts a release).
 
 ## Run
 

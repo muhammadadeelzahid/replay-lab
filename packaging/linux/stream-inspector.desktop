@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Stream Inspector
+Comment=Replays ns-3 adaptive streaming runs over satellite 5G with IAB
+Exec=stream-inspector
+Icon=stream-inspector
+Categories=Science;Video;
+Terminal=false

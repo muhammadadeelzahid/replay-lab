@@ -86,3 +86,22 @@ if(APPLE)
 else()
     set_target_properties(abrviz PROPERTIES OUTPUT_NAME "stream-inspector")
 endif()
+
+if(WIN32)
+    # A GUI program (no console window) with the application icon.
+    set_target_properties(abrviz PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_sources(abrviz PRIVATE ${PROJECT_SOURCE_DIR}/packaging/windows/app.rc)
+    target_link_libraries(abrviz PRIVATE psapi)
+endif()
+
+# Installation, used by the release packages (the Linux AppImage is built from the install tree).
+include(GNUInstallDirs)
+install(TARGETS abrviz
+    BUNDLE DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(UNIX AND NOT APPLE)
+    install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/stream-inspector.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/stream-inspector.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+endif()

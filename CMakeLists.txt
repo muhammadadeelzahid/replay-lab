@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(ABR_WITH_GSTREAMER "Build the GStreamer replay engine" ON)
 option(ABR_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+option(ABR_BUILD_TESTS "Build the tests" ON)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS
     Core Concurrent Widgets Charts Multimedia MultimediaWidgets Svg Test)
@@ -96,4 +97,6 @@ add_subdirectory(core)
 add_subdirectory(media)
 add_subdirectory(app)
 add_subdirectory(tools)
-add_subdirectory(tests)
+if(ABR_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()

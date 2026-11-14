@@ -23,7 +23,14 @@
 
 #include <QVideoSink>
 
+#ifdef Q_OS_WIN
+#define NOMINMAX  // windows.h would otherwise turn std::min and std::max into macros
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <psapi.h>
+#else
 #include <sys/resource.h>
+#endif
 
 #include <algorithm>
 #include <cstdio>
@@ -100,30 +107,46 @@ void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool wa
  */
 double cpuSeconds()
 {
+#ifdef Q_OS_WIN
+    FILETIME created{}, exited{}, kernel{}, user{};
+    GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user);
+    const auto seconds = [](const FILETIME& t) {
+        const auto ticks = (static_cast<unsigned long long>(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+        return static_cast<double>(ticks) / 1e7;  // 100 ns units
+    };
+    return seconds(kernel) + seconds(user);
+#else
     rusage usage{};
     getrusage(RUSAGE_SELF, &usage);
     const auto seconds = [](const timeval& t) {
         return static_cast<double>(t.tv_sec) + static_cast<double>(t.tv_usec) / 1e6;
     };
     return seconds(usage.ru_utime) + seconds(usage.ru_stime);
+#endif
 }
 
 /**
  * @brief The process's peak resident memory.
  *
- * @note getrusage() reports ru_maxrss in bytes on macOS and in kilobytes elsewhere; both are
- *       converted.
+ * @note getrusage() reports ru_maxrss in bytes on macOS and in kilobytes on Linux; Windows
+ *       reports the peak working set in bytes. All are converted.
  *
  * @return The maximum resident set size so far, in MiB.
  */
 double peakMemoryMb()
 {
+#ifdef Q_OS_WIN
+    PROCESS_MEMORY_COUNTERS counters{};
+    GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters));
+    return static_cast<double>(counters.PeakWorkingSetSize) / (1024.0 * 1024.0);
+#else
     rusage usage{};
     getrusage(RUSAGE_SELF, &usage);
 #ifdef Q_OS_MACOS
     return static_cast<double>(usage.ru_maxrss) / (1024.0 * 1024.0);  // bytes
 #else
     return static_cast<double>(usage.ru_maxrss) / 1024.0;  // kilobytes
+#endif
 #endif
 }
 
