@@ -384,6 +384,9 @@ private slots:
             });
             QCOMPARE(window.timeline()->count(SegmentTimeline::Kind::BufferFullWait),
                      static_cast<int>(waits));
+            // Every run was streamed over the satellite to the IAB relay.
+            QVERIFY2(run->topology.hasSatellite() && run->topology.viaRelay, qPrintable(directory));
+            QCOMPARE(*run->topology.satelliteAltitude, 550000.0);
             // The report is shown for every bundle and agrees with summary.json.
             QVERIFY2(window.report()->report().agreesWithSummary(), qPrintable(directory));
             QVERIFY2(window.report()->verdict().startsWith(QStringLiteral("All 6 numbers")),

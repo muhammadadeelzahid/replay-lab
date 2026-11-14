@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Stream Inspector: a play symbol (the replayed stream) under a magnifying glass, which
-       shows the stepped line of the bitrate the player switched between. -->
+  <!-- Stream Inspector: a play symbol (the replayed stream) sent down from a LEO satellite,
+       under a magnifying glass showing the stepped line of the bitrate the player switched
+       between. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#3c3c45"/>
@@ -25,6 +26,19 @@
   <!-- Play symbol with rounded corners. -->
   <path d="M276 236 Q276 186 320 211 L662 404 Q706 429 662 454 L320 647 Q276 672 276 622 Z"
         fill="url(#play)" filter="url(#shadow)"/>
+  <!-- A LEO satellite overhead, beaming the stream down: the backhaul. -->
+  <path d="M688 350 A90 90 0 0 1 630 281" fill="none" stroke="#64d2ff" stroke-width="18"
+        stroke-linecap="round" stroke-opacity="0.95"/>
+  <path d="M672 394 A135 135 0 0 1 585 290" fill="none" stroke="#64d2ff" stroke-width="18"
+        stroke-linecap="round" stroke-opacity="0.55"/>
+  <g transform="translate(716 266) rotate(-40) scale(0.8)" filter="url(#shadow)">
+    <rect x="-30" y="-36" width="60" height="72" rx="12" fill="#f2f2f7"/>
+    <rect x="-118" y="-26" width="74" height="52" rx="7" fill="#0a84ff"/>
+    <rect x="44" y="-26" width="74" height="52" rx="7" fill="#0a84ff"/>
+    <path d="M-44 0h14M30 0h14" stroke="#f2f2f7" stroke-width="10"/>
+    <path d="M-81 -26v52M81 -26v52" stroke="#ffffff" stroke-opacity="0.35" stroke-width="5"/>
+    <circle cx="0" cy="44" r="10" fill="#f2f2f7"/>
+  </g>
   <!-- Magnifying glass. -->
   <g filter="url(#shadow)">
     <line x1="712" y1="704" x2="812" y2="804" stroke="#f2f2f7" stroke-width="60" stroke-linecap="round"/>

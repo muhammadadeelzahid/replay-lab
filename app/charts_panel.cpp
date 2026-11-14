@@ -2,6 +2,7 @@
 
 #include "chart_series.h"
 #include "format.h"
+#include "icons.h"
 #include "session.h"
 #include "time_cursor.h"
 
@@ -256,7 +257,7 @@ ChartsPanel::ChartsPanel(Session* session, QWidget* parent)
         plot->view->bottomMargin = last ? kAxisLabelsHeight : kBottomMargin;
 
         plot->cursor = new QGraphicsLineItem(plot->chart);
-        plot->cursor->setPen(QPen(palette().color(QPalette::Highlight), 2));
+        plot->cursor->setPen(QPen(accentColor(palette()), 2));
         plot->cursor->setZValue(100);
         plot->cursor->hide();
 

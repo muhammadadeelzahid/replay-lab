@@ -37,6 +37,10 @@ private:
     QLabel* status_;
     QLabel* decisionTime_;
     QLabel* chosen_;
+    QLabel* feeder_;
+    QLabel* satellite_;
+    QLabel* carrier_;
+    QLabel* relay_;
     QLabel* estimate_;
     QLabel* rtt_;
     QLabel* engine_;

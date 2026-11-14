@@ -2,6 +2,7 @@
 #include "abrviz/core/io/log_tokens.h"
 #include "abrviz/core/io/mapped_file.h"
 #include "abrviz/core/io/mp4_duration.h"
+#include "abrviz/core/io/topology_reader.h"
 #include "abrviz/core/io/policy_log_parser.h"
 #include "abrviz/core/io/sim_log_parser.h"
 #include "abrviz/core/io/text_lines.h"
@@ -260,6 +261,36 @@ private slots:
         QCOMPARE(unfinished.size(), 2u);
         QVERIFY(unfinished[1].terminal);
         QCOMPARE(unfinished[1].end, 10.0);
+    }
+
+    void networkTopology()
+    {
+        const QString text = QStringLiteral(
+            "Total Bandwidth: 100.008 MHz\n"
+            "Center Frequency: 28 GHz\n"
+            "Install Satellite eNB with CellId 1 on Node ID 3 at position (500, 500, 550000)\n"
+            "Install IAB device with backhaul IMSI 1 and access cellId 2 on Node ID 4 at position (500, 500, 10)\n"
+            "AttachToSingleClosestEnb called for UE device: ns3::MmWaveUeNetDevice node_id: 5\n"
+            "Closest eNB found at distance: 9.37591 node_id: 4\n"
+            "AttachToSingleClosestEnb called for UE device: ns3::MmWaveUeNetDevice node_id: 7\n"
+            "Closest eNB found at distance: 85.08 node_id: 4\n"
+            "distance 549990\n"
+            "Attached to enB device with cellId 1\n");
+        const NetworkTopology t = parseNetworkTopology(text, 7);
+        QVERIFY(t.hasSatellite());
+        QCOMPARE(*t.satelliteAltitude, 550000.0);
+        QCOMPARE(*t.satelliteNode, 3);
+        QCOMPARE(t.relayCount, 1);
+        QCOMPARE(*t.backhaulDistance, 549990.0);
+        QCOMPARE(*t.carrierFrequencyGHz, 28.0);
+        QCOMPARE(*t.bandwidthMHz, 100.008);
+        QCOMPARE(*t.servingNode, 4);
+        QCOMPARE(*t.accessDistance, 85.08);
+        QVERIFY(t.viaRelay);
+
+        const NetworkTopology empty = parseNetworkTopology(QStringLiteral("nothing here\n"), 7);
+        QVERIFY(!empty.hasSatellite());
+        QVERIFY(!empty.viaRelay);
     }
 
     void mp4Duration()

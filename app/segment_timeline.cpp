@@ -1,6 +1,7 @@
 #include "segment_timeline.h"
 
 #include "format.h"
+#include "icons.h"
 #include "rung_colors.h"
 #include "session.h"
 #include "time_cursor.h"
@@ -363,7 +364,7 @@ void SegmentTimeline::paintEvent(QPaintEvent* /*event*/)
 
     // Cursor.
     const double x = xAt(session_->cursor()->time());
-    painter.setPen(QPen(palette().color(QPalette::Highlight), 2));
+    painter.setPen(QPen(accentColor(palette()), 2));
     painter.drawLine(QPointF(x, plot.top() - kTopMargin), QPointF(x, axisTop));
 }
 

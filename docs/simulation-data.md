@@ -1,7 +1,11 @@
 # Simulation data
 
 abr-viz reads run bundles exported from the `ns3-ntn-iab-ai` simulations (satellite 5G with
-IAB relays, DASH over QUIC). Each bundle is one streaming session of the LLM ABR policy
+IAB relays, DASH over QUIC). The set-up lines of every `sim.log` describe the same network: a
+satellite gNB (cell 1, node 3) at 550 km, 28 GHz with 100 MHz; one IAB relay (node 4) 10 m
+above the ground, attached to the satellite at 549,990 m; three UEs within 100 m of the relay,
+each attached to the relay (in BBB 36 Mbps the bundle's UE, node 7, is 85 m away); the DASH
+server on the remote host behind the core. Each bundle is one streaming session of the LLM ABR policy
 (`ns3::AiDashClient`). This page describes the bundles and the quirks the viewer has to handle.
 
 The bundles are produced by `scratch/ai_llm/export_viewer_bundle.py` in the research

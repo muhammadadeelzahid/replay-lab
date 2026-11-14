@@ -64,6 +64,25 @@ QString glyphBody(Glyph glyph)
     case Glyph::Settings:
         return QStringLiteral(R"(<circle cx="12" cy="12" r="3.2"/>
             <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9"/>)");
+    case Glyph::Satellite:
+        return QStringLiteral(R"svg(<g transform="rotate(-45 12 12)">
+            <rect x="9.6" y="8.8" width="4.8" height="6.4" rx="1.1"/>
+            <rect x="2.4" y="9.6" width="5.6" height="4.8" rx="0.7"/><path d="M5.2 9.6v4.8"/>
+            <rect x="16" y="9.6" width="5.6" height="4.8" rx="0.7"/><path d="M18.8 9.6v4.8"/>
+            <path d="M8 12h1.6M14.4 12H16"/><path d="M12 15.2v2.2"/></g>
+            <path d="M4.2 19.8a4.5 4.5 0 0 0 4.2-1.9"/><path d="M2.6 16.6a2.6 2.6 0 0 0 2.6-1.1"/>)svg");
+    case Glyph::Relay:
+        return QStringLiteral(R"(<path d="M12 10.4v10.1"/><path d="M8.6 20.5h6.8"/><path d="M9.6 20.5L12 13l2.4 7.5"/>
+            <circle cx="12" cy="8.6" r="1.5" fill="C"/>
+            <path d="M8.8 5.6a4.6 4.6 0 0 0 0 6"/><path d="M15.2 5.6a4.6 4.6 0 0 1 0 6"/>
+            <path d="M6.2 3.4a8 8 0 0 0 0 10.4"/><path d="M17.8 3.4a8 8 0 0 1 0 10.4"/>)");
+    case Glyph::Server:
+        return QStringLiteral(R"(<rect x="4" y="4" width="16" height="6.6" rx="1.6"/>
+            <rect x="4" y="13.4" width="16" height="6.6" rx="1.6"/>
+            <circle cx="7.6" cy="7.3" r="0.9" fill="C"/><circle cx="7.6" cy="16.7" r="0.9" fill="C"/>
+            <path d="M11.5 7.3h5M11.5 16.7h5"/>)");
+    case Glyph::Device:
+        return QStringLiteral(R"(<rect x="7" y="2.6" width="10" height="18.8" rx="2.2"/><path d="M10.6 18.4h2.8"/>)");
     case Glyph::Search:
         return QStringLiteral(R"(<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>)");
     case Glyph::Overlay:
@@ -130,6 +149,12 @@ private:
 QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected)
 {
     return QIcon(new GlyphEngine(glyph, color, selected));  // QIcon takes ownership of the engine
+}
+
+QColor accentColor(const QPalette& palette)
+{
+    const bool dark = palette.color(QPalette::Window).lightness() < 128;
+    return dark ? QColor(0x0a, 0x84, 0xff) : QColor(0x00, 0x7a, 0xff);
 }
 
 QIcon appIcon()

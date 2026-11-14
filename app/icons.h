@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QIcon>
+#include <QPalette>
 
 namespace abrviz {
 
@@ -28,13 +29,21 @@ enum class Glyph {
     Sidebar,
     Settings,
     Search,
+    Satellite,
+    Relay,
+    Server,
+    Device,
 };
 
 /// `glyph` drawn in `color` (normally the palette's text colour, so it suits light and dark
 /// themes), sharp at every size Qt asks for. `selected` (if valid) is used for selected items.
 [[nodiscard]] QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected = QColor());
 
-/// The application icon (a play symbol under a magnifying glass).
+/// The accent colour for icons and highlights: Apple's system blue for the appearance.
+/// (Qt's Highlight on macOS is the darker selection colour.)
+[[nodiscard]] QColor accentColor(const QPalette& palette);
+
+/// The application icon (a play symbol beamed down by a satellite, under a magnifying glass).
 [[nodiscard]] QIcon appIcon();
 
 } // namespace abrviz

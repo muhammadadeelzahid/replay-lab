@@ -194,7 +194,7 @@ void SourceList::applyStyle()
     const bool dark = isDark(palette());
     const QColor text = palette().color(QPalette::WindowText);
     const QColor secondary = palette().color(QPalette::PlaceholderText);
-    const QColor accent = palette().color(QPalette::Active, QPalette::Highlight);
+    const QColor accent = accentColor(palette());
     // Section headings are secondary text; run icons take the accent colour, as in Finder.
     for (int s = 0; s < topLevelItemCount(); ++s) {
         QTreeWidgetItem* section = topLevelItem(s);

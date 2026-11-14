@@ -9,6 +9,7 @@ add_library(abrviz_core STATIC
     include/abrviz/core/io/sim_log_parser.h
     include/abrviz/core/io/policy_log_parser.h
     include/abrviz/core/io/mp4_duration.h
+    include/abrviz/core/io/topology_reader.h
     include/abrviz/core/load/load_result.h
     include/abrviz/core/load/segment_shift.h
     include/abrviz/core/load/bundle_reader.h
@@ -33,6 +34,7 @@ add_library(abrviz_core STATIC
     src/io/sim_log_parser.cpp
     src/io/policy_log_parser.cpp
     src/io/mp4_duration.cpp
+    src/io/topology_reader.cpp
     src/load/segment_shift.cpp
     src/load/bundle_reader.cpp
     src/load/bundle_loader.cpp

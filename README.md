@@ -2,7 +2,9 @@
 
 <img src="app/resources/app-icon.svg" width="96" align="right" alt="">
 
-A Mac app (and Qt desktop app) for ns-3 adaptive video streaming simulations. It opens a simulation run
+A Mac app (and Qt desktop app) for ns-3 simulations of adaptive video streamed over a
+**satellite 5G network with integrated access and backhaul (IAB)**: a LEO satellite gNB
+550 km up backhauls an IAB relay on the ground, which serves the viewers. It opens a simulation run
 bundle and shows what the simulated user saw, segment by segment: the quality the LLM ABR
 policy chose, the experienced video with its stalls, the buffer, throughput, RTT and loss over
 time, and the simulation logs, all linked to one time cursor.
@@ -10,7 +12,7 @@ time, and the simulation logs, all linked to one time cursor.
 Built with **C++20**, **Qt 6** and **GStreamer**. The project is called abr-viz; the application
 is Stream Inspector.
 
-![Stream Inspector replaying Big Buck Bunny at 36 Mbps, paused inside its stall](docs/images/replay.jpg)
+![Stream Inspector replaying Big Buck Bunny at 36 Mbps while a segment comes down over the satellite](docs/images/replay.jpg)
 
 ## What it shows
 
@@ -24,7 +26,10 @@ a transport bar.
   folder, a welcome screen with the recent folders.
 - **Toolbar**: a segmented control for the views of the open run:
   - **Replay**: the video the simulated user saw, each segment at the rung it was played at,
-    stalls as frozen frames, cut off where playback stopped.
+    stalls as frozen frames, cut off where playback stopped. Above it, the path every frame
+    took: video server, feeder link, LEO satellite gNB, satellite backhaul, IAB relay, 5G access,
+    viewer, with the run's numbers (feeder rate, altitude, carrier, relay distance). The links
+    animate while a segment is in flight and the viewer turns red during a stall.
   - **Analysis**: buffer, throughput and the policy's estimate, chosen and played bitrate,
     RTT and loss, and decision delay, with a readout at the cursor.
   - **Logs**: `sim.log` and the policy log in one indexed view, filtered in the background,
@@ -32,7 +37,8 @@ a transport bar.
   - **Report**: QoE numbers, with the six that `summary.json` reports checked against it, and
     the run's settings and ladder.
 - **Inspector**: what was on screen at the cursor (segment, rung, resolution, bitrate, buffer,
-  stall), the policy's last decision, the network as last measured, and the engine and times.
+  stall), the policy's last decision, the satellite path (feeder, satellite, carrier, relay,
+  estimate, RTT), and the engine and times.
 - **Transport bar**: elapsed and remaining replay time, play, 5 s and segment steps, and the
   segment timeline (downloads, segments on screen and decisions, coloured by rung, with stalls,
   guard overrides and the cut-off marked), which is also the scrubber.

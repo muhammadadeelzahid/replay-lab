@@ -151,8 +151,25 @@ struct Warning {
 
 /// Everything loaded from one bundle. Built once by the loader, then shared read-only as
 /// `std::shared_ptr<const RunData>`.
+/// The simulated network, from the set-up lines of `sim.log`: a satellite gNB (the donor),
+/// IAB relays on the ground, and the UEs, which attach to the closest cell.
+struct NetworkTopology {
+    std::optional<int> satelliteNode;
+    std::optional<double> satelliteAltitude;   ///< metres above the ground plane
+    int relayCount = 0;
+    std::optional<double> backhaulDistance;    ///< metres from the relay to the satellite
+    std::optional<double> carrierFrequencyGHz;
+    std::optional<double> bandwidthMHz;
+    std::optional<int> servingNode;            ///< the cell the bundle's UE attached to
+    std::optional<double> accessDistance;      ///< metres from the UE to that cell
+    bool viaRelay = false;                     ///< the UE is served by an IAB relay
+
+    [[nodiscard]] bool hasSatellite() const { return satelliteAltitude.has_value(); }
+};
+
 struct RunData {
     RunInfo info;
+    NetworkTopology topology;
     VideoInfo video;
     double streamStart = 0.0;
     double playbackStart = 0.0;

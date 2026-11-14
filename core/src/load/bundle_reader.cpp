@@ -1,5 +1,7 @@
 #include "abrviz/core/load/bundle_reader.h"
 
+#include "abrviz/core/io/topology_reader.h"
+
 #include "abrviz/core/io/mapped_file.h"
 #include "abrviz/core/io/mp4_duration.h"
 #include "abrviz/core/load/segment_shift.h"
@@ -169,6 +171,8 @@ LoadResult assembleRunData(BundleParts parts)
 
     auto run = std::make_shared<RunData>();
     run->info = std::move(parts.run.value);
+    // A few hundred set-up lines at the top of sim.log; the rest is parsed in parallel.
+    run->topology = readNetworkTopology(simLogPath(parts.directory), run->info.nodeId);
     run->video = std::move(parts.video.info.value);
     run->samples = std::move(parts.samples.value);
     run->summary = parts.summary.value;

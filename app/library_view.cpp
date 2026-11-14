@@ -3,6 +3,7 @@
 #include "branding.h"
 #include "format.h"
 #include "icons.h"
+#include "network_path_view.h"
 
 #include "abrviz/core/version.h"
 
@@ -140,7 +141,7 @@ QPushButton* actionRow(Glyph glyph, const QString& title, const QString& detail,
     row->setCursor(Qt::PointingHandCursor);
     row->setFocusPolicy(Qt::NoFocus);
     auto* icon = new QLabel(row);
-    icon->setPixmap(glyphIcon(glyph, parent->palette().color(QPalette::Highlight)).pixmap(24, 24));
+    icon->setPixmap(glyphIcon(glyph, accentColor(parent->palette())).pixmap(24, 24));
     auto* name = new QLabel(title, row);
     QFont font = name->font();
     font.setBold(true);
@@ -197,6 +198,15 @@ LibraryView::LibraryView(QWidget* parent)
         auto* version = new QLabel(tr("Version %1").arg(versionString()), welcome_);
         version->setAlignment(Qt::AlignCenter);
         version->setForegroundRole(QPalette::PlaceholderText);
+        auto* tagline = new QLabel(tr("See what a viewer saw when adaptive video was streamed over a "
+                                      "satellite 5G network with integrated access and backhaul (IAB)."),
+                                   welcome_);
+        tagline->setWordWrap(true);
+        tagline->setAlignment(Qt::AlignCenter);
+        tagline->setFixedWidth(520);
+        tagline->setMinimumHeight(tagline->heightForWidth(520));
+        auto* path = new NetworkPathView(nullptr, nullptr, welcome_);
+        path->setFixedWidth(720);
 
         auto* actions = new QVBoxLayout();
         actions->setSpacing(4);
@@ -221,7 +231,11 @@ LibraryView::LibraryView(QWidget* parent)
         column->addSpacing(10);
         column->addWidget(name);
         column->addWidget(version);
-        column->addSpacing(26);
+        column->addSpacing(14);
+        column->addWidget(tagline, 0, Qt::AlignHCenter);
+        column->addSpacing(14);
+        column->addWidget(path, 0, Qt::AlignHCenter);
+        column->addSpacing(18);
         column->addWidget(actionBox, 0, Qt::AlignHCenter);
         column->addWidget(recentBox_, 0, Qt::AlignHCenter);
         column->addStretch(3);

@@ -7,6 +7,7 @@
 #include "library_view.h"
 #include "log_console.h"
 #include "moment_panel.h"
+#include "network_path_view.h"
 #include "replay_player.h"
 #include "report_view.h"
 #include "segment_timeline.h"
@@ -345,7 +346,15 @@ void MainWindow::createPages()
 
     d_->pages = new QStackedWidget(this);
     d_->pages->addWidget(d_->library);
-    d_->pages->addWidget(d_->player);
+    // The replay, under the path its frames took: server, satellite, IAB relay, viewer.
+    auto* replay = new QWidget(this);
+    auto* replayLayout = new QVBoxLayout(replay);
+    replayLayout->setContentsMargins(0, 0, 0, 0);
+    replayLayout->setSpacing(0);
+    replayLayout->addWidget(new NetworkPathView(d_->session, d_->player, replay));
+    replayLayout->addWidget(divider(Qt::Horizontal, replay));
+    replayLayout->addWidget(d_->player, 1);
+    d_->pages->addWidget(replay);
     d_->pages->addWidget(padded(d_->charts, this));
     d_->pages->addWidget(padded(d_->logs, this));
     auto* reportSplit = new QSplitter(Qt::Horizontal, this);
@@ -359,11 +368,35 @@ void MainWindow::createPages()
 
     d_->sidebar = new SourceList(this);
     d_->sidebarPane = new QWidget(this);
+    auto* sidebarColumn = new QWidget(d_->sidebarPane);
+    sidebarColumn->setObjectName(QStringLiteral("sidebarColumn"));
+    sidebarColumn->setFixedWidth(230);
+    auto* columnLayout = new QVBoxLayout(sidebarColumn);
+    columnLayout->setContentsMargins(0, 0, 0, 0);
+    columnLayout->setSpacing(0);
+    columnLayout->addWidget(d_->sidebar, 1);
+    // Says, under every list of runs, what network they were streamed over.
+    auto* footer = new QWidget(sidebarColumn);
+    footer->setObjectName(QStringLiteral("sidebarFooter"));
+    auto* footerLayout = new QHBoxLayout(footer);
+    footerLayout->setContentsMargins(16, 10, 12, 12);
+    footerLayout->setSpacing(10);
+    auto* footerIcon = new QLabel(footer);
+    footerIcon->setObjectName(QStringLiteral("networkIcon"));
+    footerIcon->setAlignment(Qt::AlignTop);
+    auto* footerText = new QLabel(tr("<b>Satellite 5G with IAB</b><br>Every run was streamed from a "
+                                     "LEO satellite gNB through an IAB relay to the viewer."),
+                                  footer);
+    footerText->setWordWrap(true);
+    footerText->setFont(format::scaled(footerText->font(), 0.9));
+    footerText->setForegroundRole(QPalette::PlaceholderText);
+    footerLayout->addWidget(footerIcon);
+    footerLayout->addWidget(footerText, 1);
+    columnLayout->addWidget(footer);
     auto* sidebarLayout = new QHBoxLayout(d_->sidebarPane);
     sidebarLayout->setContentsMargins(0, 0, 0, 0);
     sidebarLayout->setSpacing(0);
-    d_->sidebar->setFixedWidth(230);
-    sidebarLayout->addWidget(d_->sidebar);
+    sidebarLayout->addWidget(sidebarColumn);
     sidebarLayout->addWidget(divider(Qt::Vertical, d_->sidebarPane));
 
     d_->inspectorPane = new QWidget(this);
@@ -641,7 +674,8 @@ void MainWindow::updateTitle()
     const QString link = run->info.feederLinkRate
         ? format::bitrate(static_cast<double>(*run->info.feederLinkRate))
         : tr("uncongested");
-    setWindowTitle(QStringLiteral("%1 — %2").arg(run->video.title, link));
+    const QString network = run->topology.hasSatellite() ? tr(" · Satellite 5G IAB") : QString();
+    setWindowTitle(QStringLiteral("%1 — %2 feeder%3").arg(run->video.title, link, network));
 }
 
 void MainWindow::updatePanes()
@@ -668,6 +702,8 @@ void MainWindow::applyStyle()
             action->setIcon(glyphIcon(Glyph::Inspector, text));
     }
     d_->playAction->setIcon(glyphIcon(d_->player->isRunning() ? Glyph::Pause : Glyph::Play, text));
+    if (auto* icon = findChild<QLabel*>(QStringLiteral("networkIcon")))
+        icon->setPixmap(glyphIcon(Glyph::Satellite, accentColor(pal)).pixmap(22, 22));
 
     const bool dark = isDark(pal);
     const QString line = dark ? QStringLiteral("#1affffff") : QStringLiteral("#1f000000");
@@ -679,8 +715,9 @@ void MainWindow::applyStyle()
         QFrame#divider[frameShape="4"] { max-width: 16777215px; }
         QFrame#card { background: %2; border: none; border-radius: 10px; }
         QLabel#notice { background: %3; border-radius: 8px; padding: 6px 12px; }
+        QWidget#sidebarColumn, QWidget#sidebarFooter { background: %4; }
         QSplitter::handle { background: %1; }
-    )").arg(line, grouped, noticeBg));
+    )").arg(line, grouped, noticeBg, dark ? QStringLiteral("#262628") : QStringLiteral("#ececee")));
 }
 
 void MainWindow::changeEvent(QEvent* event)

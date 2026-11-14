@@ -60,7 +60,11 @@ MomentPanel::MomentPanel(Session* session, ReplayPlayer* player, QWidget* parent
     decisionTime_ = addRow(tr("At"));
     chosen_ = addRow(tr("Chosen"));
 
-    addHeading(tr("Network"));
+    addHeading(tr("Satellite path"));
+    feeder_ = addRow(tr("Feeder"));
+    satellite_ = addRow(tr("Satellite"));
+    carrier_ = addRow(tr("Carrier"));
+    relay_ = addRow(tr("Relay"));
     estimate_ = addRow(tr("Estimate"));
     rtt_ = addRow(tr("RTT"));
 
@@ -173,6 +177,23 @@ void MomentPanel::refresh()
         estimate = decision->throughputEstimate;
     if (estimate)
         estimate_->setText(format::bitrate(*estimate));
+    const NetworkTopology& net = run->topology;
+    if (run->info.feederLinkRate)
+        feeder_->setText(tr("%1, shared by %2 UEs")
+                             .arg(format::bitrate(static_cast<double>(*run->info.feederLinkRate)))
+                             .arg(run->info.simulatedUes));
+    if (net.satelliteAltitude)
+        satellite_->setText(tr("LEO gNB at %1 km").arg(*net.satelliteAltitude / 1000.0, 0, 'f', 0));
+    if (net.carrierFrequencyGHz) {
+        QString carrier = tr("%1 GHz").arg(*net.carrierFrequencyGHz, 0, 'g', 3);
+        if (net.bandwidthMHz)
+            carrier += tr(", %1 MHz").arg(*net.bandwidthMHz, 0, 'f', 0);
+        carrier_->setText(carrier);
+    }
+    if (net.viaRelay && net.accessDistance)
+        relay_->setText(tr("IAB, %1 m from the viewer").arg(*net.accessDistance, 0, 'f', 0));
+    else if (net.relayCount > 0)
+        relay_->setText(tr("IAB (%n relay(s))", nullptr, net.relayCount));
     if (rtt)
         rtt_->setText(QStringLiteral("%1 ms").arg(*rtt, 0, 'f', 0));
 
