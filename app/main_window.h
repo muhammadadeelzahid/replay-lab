@@ -6,20 +6,27 @@
 
 #include <memory>
 
+class QAction;
+
 namespace abrviz {
 
 class ChartsPanel;
 class LibraryView;
 class LogConsole;
+class MomentPanel;
 class RenderQueue;
 class ReplayPlayer;
 class ReportView;
 class Session;
 class SegmentTimeline;
 class SummaryPanel;
+class TransportBar;
 
-/// The application window: the replay player, docks for the library, the run summary, the QoE
-/// report, the timeline, the charts and the log, and the loading of folders and bundles in the background.
+/// The application window. A sidebar switches between five pages: Library (the runs of a
+/// folder, or a welcome screen), Replay (the video and what was on screen), Analysis (the
+/// charts), Logs and Report. The toolbar opens folders and bundles, picks a run and the replay
+/// engine; under every page the transport bar plays the replay and holds the segment timeline,
+/// which moves the shared time cursor. Folders and bundles load in the background.
 ///
 /// Shutdown order: the destructor calls `shutdown()` first, which cancels and waits for the
 /// pending scan, load and log indexing, and then destroys the replay engine. Only then is the
@@ -29,6 +36,9 @@ class MainWindow final : public QMainWindow {
     Q_OBJECT
 
 public:
+    enum class Page { Library, Replay, Analysis, Logs, Report };
+    static constexpr int kPageCount = 5;
+
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
@@ -52,6 +62,10 @@ public:
     /// The engine saved in the settings, or the default one.
     [[nodiscard]] static Engine savedEngine();
 
+    void showPage(Page page);
+    [[nodiscard]] Page currentPage() const;
+    [[nodiscard]] static QString pageName(Page page);
+
     /// Cancels and waits for every pending task. Safe to call more than once.
     void shutdown();
 
@@ -64,7 +78,14 @@ public:
     [[nodiscard]] RenderQueue* renderQueue() const;
     [[nodiscard]] SummaryPanel* summary() const;
     [[nodiscard]] ReportView* report() const;
+    [[nodiscard]] TransportBar* transport() const;
+    [[nodiscard]] MomentPanel* moment() const;
     [[nodiscard]] bool isBusy() const;
+
+    /// Moves the cursor by `seconds` of replay time (the step buttons use 5 s).
+    void stepReplay(double seconds);
+    /// Moves the cursor to the start of the next (`direction` 1) or previous (-1) segment.
+    void stepSegment(int direction);
 
 signals:
     /// The library list was replaced (after `openFolder`).
@@ -74,9 +95,16 @@ signals:
     /// The log index of the open run was built and handed to the session.
     void logIndexReady();
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+    void changeEvent(QEvent* event) override;
+
 private:
+    void createPages();
+    void createActions();
     void createMenus();
-    void createDocks();
+    void createToolBar();
+    void applyStyle();
     void chooseFolder();
     void chooseBundle();
     void scanFinished();
@@ -86,6 +114,9 @@ private:
     void updateStatus();
     void updateActions();
     void updateEngineActions();
+    void updateRunPicker();
+    void rememberFolder(const QString& folder);
+    void restoreSettings();
 
     struct Impl;
     std::unique_ptr<Impl> d_;

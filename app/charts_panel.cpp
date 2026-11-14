@@ -207,7 +207,11 @@ ChartsPanel::ChartsPanel(Session* session, QWidget* parent)
     layout->setContentsMargins(4, 4, 4, 4);
     layout->setSpacing(2);
     readout_->setTextFormat(Qt::RichText);
+    // The readout changes with every cursor move; a fixed height keeps it from relaying out
+    // the window (which costs a full repaint).
     readout_->setWordWrap(true);
+    readout_->setFixedHeight(readout_->fontMetrics().lineSpacing() * 2 + 4);
+    readout_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     layout->addWidget(readout_);
 
     const QColor text = palette().color(QPalette::Text);

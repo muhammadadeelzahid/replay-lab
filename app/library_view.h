@@ -6,6 +6,10 @@
 #include <QWidget>
 
 class QLabel;
+class QLineEdit;
+class QPushButton;
+class QSortFilterProxyModel;
+class QStackedWidget;
 class QTableView;
 
 namespace abrviz {
@@ -34,7 +38,9 @@ private:
     QString openBundle_;
 };
 
-/// The table of bundles in the open folder. Double-click (or Enter) opens a bundle.
+/// The Library page. Without a folder it shows a welcome screen (open a folder or a bundle,
+/// recent folders); with one, a searchable table of its runs and the details of the selected
+/// run. Double-click, Enter or the Open button opens a run.
 class LibraryView final : public QWidget {
     Q_OBJECT
 
@@ -44,15 +50,40 @@ public:
     void setBundles(QList<BundleSummaryPtr> bundles, const QString& folder);
     void setScanning(const QString& folder);
     void setOpenBundle(const QString& directory);
+    void setRecentFolders(const QStringList& folders);
+
     [[nodiscard]] LibraryModel* model() const { return model_; }
+    [[nodiscard]] QLineEdit* searchEdit() const { return search_; }
+    /// Rows shown after the search filter.
+    [[nodiscard]] int visibleRows() const;
+    [[nodiscard]] bool isShowingWelcome() const;
+    [[nodiscard]] QString detailsText() const;
+    /// Selects the row of `directory` (if listed and not filtered out).
+    void selectBundle(const QString& directory);
 
 signals:
     void openRequested(const QString& directory);
+    void openFolderRequested();
+    void openBundleRequested();
+    void recentFolderRequested(const QString& folder);
 
 private:
+    void selectionChanged();
+    void showDetails(const BundleSummaryPtr& bundle);
+    [[nodiscard]] BundleSummaryPtr selectedBundle() const;
+
     LibraryModel* model_;
+    QSortFilterProxyModel* proxy_;
+    QStackedWidget* stack_;
+    QWidget* welcome_;
+    QWidget* recentBox_;
+    QWidget* browser_;
+    QLabel* title_;
+    QLabel* path_;
+    QLineEdit* search_;
     QTableView* table_;
-    QLabel* header_;
+    QLabel* details_;
+    QPushButton* openButton_;
 };
 
 } // namespace abrviz

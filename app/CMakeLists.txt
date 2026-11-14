@@ -22,7 +22,28 @@ add_library(abrviz_gui STATIC
     replay_player.h
     replay_player.cpp
     report_view.h
-    report_view.cpp)
+    report_view.cpp
+    icons.h
+    icons.cpp
+    transport_bar.h
+    transport_bar.cpp
+    moment_panel.h
+    moment_panel.cpp)
+
+qt_add_resources(abrviz_gui "abrviz_resources"
+    PREFIX "/abrviz"
+    BASE resources
+    FILES resources/abrviz.svg)
+
+target_sources(abrviz_gui PRIVATE playback_activity.h)
+if(APPLE)
+    enable_language(OBJCXX)
+    target_sources(abrviz_gui PRIVATE playback_activity_mac.mm)
+    set_source_files_properties(playback_activity_mac.mm PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+    target_link_libraries(abrviz_gui PRIVATE "-framework Foundation")
+else()
+    target_sources(abrviz_gui PRIVATE playback_activity.cpp)
+endif()
 
 target_include_directories(abrviz_gui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(abrviz_gui PUBLIC
@@ -30,9 +51,25 @@ target_link_libraries(abrviz_gui PUBLIC
     abrviz_media
     Qt6::Widgets
     Qt6::Charts
-    Qt6::MultimediaWidgets)
+    Qt6::MultimediaWidgets
+    Qt6::Svg)
 abrviz_set_warnings(abrviz_gui)
 
 qt_add_executable(abrviz main.cpp)
 target_link_libraries(abrviz PRIVATE abrviz_gui)
+
+# A macOS app bundle with its icon: build/<preset>/app/abrviz.app.
+if(APPLE)
+    set(ABRVIZ_ICNS ${CMAKE_CURRENT_SOURCE_DIR}/resources/abrviz.icns)
+    target_sources(abrviz PRIVATE ${ABRVIZ_ICNS})
+    set_source_files_properties(${ABRVIZ_ICNS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    set_target_properties(abrviz PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_BUNDLE_NAME "abr-viz"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.muhammadadeelzahid.abrviz"
+        MACOSX_BUNDLE_ICON_FILE abrviz.icns
+        MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+        MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+        MACOSX_BUNDLE_COPYRIGHT "MIT licence")
+endif()
 abrviz_set_warnings(abrviz)

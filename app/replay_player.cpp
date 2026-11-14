@@ -1,6 +1,7 @@
 #include "replay_player.h"
 
 #include "format.h"
+#include "playback_activity.h"
 #include "session.h"
 
 #include <QGraphicsRectItem>
@@ -9,10 +10,8 @@
 #include <QGraphicsVideoItem>
 #include <QGraphicsView>
 #include <QHBoxLayout>
-#include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
-#include <QStyle>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -31,20 +30,6 @@ const BufferPoint* bufferAt(const RunData& run, double time)
     return it == run.buffer.begin() ? nullptr : &*std::prev(it);
 }
 
-QString stateName(ReplaySource::State state)
-{
-    switch (state) {
-    case ReplaySource::State::Idle: return ReplayPlayer::tr("idle");
-    case ReplaySource::State::Preparing: return ReplayPlayer::tr("preparing");
-    case ReplaySource::State::Playing: return ReplayPlayer::tr("playing");
-    case ReplaySource::State::Paused: return ReplayPlayer::tr("paused");
-    case ReplaySource::State::Stalled: return ReplayPlayer::tr("stalled");
-    case ReplaySource::State::Ended: return ReplayPlayer::tr("ended");
-    case ReplaySource::State::Error: return ReplayPlayer::tr("error");
-    }
-    return {};
-}
-
 } // namespace
 
 ReplayPlayer::ReplayPlayer(Session* session, RenderQueue* queue, QWidget* parent)
@@ -57,11 +42,9 @@ ReplayPlayer::ReplayPlayer(Session* session, RenderQueue* queue, QWidget* parent
     , overlayBox_(new QGraphicsRectItem())
     , overlay_(new QGraphicsTextItem())
     , message_(new QGraphicsTextItem())
-    , playButton_(new QPushButton(this))
-    , renderButton_(new QPushButton(tr("Render video"), this))
+    , renderButton_(new QPushButton(tr("Render Video"), this))
     , progress_(new QProgressBar(this))
-    , timeLabel_(new QLabel(this))
-    , engineLabel_(new QLabel(this))
+    , renderBar_(new QWidget(this))
 {
     setObjectName(QStringLiteral("replayPlayer"));
 
@@ -107,19 +90,20 @@ ReplayPlayer::ReplayPlayer(Session* session, RenderQueue* queue, QWidget* parent
     progress_->setRange(0, 1000);
     progress_->setTextVisible(false);
     progress_->hide();
-    connect(playButton_, &QPushButton::clicked, this, &ReplayPlayer::togglePlay);
     connect(renderButton_, &QPushButton::clicked, this, &ReplayPlayer::prepare);
 
-    auto* controls = new QHBoxLayout();
-    controls->addWidget(playButton_);
+    // Shown only while the pre-rendered engine has no video yet.
+    auto* controls = new QHBoxLayout(renderBar_);
+    controls->setContentsMargins(8, 4, 8, 4);
+    controls->addStretch(1);
     controls->addWidget(renderButton_);
     controls->addWidget(progress_);
-    controls->addWidget(timeLabel_, 1);
-    controls->addWidget(engineLabel_);
+    controls->addStretch(1);
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 4);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
     layout->addWidget(view_, 1);
-    layout->addLayout(controls);
+    layout->addWidget(renderBar_);
 
     connect(session_, &Session::runChanged, this, &ReplayPlayer::runChanged);
     connect(session_->cursor(), &TimeCursor::timeChanged, this, &ReplayPlayer::cursorMoved);
@@ -181,8 +165,15 @@ void ReplayPlayer::releaseEngine()
         return;
     engine_->disconnect(this);
     engine_.reset();  // cancels and waits for its render job, stops playback
+    activity_.reset();
     engineKind_.reset();
     emit engineChanged();
+}
+
+void ReplayPlayer::setOverlayVisible(bool visible)
+{
+    overlayVisible_ = visible;
+    updateOverlay();
 }
 
 QVideoSink* ReplayPlayer::videoSink() const
@@ -272,6 +263,10 @@ void ReplayPlayer::engineStateChanged(ReplaySource::State state)
 {
     if (state == ReplaySource::State::Paused || state == ReplaySource::State::Playing)
         engineShowedPicture_ = true;
+    if (isRunning() && !activity_)
+        activity_ = std::make_unique<PlaybackActivity>();
+    else if (!isRunning())
+        activity_.reset();
     // Once ready, show the picture at the cursor.
     if (state == ReplaySource::State::Paused && engine_->position() == 0.0 && session_->run())
         engine_->seek(session_->clock().simToReplay(session_->cursor()->time()));
@@ -325,8 +320,8 @@ void ReplayPlayer::updateOverlay()
     overlay_->setPlainText(lines.join(QLatin1Char('\n')));
     const QRectF text = overlay_->boundingRect();
     overlayBox_->setRect(0, 0, text.width() + 12, text.height() + 6);
-    overlay_->show();
-    overlayBox_->show();
+    overlay_->setVisible(overlayVisible_);
+    overlayBox_->setVisible(overlayVisible_);
 }
 
 void ReplayPlayer::updateMessage()
@@ -358,26 +353,14 @@ void ReplayPlayer::updateMessage()
 void ReplayPlayer::updateControls()
 {
     const bool ready = engine_ && engine_->isReady() && session_->run();
-    const bool playing = isRunning();
     const bool preparing = engine_ && engine_->state() == ReplaySource::State::Preparing
         && !engine_->isReady();
-    playButton_->setEnabled(ready);
-    playButton_->setIcon(style()->standardIcon(playing ? QStyle::SP_MediaPause
-                                                       : QStyle::SP_MediaPlay));
-    playButton_->setText(playing ? tr("Pause") : tr("Play"));
+    Q_UNUSED(ready);
     // Only the pre-rendered engine has something to prepare.
-    renderButton_->setVisible(engineKind_ == Engine::Prerendered && session_->run() && !engine_->isReady());
-    renderButton_->setEnabled(!preparing);
+    const bool needsRender = engineKind_ == Engine::Prerendered && session_->run() && !engine_->isReady();
+    renderBar_->setVisible(needsRender);
+    renderButton_->setVisible(!preparing);
     progress_->setVisible(preparing);
-    engineLabel_->setText(engine_ ? tr("Engine: %1").arg(engine_->name()) : QString());
-    if (ready) {
-        timeLabel_->setText(tr("%1  ·  %2 / %3")
-                                .arg(stateName(engine_->state()),
-                                     format::seconds(engine_->position()),
-                                     format::seconds(session_->clock().replayDuration())));
-    } else {
-        timeLabel_->clear();
-    }
 }
 
 void ReplayPlayer::fitVideo()

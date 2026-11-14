@@ -63,7 +63,8 @@ cmake --preset asan  && cmake --build --preset asan  && ctest --preset asan
 cmake --preset tsan  && cmake --build --preset tsan  && ctest --preset tsan
 cmake --preset nogst && cmake --build --preset nogst && ctest --preset nogst
 ./build/debug/tools/validate_bundle viewer_bundles/*
-./build/debug/app/abrviz --engine=gstreamer viewer_bundles
+./build/debug/app/abrviz.app/Contents/MacOS/abrviz --engine=gstreamer viewer_bundles   # macOS
+./build/debug/app/abrviz --engine=gstreamer viewer_bundles                              # Linux
 ```
 
 
@@ -73,16 +74,19 @@ Measure with the release build. The numbers in the README come from:
 
 ```sh
 B=build/release
+APP=$B/app/abrviz.app/Contents/MacOS/abrviz   # $B/app/abrviz on Linux
 time $B/tools/print_report viewer_bundles > /dev/null
 $B/tools/render_experienced --cache /tmp/abrviz-cold viewer_bundles/big_buck_bunny_llm_36Mbps_run_2
-$B/app/abrviz viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine gstreamer --time 50 --profile 10
-$B/app/abrviz viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine prerendered --time 50 --profile 10
+$APP viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine gstreamer --time 50 --profile 10
+$APP viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine prerendered --time 50 --profile 10
 ```
 
 `--profile` prints when the bundle and the log index were ready, how long the engine took to
 show its first picture (rendering first if it has to), the frames shown per second over the
-played seconds, CPU time as a share of one core, and peak memory. The README pictures are made
-with `--screenshot` (no window appears).
+played seconds, CPU time as a share of one core, peak memory, and every gap of more than
+150 ms between frames with the segment and rung it happened at. It stops early when the replay
+ends, so `--time 0 --profile 300` plays a whole run; every run was checked this way with both
+engines. The README pictures are made with `--screenshot` (no window appears).
 
 
 ## Setup

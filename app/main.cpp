@@ -1,3 +1,4 @@
+#include "icons.h"
 #include "main_window.h"
 #include "replay_player.h"
 #include "session.h"
@@ -8,7 +9,6 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
-#include <QDockWidget>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QTimer>
@@ -17,6 +17,7 @@
 
 #include <sys/resource.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <memory>
 #include <optional>
@@ -26,7 +27,7 @@ namespace {
 /// `--screenshot`: once the bundle (and its log index) or the folder is ready, save a picture of
 /// the window and quit. Used for the README images and to check the layout without a display.
 void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool waitForBundle,
-                        std::optional<double> time)
+                        bool waitForFolder, std::optional<double> time)
 {
     auto take = [&window, file, time] {
         if (time)
@@ -61,8 +62,10 @@ void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool wa
                                  QApplication::exit(1);
                              }
                          });
-    } else {
+    } else if (waitForFolder) {
         QObject::connect(&window, &abrviz::MainWindow::folderScanned, &window, take);
+    } else {
+        QTimer::singleShot(0, &window, take);  // the welcome screen
     }
 }
 
@@ -85,6 +88,34 @@ double peakMemoryMb()
 #else
     return static_cast<double>(usage.ru_maxrss) / 1024.0;  // kilobytes
 #endif
+}
+
+/// The segment shown at `replay`, its rung, and whether the rung changed from the one before.
+QString describeReplayTime(abrviz::MainWindow& window, double replay)
+{
+    const auto& run = window.session()->run();
+    const auto position = window.session()->clock().positionAtReplay(replay);
+    if (!run || position.segment < 0)
+        return QStringLiteral("before playback");
+    const auto rungOf = [&run](int segment) {
+        const auto it = std::ranges::find(run->segments, segment, &abrviz::Segment::index);
+        return it == run->segments.end() ? -1 : it->playedRung;
+    };
+    // The segment shown before this one in playback order.
+    int previous = -1;
+    for (const auto& piece : window.session()->clock().pieces()) {
+        if (piece.kind != abrviz::PlaybackClock::Piece::Kind::Segment)
+            continue;
+        if (piece.segment == position.segment)
+            break;
+        previous = piece.segment;
+    }
+    return QStringLiteral("segment %1 at %2%, rung %3 -> %4%5")
+        .arg(position.segment)
+        .arg(position.fraction * 100.0, 0, 'f', 0)
+        .arg(rungOf(previous))
+        .arg(rungOf(position.segment))
+        .arg(position.stalled ? QStringLiteral(", stalled") : QString());
 }
 
 /// `--profile`: once the bundle and its log index are ready, plays `seconds` of the replay with
@@ -125,15 +156,31 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
             poll->deleteLater();
             const qint64 readyMs = renderClock->elapsed();
             auto frames = std::make_shared<int>(0);
+            // Gaps between frames longer than 150 ms, with the replay time they ended at.
+            auto frameClock = std::make_shared<QElapsedTimer>();
+            auto gaps = std::make_shared<QStringList>();
             QObject::connect(player->videoSink(), &QVideoSink::videoFrameChanged, &window,
-                             [frames] { ++*frames; });
+                             [&window, frames, frameClock, gaps, player] {
+                                 ++*frames;
+                                 if (frameClock->isValid() && frameClock->elapsed() > 150) {
+                                     const double replay = player->engine()->position();
+                                     *gaps << QStringLiteral("%1 ms at replay %2 s (%3)")
+                                                  .arg(frameClock->elapsed())
+                                                  .arg(replay, 0, 'f', 2)
+                                                  .arg(describeReplayTime(window, replay));
+                                 }
+                                 frameClock->start();
+                             });
+            const qint64 decodedBefore = engine->property("framesDecoded").toLongLong();
             const double cpuBefore = cpuSeconds();
             const double startPosition = engine->position();
             auto playClock = std::make_shared<QElapsedTimer>();
             playClock->start();
             player->play();
-            QTimer::singleShot(static_cast<int>(seconds * 1000.0), &window,
-                               [&window, player, frames, cpuBefore, playClock, startPosition, indexMs, loadMs, readyMs] {
+            auto finished = std::make_shared<bool>(false);
+            const auto finish = [&window, player, frames, gaps, decodedBefore, cpuBefore, playClock, startPosition, indexMs, loadMs, readyMs, finished] {
+                if (std::exchange(*finished, true))
+                    return;
                 const double wall = static_cast<double>(playClock->elapsed()) / 1000.0;
                 const double cpu = cpuSeconds() - cpuBefore;
                 const double end = player->engine()->position();
@@ -148,10 +195,22 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
                             end - startPosition, startPosition, end, wall);
                 std::printf("frames shown     %d (%.1f per second; the video has %.2f)\n", *frames,
                             *frames / wall, run->video.frameRate);
+                if (player->engine()->property("framesDecoded").isValid())
+                    std::printf("frames decoded   %lld\n",
+                                player->engine()->property("framesDecoded").toLongLong() - decodedBefore);
                 std::printf("CPU while playing %.0f %% of one core\n", 100.0 * cpu / wall);
                 std::printf("peak memory      %.0f MB\n", peakMemoryMb());
+                std::printf("gaps over 150 ms %lld%s%s\n", static_cast<long long>(gaps->size()),
+                            gaps->isEmpty() ? "" : ": ", qPrintable(gaps->join(QStringLiteral(", "))));
                 QApplication::exit(0);
-            });
+            };
+            // Stops after `seconds`, or earlier when the replay ends.
+            QTimer::singleShot(static_cast<int>(seconds * 1000.0), &window, finish);
+            QObject::connect(player, &abrviz::ReplayPlayer::stateChanged, &window,
+                             [finish](abrviz::ReplaySource::State state) {
+                                 if (state == abrviz::ReplaySource::State::Ended)
+                                     finish();
+                             });
         });
         poll->start(20);
     });
@@ -165,6 +224,7 @@ int main(int argc, char* argv[])
     QApplication::setApplicationName(QStringLiteral("abr-viz"));
     QApplication::setApplicationVersion(abrviz::versionString());
     QApplication::setOrganizationName(QStringLiteral("abr-viz"));
+    QApplication::setWindowIcon(abrviz::appIcon());
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Viewer for ns-3 adaptive bitrate run bundles"));
@@ -190,14 +250,16 @@ int main(int argc, char* argv[])
         QStringLiteral("engine"),
         QStringLiteral("Replay engine: gstreamer or prerendered (overrides the saved choice)."),
         QStringLiteral("name"));
-    const QCommandLineOption reportOption(
-        QStringLiteral("report"), QStringLiteral("Show the QoE report tab instead of the run summary."));
+    const QCommandLineOption pageOption(
+        QStringLiteral("page"),
+        QStringLiteral("Page to show: library, replay, analysis, logs or report."),
+        QStringLiteral("name"));
     const QCommandLineOption profileOption(
         QStringLiteral("profile"),
         QStringLiteral("Open the bundle, play this many seconds of the replay, print timings and quit."),
         QStringLiteral("seconds"));
     parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption, engineOption,
-                       reportOption, profileOption});
+                       pageOption, profileOption});
     parser.process(app);
 
     abrviz::MainWindow window;
@@ -214,9 +276,21 @@ int main(int argc, char* argv[])
         if (parts.size() == 2)
             window.resize(parts[0].toInt(), parts[1].toInt());
     }
-    if (parser.isSet(reportOption)) {
-        if (auto* dock = window.findChild<QDockWidget*>(QStringLiteral("reportDock")))
-            dock->raise();
+    // The page asked for is shown once the run is open (opening a run shows the replay).
+    std::optional<abrviz::MainWindow::Page> page;
+    if (parser.isSet(pageOption)) {
+        for (int i = 0; i < abrviz::MainWindow::kPageCount; ++i) {
+            const auto candidate = static_cast<abrviz::MainWindow::Page>(i);
+            if (abrviz::MainWindow::pageName(candidate).compare(parser.value(pageOption), Qt::CaseInsensitive) == 0)
+                page = candidate;
+        }
+        if (!page) {
+            std::fprintf(stderr, "unknown page '%s'\n", qPrintable(parser.value(pageOption)));
+            return 2;
+        }
+        QObject::connect(&window, &abrviz::MainWindow::bundleOpened, &window,
+                         [&window, page] { window.showPage(*page); });
+        window.showPage(*page);
     }
     // Screenshot and profile runs lay the window out and paint it without putting it on the
     // screen.
@@ -240,9 +314,7 @@ int main(int argc, char* argv[])
             parser.showHelp(1);
         scheduleProfile(window, parser.value(profileOption).toDouble(), time);
     } else if (parser.isSet(screenshotOption)) {
-        if (path.isEmpty())
-            parser.showHelp(1);
-        scheduleScreenshot(window, parser.value(screenshotOption), !bundle.isEmpty(), time);
+        scheduleScreenshot(window, parser.value(screenshotOption), !bundle.isEmpty(), !path.isEmpty(), time);
     } else if (time) {
         QObject::connect(window.session(), &abrviz::Session::runChanged, &window, [&window, time] {
             window.session()->cursor()->setTime(*time);

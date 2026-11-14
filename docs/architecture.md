@@ -112,7 +112,7 @@ new values through `QFuture` or queued calls.
 | Filtering the log | global pool | one task per request, holding a `std::shared_ptr<const LogIndex>`; it checks its `QPromise` for cancellation. An atomic generation counter discards results of older requests; a 150 ms timer debounces typing |
 | Rendering the experienced video | `RenderQueue` thread | a `std::jthread` takes jobs from a queue guarded by `std::mutex` and `std::condition_variable_any`, waiting on its `std::stop_token` |
 | Transcoding segments | `RenderQueue`'s own `QThreadPool` | one task per segment runs `ffmpeg` through `QProcess`, polling `waitForFinished(100)` and the job's stop token, so cancelling takes effect within 100 ms |
-| Decoding and scaling video | GStreamer's streaming threads | our code runs there only in the `appsink` callback, which wraps the frame and posts it to the GUI thread |
+| Decoding and scaling video | GStreamer's streaming threads | none of our code runs there: they fill the `appsink` queue (a few frames) and block when it is full; the GUI thread takes frames from it |
 | GStreamer bus messages | `GstSegmentSource` thread | a `std::jthread` pops bus messages with a 100 ms timeout until stopped, and forwards them as queued calls (Qt's event loop on macOS is not a GLib main loop) |
 | GStreamer initialisation | any | `gst_init()` runs once, under `std::call_once` |
 
@@ -127,7 +127,6 @@ State written by one thread and read by another, and how it is protected:
 | log filter generation, render progress | `std::atomic` |
 | `RenderQueue` job queue | `std::mutex` and `std::condition_variable_any` |
 | `RenderCache` (rendered files and jobs in progress) | `std::mutex`; claims released by `ClaimGuard` |
-| `GstSegmentSource` latest frame | `std::mutex`, plus a `std::atomic<bool>` so that at most one queued delivery is pending |
 
 Rules:
 1. A task receives shared data by value: the lambda captures its own `shared_ptr`, never a
@@ -140,9 +139,10 @@ Rules:
    atomic countdown: the last task to finish does the follow-up work.
 5. A class that owns a thread stops and joins it at the start of its destructor, before any
    member the thread uses is destroyed.
-6. In `GstSegmentSource`, streaming threads touch only the frame slot. The video sink (a
-   `QPointer`, which is not thread-safe) is used only on the GUI thread, and the run can only
-   be replaced while the pipeline is stopped.
+6. In `GstSegmentSource`, streaming threads run no code of ours; frames cross through the
+   `appsink` queue, which is thread-safe. The video sink (a `QPointer`, which is not
+   thread-safe) is used only on the GUI thread, and the run can only be replaced while the
+   pipeline is stopped.
 
 ThreadSanitizer. Qt is not built with TSan, so TSan cannot see the locks inside `QThreadPool`
 and `QFuture`. Our own synchronisation therefore uses standard atomics and mutexes, which TSan
@@ -204,13 +204,33 @@ with `static_assert`.
 
 ## GUI
 
-- `MainWindow`: docks for the library, summary, timeline, charts, logs, player and report.
-  Menus: File (open bundle, open folder), Playback (engine, render video), Help.
+- `MainWindow`: a sidebar of five pages in a `QStackedWidget`: Library, Replay (the player and
+  the `MomentPanel`), Analysis (charts), Logs, and Report (report and summary). A toolbar opens
+  folders and bundles, picks a run of the folder and the engine; the `TransportBar` under every
+  page holds the playback buttons and the `SegmentTimeline`. Menus: File (open folder, open
+  bundle, open recent), View (pages, video overlay, full screen), Playback (play, 5 s steps,
+  segment steps, render video, engine), Help. Every command is a `QAction` shared by the menu,
+  its shortcut and its button. Recent folders, the window geometry, the overlay and the engine
+  are kept with `QSettings`.
+- `TransportBar`: play, 5 s and segment steps, the simulation and replay time, the state, and
+  the segment timeline as the scrubber. Shown while a run is open.
+- `MomentPanel`: what was on screen at the cursor, the last decision before it, the network
+  as last measured, and the engine and times.
+- Labels that change while the replay runs have fixed sizes. A label that grew or shrank would
+  make the main window lay out again, and on a large window that repaint costs about 200 ms.
+- Icons are line drawings in SVG, drawn in the palette's text colour (so light and dark mode
+  both work) by a `QIconEngine`; the application icon is `app/resources/abrviz.svg`, built into
+  `abrviz.icns` for the macOS app bundle.
+- `PlaybackActivity`: while the replay runs, an `NSProcessInfo` activity keeps macOS App Nap
+  from throttling the app's timers when its window is hidden or covered (otherwise timers fire
+  only every 200 ms or so after half a minute, and the replay stutters).
 - `Session`: the open run (`shared_ptr<const RunData>`), its `LogIndex`, and the `TimeCursor`.
   Emits `runChanged`; every panel connects to it.
 - `TimeCursor`: the current simulation time. `setTime(t, source)`; a panel ignores changes it
   caused itself.
-- `LibraryView`: table of the bundles in a folder (video, link rate, stalls, cut-off).
+- `LibraryView`: a welcome screen (open a folder or a bundle, recent folders) or the table of
+  the bundles in a folder (video, link rate, stalls, cut-off) with a search filter and the
+  details of the selected run.
 - `SummaryPanel`: run information, ladder, warnings.
 - `SegmentTimeline`: painted strip of played rungs, stalls, guard overrides and buffer-full
   waits; clicking moves the cursor.
@@ -269,7 +289,7 @@ new one.
 
 ```
 splitmuxsrc ! decodebin3 ! videoconvert ! videoscale
-            ! video/x-raw,format=NV12,width=1920,height=1080 ! appsink
+            ! video/x-raw,format=NV12,width=1920,height=1080 ! appsink sync=false max-buffers=8
 ```
 
 - `splitmuxsrc` plays a list of files as one stream. Its `format-location` signal returns the
@@ -277,48 +297,55 @@ splitmuxsrc ! decodebin3 ! videoconvert ! videoscale
   `splitmuxsrc`. Resolution changes between files are handled by the decoder.
 - `decodebin3` uses VideoToolbox (`vtdec`) on macOS and `avdec_h264` on Linux.
 - Every rung is scaled to 1080p, so low rungs look as soft as they should.
-- Frames are NV12. The `appsink` callback wraps each sample in a `GstVideoBuffer` (a
-  `QAbstractVideoBuffer`) that maps it with `VideoFrameMapGuard` and releases it in its
-  destructor, so frames are handed to Qt without copying.
+- Frames are NV12. Each sample is wrapped in a `GstVideoBuffer` (a `QAbstractVideoBuffer`)
+  that maps it with `VideoFrameMapGuard` and releases it in its destructor, so frames are
+  handed to Qt without copying.
+- Timing is done by the engine, not by the sink. The appsink does not sync to a clock; the
+  pipeline stays in `PLAYING` and decodes until the appsink's queue of 8 frames is full. While
+  playing, a 5 ms timer on the GUI thread advances a replay clock (`QElapsedTimer` plus the
+  replay time it started from), maps it to media time through the spans, and shows the newest
+  queued frame that is due; late frames are skipped.
 - The replay timeline is cut into spans: runs of consecutive segments, and the stalls between
-  them. A segment span is played with a flushing seek whose stop is the span's end media time;
-  at its EOS the engine pauses the pipeline, keeps the last frame on screen and reports
-  `Stalled` for the stall's duration (a `QTimer`), then seeks to the next span and plays on.
-  Seeking into a stall shows the frame just before the stall's media time.
-- Cut-off playback: the last span's stop is the media time where playback stopped.
-- Positions: while playing, the replay time comes from the media time of the frame on screen
-  (its stream time); while stalled, from the time spent in the stall.
-- Paused seeks need no workaround: the appsink's preroll callback delivers the frame at the
-  new position.
+  them. Spans are contiguous in media time, so a stall needs no seek: while the replay clock
+  is inside a stall, the media target is the frame before it, the last frame stays on screen,
+  and the state is `Stalled`. Playback ends when the replay clock reaches the replay duration,
+  which is where a cut-off run stopped (the seek stop is the end of the played media, so
+  nothing beyond it is decoded).
+- Seeks are flushing and accurate. The first frame after a seek is shown at once, also while
+  paused. Seeking into a stall shows the frame just before the stall's media time.
+- Why not let the sink sync. The first version synced the appsink to the pipeline clock and
+  stopped each span with a seek stop and EOS. When `splitmuxsrc` moved to the next part at a
+  rung change, the running time could jump ahead, and the sink then waited for it: the picture
+  froze for seconds, sometimes for over a minute, at random places. With the clock on our
+  side, a timestamp glitch can at worst show one frame early or late.
 - Some decoders fail without posting an error (VideoToolbox refuses very small frames, such as
-  64 x 36). If no frame has arrived 8 s after the pipeline starts, the engine reports an error.
-  An error before the engine has shown any picture makes the player switch to the pre-rendered
-  engine and say why in the status bar.
+  64 x 36). If the pipeline has not prerolled 8 s after it starts, the engine reports an
+  error. An error before the engine has shown any picture makes the player switch to the
+  pre-rendered engine and say why in the status bar.
 
-Member order. Members are destroyed in reverse order of declaration, and the streaming threads
-use the frame slot, so the pipeline must stop before the frame slot is destroyed:
+Member order. Members are destroyed in reverse order of declaration; the bus thread posts to
+the engine and the pipeline owns the appsink:
 
 ```cpp
 class GstSegmentSource final : public ReplaySource {
     // ...
 private:
     std::shared_ptr<const RunData> run_;   // replaced only while the pipeline is stopped
+    std::vector<Span> spans_;
     QPointer<QVideoSink> sink_;            // GUI thread only
-    std::mutex frameMutex_;                // frame slot, written by streaming threads
-    QVideoFrame latestFrame_;
-    double latestMedia_ = 0.0;
-    std::atomic<bool> framePending_{false};
+    QTimer* ticker_;                       // presents frames while playing
+    QElapsedTimer playClock_;              // replay time = anchor_ + elapsed
+    std::optional<Pending> pending_;       // the next queued frame, not due yet
     GstElement* appsink_ = nullptr;        // owned by the pipeline
     PipelineGuard pipeline_;               // stops the streaming threads, then unrefs
     std::jthread busThread_;               // destroyed first
 };
 ```
 
-The destructor also does this explicitly: stop and join the bus thread, stop the pipeline,
-then let the members go. The bus thread holds its own reference to the bus and never reads
-`pipeline_`; only plain values (message kind and text), not `GstMessage`s, are posted to the
-GUI thread. Queued deliveries still pending are dropped by Qt because they are
-posted with the engine as the context object.
+The destructor also does this explicitly: stop and join the bus thread, then stop the
+pipeline. The bus thread holds its own reference to the bus and never reads `pipeline_`; only
+plain values (message kind and text), not `GstMessage`s, are posted to the GUI thread. Calls
+still queued are dropped by Qt because they are posted with the engine as the context object.
 
 ### Pre-rendered engine (`PrerenderedSource`)
 

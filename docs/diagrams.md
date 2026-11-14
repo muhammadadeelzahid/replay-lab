@@ -224,21 +224,19 @@ classDiagram
     -PlaybackClock clock
     -vector~Span~ spans
     -QPointer~QVideoSink~ sink
-    -QTimer* stallTimer
-    -mutex frameMutex
-    -QVideoFrame latestFrame
-    -atomic~bool~ framePending
+    -QTimer* ticker
+    -QElapsedTimer playClock
+    -optional~Pending~ pending
     -GstElement* appsink
     -PipelineGuard pipeline
     -jthread busThread
     +makeSpans(PlaybackClock clock)$ vector~Span~
-    -pull(GstElement* appsink, bool preroll) GstFlowReturn
-    -deliverFrame()
+    -tick() present the frames that are due
+    -pullSample() optional~Pending~
     -busLoop(stop_token stop, GstBus* bus)
-    -spanFinished()
-    -stallFinished()
     +dtor() join bus thread, stop pipeline
   }
+
   class ReplaySourceFactory {
     +available()$ QList~Engine~
     +create(Engine engine, RenderQueue* queue)$ unique_ptr~ReplaySource~
@@ -292,9 +290,16 @@ classDiagram
     -unique_ptr~Impl~ d
     +openBundle(QString dir)
     +openFolder(QString dir)
+    +showPage(Page page)
+    +stepReplay(double seconds)
+    +stepSegment(int direction)
     -shutdown()
     +dtor() shutdown() first
   }
+  class TransportBar {
+    +play, step and segment buttons (shared QActions)
+  }
+  class MomentPanel
   class Impl {
     -unique_ptr~RenderQueue~ renderQueue
     -FutureGuard~LoadResult~ loading
@@ -325,6 +330,11 @@ classDiagram
   class ReportView
 
   MainWindow *-- Impl
+  MainWindow *-- TransportBar
+  MainWindow *-- MomentPanel
+  TransportBar o-- SegmentTimeline
+  TransportBar --> ReplayPlayer
+  MomentPanel --> Session
   MainWindow *-- Session
   MainWindow *-- LibraryView
   MainWindow *-- SummaryPanel
@@ -380,7 +390,7 @@ flowchart LR
 
   subgraph GST["GStreamer streaming threads"]
     PIPE["splitmuxsrc → decodebin3 → scale → appsink"]
-    CB["appsink new-sample / new-preroll: wrap frame, store in slot"]
+    CB["appsink queue (8 frames); read by the GUI thread"]
   end
 
   subgraph BUS["GstSegmentSource: std::jthread"]
@@ -406,7 +416,7 @@ flowchart LR
   WL -- "queued: progress, file path" --> RP
   RP -- "play / pause / seek" --> PIPE
   PIPE --> CB
-  CB -- "queued: deliverFrame" --> RP
+  RP -- "GUI timer: try_pull_sample" --> CB
   BL -- "queued: end of stream, errors" --> RP
 ```
 
@@ -418,4 +428,4 @@ flowchart LR
 | log filter generation, render progress | `std::atomic` |
 | render job queue | `std::mutex`, `std::condition_variable_any` |
 | `RenderCache` | `std::mutex`, `ClaimGuard` |
-| GStreamer frame slot | `std::mutex`, `std::atomic<bool>` |
+| GStreamer frames | the `appsink` queue (GStreamer's own locking) |

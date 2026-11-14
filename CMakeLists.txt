@@ -13,7 +13,7 @@ option(ABR_WITH_GSTREAMER "Build the GStreamer replay engine" ON)
 option(ABR_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS
-    Core Concurrent Widgets Charts Multimedia MultimediaWidgets Test)
+    Core Concurrent Widgets Charts Multimedia MultimediaWidgets Svg Test)
 qt_standard_project_setup()
 
 if(ABR_WITH_GSTREAMER)

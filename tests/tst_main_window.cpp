@@ -3,7 +3,9 @@
 #include "library_view.h"
 #include "main_window.h"
 #include "replay_player.h"
+#include "moment_panel.h"
 #include "report_view.h"
+#include "transport_bar.h"
 #include "segment_timeline.h"
 #include "session.h"
 #include "summary_panel.h"
@@ -12,6 +14,7 @@
 #include "abrviz/core/version.h"
 
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenuBar>
 #include <QSignalSpy>
 #include <QStatusBar>
@@ -80,19 +83,89 @@ private slots:
         QCOMPARE(menus[0]->text(), QStringLiteral("&File"));
         QCOMPARE(menuTexts(menus[0]->menu()),
                  (QStringList{QStringLiteral("Open &Folder..."), QStringLiteral("Open &Bundle..."),
-                              QStringLiteral("&Quit")}));
-        QCOMPARE(menus[1]->text(), QStringLiteral("&Playback"));
+                              QStringLiteral("Open &Recent"), QStringLiteral("&Quit")}));
+        QCOMPARE(menus[1]->text(), QStringLiteral("&View"));
         QCOMPARE(menuTexts(menus[1]->menu()),
-                 (QStringList{QStringLiteral("&Play"), QStringLiteral("&Render Video"),
+                 (QStringList{QStringLiteral("Library"), QStringLiteral("Replay"),
+                              QStringLiteral("Analysis"), QStringLiteral("Logs"),
+                              QStringLiteral("Report"), QStringLiteral("Show Video &Overlay"),
+                              QStringLiteral("Enter &Full Screen")}));
+        QCOMPARE(menus[2]->text(), QStringLiteral("&Playback"));
+        QCOMPARE(menuTexts(menus[2]->menu()),
+                 (QStringList{QStringLiteral("&Play"), QStringLiteral("&Back 5 Seconds"),
+                              QStringLiteral("&Forward 5 Seconds"), QStringLiteral("P&revious Segment"),
+                              QStringLiteral("&Next Segment"), QStringLiteral("&Render Video"),
                               QStringLiteral("&Engine")}));
-        QMenu* engines = menus[1]->menu()->actions().last()->menu();
+        QMenu* engines = menus[2]->menu()->actions().last()->menu();
         QVERIFY(engines);
         QCOMPARE(engines->actions().size(), 2);
         int checked = 0;
         for (QAction* action : engines->actions())
             checked += action->isChecked() ? 1 : 0;
         QCOMPARE(checked, 1);
-        QCOMPARE(menus[2]->menu()->actions().size(), 6);  // one per dock
+        QCOMPARE(menus[3]->text(), QStringLiteral("&Help"));
+    }
+
+    void pagesFollowTheRun()
+    {
+        MainWindow window;
+        QCOMPARE(window.currentPage(), MainWindow::Page::Library);
+        QVERIFY(window.library()->isShowingWelcome());
+        QVERIFY(!window.transport()->isVisibleTo(&window));
+        QVERIFY(open(window, test::dataPath(QStringLiteral("bbb_36"))));
+        // Opening a run from the library shows its replay, with the transport bar.
+        QCOMPARE(window.currentPage(), MainWindow::Page::Replay);
+        QVERIFY(window.transport()->isVisibleTo(&window));
+        for (int i = 0; i < MainWindow::kPageCount; ++i) {
+            window.showPage(static_cast<MainWindow::Page>(i));
+            QCOMPARE(window.currentPage(), static_cast<MainWindow::Page>(i));
+        }
+    }
+
+    void transportStepsTheCursor()
+    {
+        MainWindow window;
+        QVERIFY(open(window, test::dataPath(QStringLiteral("bbb_36"))));
+        Session* session = window.session();
+        const PlaybackClock& clock = session->clock();
+        session->cursor()->setTime(clock.replayToSim(20.0));
+        window.stepReplay(5.0);
+        QVERIFY(std::abs(clock.simToReplay(session->cursor()->time()) - 25.0) < 0.01);
+        window.stepReplay(-10.0);
+        QVERIFY(std::abs(clock.simToReplay(session->cursor()->time()) - 15.0) < 0.01);
+
+        // Segment steps land on the first frame of a segment.
+        window.stepSegment(1);
+        const double next = session->cursor()->time();
+        const auto starts = [&clock] {
+            std::vector<double> times;
+            for (const auto& piece : clock.pieces())
+                if (piece.kind == PlaybackClock::Piece::Kind::Segment)
+                    times.push_back(piece.simStart);
+            return times;
+        }();
+        QVERIFY(std::ranges::find(starts, next) != starts.end());
+        window.stepSegment(-1);
+        QVERIFY(session->cursor()->time() < next);
+        QVERIFY(window.transport()->timeText().contains(QStringLiteral("replay")));
+        QVERIFY(!window.moment()->value(QStringLiteral("Segment")).isEmpty());
+    }
+
+    void libraryFiltersRuns()
+    {
+        if (!test::haveFullBundles())
+            QSKIP("viewer_bundles/ not present");
+        MainWindow window;
+        QSignalSpy scanned(&window, &MainWindow::folderScanned);
+        window.openFolder(test::bundlesPath());
+        QVERIFY(waitFor(scanned));
+        QVERIFY(!window.library()->isShowingWelcome());
+        QCOMPARE(window.library()->visibleRows(), 14);
+        window.library()->searchEdit()->setText(QStringLiteral("bunny"));
+        QCOMPARE(window.library()->visibleRows(), 2);
+        QVERIFY(window.library()->detailsText().contains(QStringLiteral("Big Buck Bunny")));
+        window.library()->searchEdit()->clear();
+        QCOMPARE(window.library()->visibleRows(), 14);
     }
 
     void engineCanBeSwitched()
@@ -151,9 +224,8 @@ private slots:
         QCOMPARE(model->bundleAt(0)->videoName, QStringLiteral("big_buck_bunny"));
         QCOMPARE(model->data(model->index(0, LibraryModel::CutOff), Qt::DisplayRole).toString(),
                  QStringLiteral("cut off"));
-        QVERIFY(model->data(model->index(1, LibraryModel::CutOff), Qt::DisplayRole)
-                    .toString()
-                    .isEmpty());
+        QCOMPARE(model->data(model->index(1, LibraryModel::CutOff), Qt::DisplayRole).toString(),
+                 QStringLiteral("complete"));
         QVERIFY(!window.isBusy());
     }
 

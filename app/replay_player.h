@@ -14,13 +14,13 @@ class QGraphicsScene;
 class QGraphicsTextItem;
 class QGraphicsVideoItem;
 class QGraphicsView;
-class QLabel;
 class QProgressBar;
 class QPushButton;
 class QVideoSink;
 
 namespace abrviz {
 
+class PlaybackActivity;
 class RenderQueue;
 class Session;
 
@@ -56,6 +56,9 @@ public:
     /// The sink both engines write into.
     [[nodiscard]] QVideoSink* videoSink() const;
     [[nodiscard]] QString messageText() const;
+    /// Shows or hides the information drawn over the video (it is always kept up to date).
+    void setOverlayVisible(bool visible);
+    [[nodiscard]] bool isOverlayVisible() const { return overlayVisible_; }
     /// Playing or stalled: the replay is running and moves the cursor.
     [[nodiscard]] bool isRunning() const;
 
@@ -95,15 +98,15 @@ private:
     QGraphicsRectItem* overlayBox_;
     QGraphicsTextItem* overlay_;
     QGraphicsTextItem* message_;
-    QPushButton* playButton_;
     QPushButton* renderButton_;
     QProgressBar* progress_;
-    QLabel* timeLabel_;
-    QLabel* engineLabel_;
+    QWidget* renderBar_;
     std::unique_ptr<ReplaySource> engine_;
+    std::unique_ptr<PlaybackActivity> activity_;  // held while the replay runs
     std::optional<Engine> engineKind_;
     QString error_;
-    bool engineShowedPicture_ = false;  // reached Paused or Playing for the current run
+    bool engineShowedPicture_ = false;
+    bool overlayVisible_ = true;  // reached Paused or Playing for the current run
 };
 
 } // namespace abrviz

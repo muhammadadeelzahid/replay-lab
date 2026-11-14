@@ -7,38 +7,47 @@ time, and the simulation logs, all linked to one time cursor.
 
 Built with **C++20**, **Qt 6** and **GStreamer**.
 
-![Main window: Big Buck Bunny at 36 Mbps, paused inside its stall](docs/images/main-window.png)
+![Replay: Big Buck Bunny at 36 Mbps, paused inside its stall](docs/images/replay.jpg)
 
 ## What it shows
 
-- **Library**: every bundle in a folder, with link rate, segments, stalls, whether playback
-  was cut off by the end of the simulation, and how well the logs match the exported data.
+A sidebar switches between five pages; the transport bar under every page plays the replay and
+holds the segment timeline, which is also the scrubber.
+
+- **Library**: every run in a folder, with link rate, segments, stalls, whether playback was
+  cut off by the end of the simulation, and how well the logs match the exported data; a
+  filter and the details of the selected run. Without a folder, a welcome screen with the
+  recent folders.
 - **Replay**: the video the simulated user saw, each segment at the rung it was played at,
-  stalls as frozen frames, cut off where playback stopped. An overlay gives the segment, rung,
-  resolution, bitrate, buffer level and state.
-- **Timeline**: downloads, segments on screen and policy decisions, coloured by rung, with
-  stalls, guard overrides and the cut-off marked.
-- **Charts**: buffer, throughput and the policy's estimate, chosen and played bitrate, RTT
-  and loss, and decision delay.
-- **Log**: `sim.log` and the policy log in one indexed view, filtered in the background, that
+  stalls as frozen frames, cut off where playback stopped. Beside it, what was on screen
+  (segment, rung, resolution, bitrate, buffer, stall), the policy's last decision, the network
+  as last measured, and the engine and times.
+- **Analysis**: buffer, throughput and the policy's estimate, chosen and played bitrate, RTT
+  and loss, and decision delay, with a readout at the cursor.
+- **Logs**: `sim.log` and the policy log in one indexed view, filtered in the background, that
   follows the cursor.
 - **Report**: QoE numbers for the session, with the six that `summary.json` reports checked
-  against it.
+  against it, next to the run's settings and ladder.
 
-Clicking or dragging in any timeline or chart moves the cursor; playing the replay moves it
-too.
+The timeline shows downloads, segments on screen and policy decisions, coloured by rung, with
+stalls, guard overrides and the cut-off marked. Clicking or dragging in the timeline or a chart
+moves the cursor; playing the replay moves it too.
 
-![The QoE report for Peaceful Autumn Lake at 9 Mbps](docs/images/report.png)
+| Library | Analysis | Report |
+| --- | --- | --- |
+| ![Library](docs/images/library.png) | ![Analysis](docs/images/analysis.png) | ![Report](docs/images/report.png) |
 
 ## Replay engines
 
 | Engine | How it works | When |
 | --- | --- | --- |
-| GStreamer (default) | plays the segment files directly: `splitmuxsrc ! decodebin3 ! videoconvert ! videoscale ! appsink`, frames handed to Qt without copying; stalls hold the last frame on a timer | built with `ABR_WITH_GSTREAMER=ON` |
+| GStreamer (default) | plays the segment files directly: `splitmuxsrc ! decodebin3 ! videoconvert ! videoscale ! appsink`, frames handed to Qt without copying; the engine times the frames itself, and a stall holds the last frame | built with `ABR_WITH_GSTREAMER=ON` |
 | Pre-rendered | `ffmpeg` renders the experienced video once (in parallel, cached), played with Qt Multimedia | always available; used automatically if GStreamer cannot show a run |
 
-Choose with Playback, Engine (saved) or `--engine gstreamer|prerendered`. Both engines show
-the same picture at the same cursor position; a test checks this on a full bundle.
+Choose in the toolbar or Playback, Engine (saved), or with `--engine gstreamer|prerendered`.
+Both engines show the same picture at the same cursor position; a test checks this on a full
+bundle. All 14 runs were played start to finish with each engine's frame rate checked: 25,
+29.97, 30 and 59.94 fps videos all play at their own rate, with gaps only at the stalls.
 
 ## Measured
 
@@ -49,17 +58,20 @@ build. Big Buck Bunny at 36 Mbps: 59 segments, 4K top rung, 111 s of replay. Num
 | What | Result |
 | --- | --- |
 | Load and check all 14 bundles (`print_report viewer_bundles`) | 0.04 s warm, 0.29 s cold |
-| Start the app, read the folder and open BBB 36 | 0.17 s |
-| Index `sim.log` and the policy log (12 k lines) | 25 ms after that |
-| GStreamer engine: first picture | 80 ms |
-| GStreamer engine: 10 s of 4K playback across the stall | 29 frames/s shown (video 30, no new frames during the stall), 50 % of one core, 400 MB peak |
+| Start the app, read the folder and open BBB 36 | 0.11 s |
+| Index `sim.log` and the policy log (12 k lines) | 20 ms after that |
+| GStreamer engine: first picture | 40–100 ms |
+| GStreamer engine: all 111 s of BBB 36 (4K rung) | 3,323 of 3,324 frames shown, the only gap is the 0.36 s stall |
+| GStreamer engine: 10 s across the stall | 29 frames/s shown (video 30, none during the stall), 60 % of one core, 420 MB peak |
 | Render the experienced video (55 parts, 10 `ffmpeg` at once) | 13.7 s (101 s of CPU); 3.9 s for an 11-segment run |
-| Pre-rendered engine: 10 s of playback | 29.9 frames/s, 40 % of one core, 240 MB peak |
+| Pre-rendered engine: 10 s of playback | 29.9 frames/s, 57 % of one core, 230 MB peak |
+
+CPU is for the whole app, including repainting the panels that follow the cursor.
 
 ## Requirements
 
 - CMake 3.24+, Ninja, a C++20 compiler (Apple clang 15+, GCC 13+)
-- Qt 6.8+ with Widgets, Charts, Multimedia, Concurrent and Test
+- Qt 6.8+ with Widgets, Charts, Multimedia, Svg, Concurrent and Test
 - GStreamer 1.22+ with the base, good, bad and libav plugins (optional, see below)
 - ffmpeg (for the pre-rendered replay engine)
 
@@ -88,23 +100,39 @@ The GStreamer replay engine is built by default. Configure with `-DABR_WITH_GSTR
 
 ## Running
 
+On macOS the app is a bundle with its icon, `build/<preset>/app/abrviz.app`:
+
 ```sh
-./build/release/app/abrviz viewer_bundles                      # the library
-./build/release/app/abrviz viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57
+open build/release/app/abrviz.app                    # welcome screen, recent folders
+APP=build/release/app/abrviz.app/Contents/MacOS/abrviz
+$APP viewer_bundles                                  # the library of a folder
+$APP viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57
 ```
+
+On Linux the executable is `build/<preset>/app/abrviz`.
 
 | Option | Effect |
 | --- | --- |
 | `--bundle <name>` | open this bundle of the folder |
 | `--time <s>` | move the cursor to this simulation time |
 | `--engine gstreamer\|prerendered` | replay engine for this start (overrides the saved choice) |
-| `--report` | show the report tab instead of the run summary |
+| `--page library\|replay\|analysis\|logs\|report` | page to show |
 | `--size WxH` | window size |
 | `--screenshot <file.png>` | save a picture of the window once everything is shown, and quit (no window appears) |
 | `--profile <s>` | play that many seconds and print load, render and playback numbers |
 
-Space plays and pauses; Ctrl+R renders the video for the pre-rendered engine. Rendered videos
-are kept in the user cache folder (`ABRVIZ_RENDER_CACHE` overrides it).
+| Keys (macOS) | Action |
+| --- | --- |
+| Space | play / pause |
+| ⌥← / ⌥→ | back / forward 5 s of replay |
+| ⌘[ / ⌘] | previous / next segment |
+| ⌘1 … ⌘5 | Library, Replay, Analysis, Logs, Report |
+| ⌘O / ⇧⌘O | open a folder / one bundle |
+| ⌘R | render the video for the pre-rendered engine |
+| ⌘I | show the information overlay on the video |
+
+On Linux, Ctrl replaces ⌘ and Alt replaces ⌥. Rendered videos are kept in the user cache
+folder (`ABRVIZ_RENDER_CACHE` overrides it).
 
 Command-line tools, built next to the app in `build/<preset>/tools/`:
 
