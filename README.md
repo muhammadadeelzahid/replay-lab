@@ -12,7 +12,7 @@ three UEs. The video server reaches the satellite over a feeder link of 9, 18 or
 
 Built with C++20, Qt 6 and GStreamer.
 
-![Replay of Big Buck Bunny at 36 Mbps](docs/images/replay.jpg)
+![Replay of Big Buck Bunny at 36 Mbps: the buffer runs dry while segment 17 is still coming over the satellite, the viewer stalls, then playback resumes](docs/images/demo.gif)
 
 ## Download
 
@@ -110,6 +110,7 @@ On Linux the executable is `build/release/app/stream-inspector`.
 | `--size WxH` | window size |
 | `--screenshot <file.png>` | save a screenshot and quit |
 | `--profile <s>` | play for some seconds and print timings |
+| `--record <folder>` | play and save a picture of the window every 100 ms, then quit (`--duration <s>`, default 8) |
 
 | Key | Action |
 | --- | --- |
@@ -121,6 +122,15 @@ On Linux the executable is `build/release/app/stream-inspector`.
 | ⌘O / ⇧⌘O | open a folder / a run |
 | ⌘R | render the video |
 | ⌘, | settings |
+
+The GIF above was made with:
+
+```sh
+"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 50 --size 1440x900 \
+    --record frames --duration 9
+ffmpeg -framerate 10 -i frames/frame-%04d.png -vf "fps=8,scale=880:-1:flags=lanczos,\
+split[a][b];[a]palettegen=max_colors=144[p];[b][p]paletteuse=dither=bayer" docs/images/demo.gif
+```
 
 Command-line tools in `build/release/tools/`: `validate_bundle`, `print_report`,
 `render_experienced`.

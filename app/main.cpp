@@ -19,6 +19,8 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QImage>
+#include <QList>
 #include <QTimer>
 
 #include <QVideoSink>
@@ -36,6 +38,7 @@
 #include <cstdio>
 #include <memory>
 #include <optional>
+#include <utility>
 
 namespace {
 
@@ -295,21 +298,108 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
     });
 }
 
+/**
+ * @brief `--record`: once the bundle and its log index are ready, plays the replay and saves a
+ *        picture of the window ten times a second, then quits.
+ *
+ * The pictures are numbered PNG files (frame-0000.png, frame-0001.png, ...) at the window's
+ * size in points, saved in `directory` (created if needed) when recording stops; ffmpeg can turn them into a GIF or a video. Recording stops after
+ * `seconds` or earlier when the replay ends. Exits the event loop with 0, or with 1 if the
+ * bundle cannot be opened, the engine fails or a picture cannot be saved.
+ * Pictures can be missed when painting the window takes longer than 100 ms.
+ *
+ * @param window The main window; must outlive the event loop.
+ * @param directory The folder to save the pictures in.
+ * @param seconds How long to record, in wall-clock seconds.
+ * @param time If set, the simulation time (seconds) to move the cursor to before playing.
+ */
+void scheduleRecord(abrviz::MainWindow& window, const QString& directory, double seconds,
+                    std::optional<double> time)
+{
+    QObject::connect(&window, &abrviz::MainWindow::bundleOpened, &window,
+                     [](const QString& bundle, bool ok) {
+                         if (!ok) {
+                             std::fprintf(stderr, "could not open %s\n", qPrintable(bundle));
+                             QApplication::exit(1);
+                         }
+                     });
+    QObject::connect(&window, &abrviz::MainWindow::logIndexReady, &window,
+                     [&window, directory, seconds, time] {
+        if (time)
+            window.session()->cursor()->setTime(*time);
+        auto* player = window.player();
+        if (!player->engine()->isReady())
+            player->prepare();
+        auto* poll = new QTimer(&window);
+        QObject::connect(poll, &QTimer::timeout, &window, [&window, player, poll, directory, seconds] {
+            const auto* engine = player->engine();
+            if (engine->state() == abrviz::ReplaySource::State::Error) {
+                std::fprintf(stderr, "engine error\n");
+                QApplication::exit(1);
+                return;
+            }
+            if (!engine->isReady() || engine->state() != abrviz::ReplaySource::State::Paused)
+                return;
+            poll->deleteLater();
+            QDir().mkpath(directory);
+            // Pictures are kept in memory at the window's size in points and saved at the end:
+            // encoding a full-resolution PNG takes longer than the 100 ms between pictures.
+            auto frames = std::make_shared<QList<QImage>>();
+            auto* grabber = new QTimer(&window);
+            grabber->setTimerType(Qt::PreciseTimer);
+            auto finished = std::make_shared<bool>(false);
+            const auto finish = [frames, directory, grabber, finished] {
+                if (std::exchange(*finished, true))
+                    return;
+                grabber->stop();
+                for (qsizetype i = 0; i < frames->size(); ++i) {
+                    const QString file = QDir(directory).filePath(
+                        QStringLiteral("frame-%1.png").arg(i, 4, 10, QLatin1Char('0')));
+                    if (!frames->at(i).save(file)) {
+                        std::fprintf(stderr, "could not save %s\n", qPrintable(file));
+                        QApplication::exit(1);
+                        return;
+                    }
+                }
+                std::printf("saved %lld pictures in %s\n", static_cast<long long>(frames->size()),
+                            qPrintable(directory));
+                QApplication::exit(0);
+            };
+            QObject::connect(grabber, &QTimer::timeout, &window, [&window, frames] {
+                *frames << window.grab().toImage().scaled(window.size(), Qt::IgnoreAspectRatio,
+                                                          Qt::SmoothTransformation);
+            });
+            // Let the panels settle on the starting moment before the first picture.
+            QTimer::singleShot(600, &window, [&window, player, grabber, seconds, finish] {
+                player->play();
+                grabber->start(100);
+                QTimer::singleShot(static_cast<int>(seconds * 1000.0), &window, finish);
+                QObject::connect(player, &abrviz::ReplayPlayer::stateChanged, &window,
+                                 [finish](abrviz::ReplaySource::State state) {
+                                     if (state == abrviz::ReplaySource::State::Ended)
+                                         finish();
+                                 });
+            });
+        });
+        poll->start(20);
+    });
+}
+
 } // namespace
 
 /**
  * @brief Starts the application.
  *
  * Parses the command line (`[path]`, `--bundle`, `--time`, `--size`, `--screenshot`,
- * `--engine`, `--page`, `--profile`), creates the main window and opens the path: a folder is
- * listed, and a bundle (the path itself if it holds a `run.json`, or `--bundle` inside it) is
- * opened. `--screenshot` and `--profile` run as a background-only application and paint the
- * window without putting it on the screen.
+ * `--engine`, `--page`, `--profile`, `--record`, `--duration`), creates the main window and
+ * opens the path: a folder is listed, and a bundle (the path itself if it holds a `run.json`,
+ * or `--bundle` inside it) is opened. `--screenshot`, `--profile` and `--record` run as a
+ * background-only application and paint the window without putting it on the screen.
  *
  * @param argc The argument count.
  * @param argv The arguments.
  * @return The event loop's exit code; 2 for an engine that is not built or an unknown page;
- *         1 if `--profile` is given without a bundle.
+ *         1 if `--profile` or `--record` is given without a bundle.
  */
 int main(int argc, char* argv[])
 {
@@ -353,10 +443,20 @@ int main(int argc, char* argv[])
         QStringLiteral("profile"),
         QStringLiteral("Open the bundle, play this many seconds of the replay, print timings and quit."),
         QStringLiteral("seconds"));
+    const QCommandLineOption recordOption(
+        QStringLiteral("record"),
+        QStringLiteral("Open the bundle, play it, save pictures of the window ten times a second "
+                       "in this folder and quit."),
+        QStringLiteral("folder"));
+    const QCommandLineOption durationOption(
+        QStringLiteral("duration"), QStringLiteral("How long --record records (default 8)."),
+        QStringLiteral("seconds"), QStringLiteral("8"));
     parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption, engineOption,
-                       pageOption, profileOption});
+                       pageOption, profileOption, recordOption, durationOption});
     parser.process(app);
-    if (parser.isSet(screenshotOption) || parser.isSet(profileOption))
+    const bool background = parser.isSet(screenshotOption) || parser.isSet(profileOption)
+        || parser.isSet(recordOption);
+    if (background)
         abrviz::runInBackground();
 
     abrviz::MainWindow window;
@@ -389,11 +489,10 @@ int main(int argc, char* argv[])
                          [&window, page] { window.showPage(*page); });
         window.showPage(*page);
     }
-    // Screenshot and profile runs lay the window out and paint it without putting it on the
-    // screen.
-    // They run as background-only apps (never activated, so they cannot take the keyboard focus
-    // from the app in use) and paint the window without putting it on the screen.
-    if (parser.isSet(screenshotOption) || parser.isSet(profileOption)) {
+    // Screenshot, profile and record runs are background-only apps (never activated, so they
+    // cannot take the keyboard focus from the app in use) and paint the window without putting
+    // it on the screen.
+    if (background) {
         window.setAttribute(Qt::WA_DontShowOnScreen);
         window.setAttribute(Qt::WA_ShowWithoutActivating);
     }
@@ -414,6 +513,10 @@ int main(int argc, char* argv[])
         if (bundle.isEmpty())
             parser.showHelp(1);
         scheduleProfile(window, parser.value(profileOption).toDouble(), time);
+    } else if (parser.isSet(recordOption)) {
+        if (bundle.isEmpty())
+            parser.showHelp(1);
+        scheduleRecord(window, parser.value(recordOption), parser.value(durationOption).toDouble(), time);
     } else if (parser.isSet(screenshotOption)) {
         scheduleScreenshot(window, parser.value(screenshotOption), !bundle.isEmpty(), !path.isEmpty(), time);
     } else if (time) {

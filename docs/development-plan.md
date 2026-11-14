@@ -63,7 +63,7 @@ full 680 MB of bundles is too large for a web page, so the web build ships a few
   the offscreen platform does not run. They run as background-only applications
   (`runInBackground()`: never activated, no Dock icon) and their window is marked
   `Qt::WA_DontShowOnScreen`, so nothing appears and the keyboard focus stays in the app in use.
-  `--screenshot` and `--profile` do the same. They are disabled in the TSan build on macOS: the TSan
+  `--screenshot`, `--profile` and `--record` do the same. They are disabled in the TSan build on macOS: the TSan
   runtime can deadlock inside itself when CoreMedia threads exit. Every test has a 300 s
   timeout.
 - Tests keep rendered videos in the build folder (`ABRVIZ_RENDER_CACHE`); stand-in `ffmpeg`
