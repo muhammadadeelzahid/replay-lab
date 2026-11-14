@@ -3,7 +3,7 @@
 #include "branding.h"
 #include "format.h"
 #include "icons.h"
-#include "network_path_view.h"
+#include "welcome_scene.h"
 
 #include "abrviz/core/version.h"
 
@@ -12,6 +12,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -207,57 +208,56 @@ LibraryView::LibraryView(QWidget* parent)
 {
     setObjectName(QStringLiteral("libraryView"));
 
-    // Welcome screen, in the style of Xcode's welcome window.
+    // Welcome screen: the app and its actions on the left, and on the right the network every
+    // run was streamed over, drawn as a scene at dusk.
     {
-        auto* icon = new QLabel(welcome_);
-        icon->setPixmap(appIcon().pixmap(128, 128));
-        icon->setAlignment(Qt::AlignCenter);
-        auto* name = makeLabel(tr("Welcome to %1").arg(appDisplayName()), 2.1, true, welcome_);
-        name->setAlignment(Qt::AlignCenter);
-        auto* version = new QLabel(tr("Version %1").arg(versionString()), welcome_);
-        version->setAlignment(Qt::AlignCenter);
+        auto* intro = new QWidget(welcome_);
+        auto* icon = new QLabel(intro);
+        icon->setPixmap(appIcon().pixmap(96, 96));
+        auto* name = makeLabel(tr("Welcome to %1").arg(appDisplayName()), 2.1, true, intro);
+        name->setWordWrap(true);
+        auto* version = new QLabel(tr("Version %1").arg(versionString()), intro);
         version->setForegroundRole(QPalette::PlaceholderText);
         auto* tagline = new QLabel(tr("See what a viewer saw when adaptive video was streamed over a "
                                       "satellite 5G network with integrated access and backhaul (IAB)."),
-                                   welcome_);
+                                   intro);
         tagline->setWordWrap(true);
-        tagline->setAlignment(Qt::AlignCenter);
-        tagline->setFixedWidth(520);
-        tagline->setMinimumHeight(tagline->heightForWidth(520));
-        auto* path = new NetworkPathView(nullptr, nullptr, welcome_);
-        path->setFixedWidth(760);
 
         auto* actions = new QVBoxLayout();
+        actions->setContentsMargins(-12, 0, 0, 0);  // line the icons up with the text above
         actions->setSpacing(4);
         actions->addWidget(actionRow(Glyph::OpenFolder, tr("Open a Folder of Runs..."),
                                      tr("Lists every run bundle in the folder."),
-                                     [this] { emit openFolderRequested(); }, welcome_));
+                                     [this] { emit openFolderRequested(); }, intro));
         actions->addWidget(actionRow(Glyph::OpenBundle, tr("Open a Single Run..."),
                                      tr("Opens one run bundle and replays it."),
-                                     [this] { emit openBundleRequested(); }, welcome_));
-        auto* actionBox = new QWidget(welcome_);
-        actionBox->setFixedWidth(400);
-        actionBox->setLayout(actions);
+                                     [this] { emit openBundleRequested(); }, intro));
 
+        recentBox_->setParent(intro);
         auto* recentLayout = new QVBoxLayout(recentBox_);
-        recentLayout->setContentsMargins(0, 18, 0, 0);
+        recentLayout->setContentsMargins(-12, 18, 0, 0);
         recentLayout->setSpacing(2);
-        recentBox_->setFixedWidth(400);
 
-        auto* column = new QVBoxLayout(welcome_);
+        auto* column = new QVBoxLayout(intro);
+        column->setContentsMargins(56, 40, 48, 40);
         column->addStretch(2);
         column->addWidget(icon);
-        column->addSpacing(10);
+        column->addSpacing(18);
         column->addWidget(name);
         column->addWidget(version);
         column->addSpacing(14);
-        column->addWidget(tagline, 0, Qt::AlignHCenter);
-        column->addSpacing(14);
-        column->addWidget(path, 0, Qt::AlignHCenter);
-        column->addSpacing(18);
-        column->addWidget(actionBox, 0, Qt::AlignHCenter);
-        column->addWidget(recentBox_, 0, Qt::AlignHCenter);
+        column->addWidget(tagline);
+        column->addSpacing(26);
+        column->addLayout(actions);
+        column->addWidget(recentBox_);
         column->addStretch(3);
+        intro->setFixedWidth(500);
+
+        auto* row = new QHBoxLayout(welcome_);
+        row->setContentsMargins(0, 0, 0, 0);
+        row->setSpacing(0);
+        row->addWidget(intro);
+        row->addWidget(new WelcomeScene(welcome_), 1);
     }
 
     // Run browser.
@@ -326,6 +326,7 @@ LibraryView::LibraryView(QWidget* parent)
             if (const BundleSummaryPtr bundle = selectedBundle())
                 emit openRequested(bundle->directory);
         });
+        table_->installEventFilter(this);
         connect(table_->selectionModel(), &QItemSelectionModel::currentRowChanged, this,
                 &LibraryView::selectionChanged);
         connect(openButton_, &QPushButton::clicked, this, [this] {
@@ -397,6 +398,19 @@ void LibraryView::setRecentFolders(const QStringList& folders)
                                     QDir::toNativeSeparators(QDir(folder).absolutePath()),
                                     [this, folder] { emit recentFolderRequested(folder); }, recentBox_));
     }
+}
+
+bool LibraryView::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == table_ && event->type() == QEvent::KeyPress) {
+        const int key = static_cast<QKeyEvent*>(event)->key();
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            if (const BundleSummaryPtr bundle = selectedBundle())
+                emit openRequested(bundle->directory);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 int LibraryView::visibleRows() const

@@ -48,14 +48,14 @@ public:
     /**
      * @brief The preferred size.
      *
-     * @return 900 pixels wide; 184 pixels high, or 254 for the static diagram.
+     * @return 900 x 150 pixels.
      */
     QSize sizeHint() const override;
 
     /**
      * @brief The smallest useful size.
      *
-     * @return 520 pixels wide; as high as sizeHint().
+     * @return 520 x 150 pixels.
      */
     QSize minimumSizeHint() const override;
 
@@ -74,23 +74,6 @@ public:
      *         alternating, with the run's numbers appended where it has them.
      */
     [[nodiscard]] QStringList labels() const;
-
-    /**
-     * @brief Whether this is the static diagram (no session), as on the welcome screen.
-     *
-     * The static diagram is drawn as a card: a night sky over the Earth's horizon, a heading,
-     * and a note under each node, with dashes flowing slowly along the path.
-     *
-     * @return True if the view was created without a session.
-     */
-    [[nodiscard]] bool isStaticDiagram() const { return session_ == nullptr; }
-
-    /**
-     * @brief Whether the dash animation is running, for tests.
-     *
-     * @return True while the timer that moves the dashes is active.
-     */
-    [[nodiscard]] bool isAnimating() const;
 
     /**
      * @brief Whether a segment download spans the cursor.
@@ -132,8 +115,8 @@ private:
     void refresh();
 
     /**
-     * @brief Runs the dash animation only while the view is visible and either it is the static
-     *        diagram or a segment is downloading while the player runs; stops it otherwise.
+     * @brief Runs the dash animation only while the view is visible, a segment is downloading
+     *        and the player is running; stops it otherwise.
      */
     void updateAnimation();
 

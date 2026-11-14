@@ -37,7 +37,9 @@ add_library(abrviz_gui STATIC
     settings_dialog.h
     settings_dialog.cpp
     network_path_view.h
-    network_path_view.cpp)
+    network_path_view.cpp
+    welcome_scene.h
+    welcome_scene.cpp)
 
 qt_add_resources(abrviz_gui "abrviz_resources"
     PREFIX "/abrviz"
