@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "replay_player.h"
 #include "session.h"
 #include "time_cursor.h"
 
@@ -7,10 +8,12 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QTimer>
 
 #include <cstdio>
+#include <memory>
 #include <optional>
 
 namespace {
@@ -23,13 +26,26 @@ void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool wa
     auto take = [&window, file, time] {
         if (time)
             window.session()->cursor()->setTime(*time);
-        // Let the panels repaint and lay out before grabbing.
-        QTimer::singleShot(400, &window, [&window, file] {
-            const bool saved = window.grab().save(file);
-            std::fprintf(saved ? stdout : stderr, "%s %s\n",
-                         saved ? "saved" : "could not save", qPrintable(file));
-            QApplication::exit(saved ? 0 : 1);
+        // Wait (at most 10 s) until the engine shows a picture or has nothing to show, then let
+        // the panels repaint and lay out before grabbing.
+        auto* poll = new QTimer(&window);
+        auto started = std::make_shared<QElapsedTimer>();
+        started->start();
+        QObject::connect(poll, &QTimer::timeout, &window, [&window, file, poll, started] {
+            const auto* engine = window.player()->engine();
+            const bool waiting = engine && engine->state() == abrviz::ReplaySource::State::Preparing
+                && engine->isReady();
+            if (waiting && started->elapsed() < 10000)
+                return;
+            poll->deleteLater();
+            QTimer::singleShot(600, &window, [&window, file] {
+                const bool saved = window.grab().save(file);
+                std::fprintf(saved ? stdout : stderr, "%s %s\n",
+                             saved ? "saved" : "could not save", qPrintable(file));
+                QApplication::exit(saved ? 0 : 1);
+            });
         });
+        poll->start(50);
     };
     if (waitForBundle) {
         QObject::connect(&window, &abrviz::MainWindow::logIndexReady, &window, take);
@@ -74,10 +90,22 @@ int main(int argc, char* argv[])
         QStringLiteral("screenshot"),
         QStringLiteral("Save a picture of the window once the run is loaded, then quit."),
         QStringLiteral("file"));
-    parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption});
+    const QCommandLineOption engineOption(
+        QStringLiteral("engine"),
+        QStringLiteral("Replay engine: gstreamer or prerendered (overrides the saved choice)."),
+        QStringLiteral("name"));
+    parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption, engineOption});
     parser.process(app);
 
     abrviz::MainWindow window;
+    if (parser.isSet(engineOption)) {
+        const auto engine = abrviz::engineFromKey(parser.value(engineOption));
+        if (!engine || !window.setEngine(*engine)) {
+            std::fprintf(stderr, "engine '%s' is not available in this build\n",
+                         qPrintable(parser.value(engineOption)));
+            return 2;
+        }
+    }
     if (parser.isSet(sizeOption)) {
         const QStringList parts = parser.value(sizeOption).split(QLatin1Char('x'));
         if (parts.size() == 2)

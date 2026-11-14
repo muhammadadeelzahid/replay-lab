@@ -17,7 +17,11 @@ if(ABR_WITH_GSTREAMER)
         src/gst/pipeline_guard.h
         src/gst/video_frame_map_guard.h
         src/gst/gst_runtime.h
-        src/gst/gst_runtime.cpp)
+        src/gst/gst_runtime.cpp
+        src/gst/gst_video_buffer.h
+        src/gst/gst_video_buffer.cpp
+        src/gst/gst_segment_source.h
+        src/gst/gst_segment_source.cpp)
     target_link_libraries(abrviz_media PRIVATE PkgConfig::GST)
     target_compile_definitions(abrviz_media PUBLIC ABRVIZ_WITH_GSTREAMER=1)
 else()

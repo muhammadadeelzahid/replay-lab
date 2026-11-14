@@ -38,7 +38,7 @@ core/        static library, QtCore and QtConcurrent only
   util/      FutureGuard, ProcessGuard
 media/       static library, Qt Multimedia, plus GStreamer when ABR_WITH_GSTREAMER is ON
   ReplaySource, PrerenderedSource, ReplaySourceFactory
-  gst/       GstSegmentSource and the GStreamer wrappers
+  src/gst/   GstSegmentSource, the GStreamer wrappers and GstRuntime (private headers)
 app/         Qt Widgets: MainWindow, Session, TimeCursor and the panels
 tools/       validate_bundle, print_report, render_experienced
 tests/       Qt Test suites, run by CTest
@@ -47,7 +47,7 @@ docs/        documentation
 
 `core` includes no widget, media or GStreamer header, so the command-line tools and the tests
 use the same loading and metrics code as the GUI. GStreamer headers appear only in
-`media/gst/`.
+`media/src/gst/`.
 
 
 ## Data model
@@ -231,7 +231,7 @@ with `static_assert`.
 
 | Level | Setting | Effect |
 | --- | --- | --- |
-| build | `-DABR_WITH_GSTREAMER=ON` (default) or `OFF` | `ON` builds `media/gst/`; configuring fails with a clear message if GStreamer is not found. `OFF` builds only the pre-rendered engine |
+| build | `-DABR_WITH_GSTREAMER=ON` (default) or `OFF` | `ON` builds `media/src/gst/`; configuring fails with a clear message if GStreamer is not found. `OFF` builds only the pre-rendered engine |
 | launch | `--engine=gstreamer` or `--engine=prerendered` | overrides the saved choice |
 | menu | Playback, Engine (saved with `QSettings`) | the user's choice |
 | fallback | automatic | if the GStreamer pipeline cannot be built, the reason is shown in the status bar and the pre-rendered engine is used |
@@ -280,9 +280,20 @@ splitmuxsrc ! decodebin3 ! videoconvert ! videoscale
 - Frames are NV12. The `appsink` callback wraps each sample in a `GstVideoBuffer` (a
   `QAbstractVideoBuffer`) that maps it with `VideoFrameMapGuard` and releases it in its
   destructor, so frames are handed to Qt without copying.
-- Stalls: when a frame reaches the media time of a stall, the engine pauses the pipeline for
-  the stall duration; the last frame stays on screen.
-- Cut-off playback: the stop position is set to the media time where playback stopped.
+- The replay timeline is cut into spans: runs of consecutive segments, and the stalls between
+  them. A segment span is played with a flushing seek whose stop is the span's end media time;
+  at its EOS the engine pauses the pipeline, keeps the last frame on screen and reports
+  `Stalled` for the stall's duration (a `QTimer`), then seeks to the next span and plays on.
+  Seeking into a stall shows the frame just before the stall's media time.
+- Cut-off playback: the last span's stop is the media time where playback stopped.
+- Positions: while playing, the replay time comes from the media time of the frame on screen
+  (its stream time); while stalled, from the time spent in the stall.
+- Paused seeks need no workaround: the appsink's preroll callback delivers the frame at the
+  new position.
+- Some decoders fail without posting an error (VideoToolbox refuses very small frames, such as
+  64 x 36). If no frame has arrived 8 s after the pipeline starts, the engine reports an error.
+  An error before the engine has shown any picture makes the player switch to the pre-rendered
+  engine and say why in the status bar.
 
 Member order. Members are destroyed in reverse order of declaration, and the streaming threads
 use the frame slot, so the pipeline must stop before the frame slot is destroyed:
@@ -293,17 +304,20 @@ class GstSegmentSource final : public ReplaySource {
 private:
     std::shared_ptr<const RunData> run_;   // replaced only while the pipeline is stopped
     QPointer<QVideoSink> sink_;            // GUI thread only
-    GstElement* appsink_ = nullptr;        // owned by the pipeline
     std::mutex frameMutex_;                // frame slot, written by streaming threads
     QVideoFrame latestFrame_;
+    double latestMedia_ = 0.0;
     std::atomic<bool> framePending_{false};
+    GstElement* appsink_ = nullptr;        // owned by the pipeline
     PipelineGuard pipeline_;               // stops the streaming threads, then unrefs
     std::jthread busThread_;               // destroyed first
 };
 ```
 
 The destructor also does this explicitly: stop and join the bus thread, stop the pipeline,
-then let the members go. Queued deliveries still pending are dropped by Qt because they are
+then let the members go. The bus thread holds its own reference to the bus and never reads
+`pipeline_`; only plain values (message kind and text), not `GstMessage`s, are posted to the
+GUI thread. Queued deliveries still pending are dropped by Qt because they are
 posted with the engine as the context object.
 
 ### Pre-rendered engine (`PrerenderedSource`)

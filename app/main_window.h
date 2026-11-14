@@ -1,5 +1,7 @@
 #pragma once
 
+#include "abrviz/media/replay_source_factory.h"
+
 #include <QMainWindow>
 
 #include <memory>
@@ -43,6 +45,12 @@ public:
     /// Opening another bundle first cancels this one.
     void openBundle(const QString& directory);
 
+    /// Switches the replay engine. With `remember`, the choice is saved for the next start
+    /// (the Engine menu does this; `--engine` does not). Returns false if `engine` is not built.
+    bool setEngine(Engine engine, bool remember = false);
+    /// The engine saved in the settings, or the default one.
+    [[nodiscard]] static Engine savedEngine();
+
     /// Cancels and waits for every pending task. Safe to call more than once.
     void shutdown();
 
@@ -75,6 +83,7 @@ private:
     void logIndexFinished();
     void updateStatus();
     void updateActions();
+    void updateEngineActions();
 
     struct Impl;
     std::unique_ptr<Impl> d_;

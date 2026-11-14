@@ -9,8 +9,9 @@
 namespace abrviz::test {
 
 /// A run with real media for render and replay tests: three 2.5 s segments of
-/// tests/data/media/two_and_a_half_seconds.mp4 (30 fps), a stall of `stall` seconds after the
-/// second, and playback cut off half way through the third. Replay time: 6.25 s + `stall`.
+/// tests/data/media/two_and_a_half_seconds.mp4 (320 x 180, 30 fps; VideoToolbox refuses much
+/// smaller frames), a stall of `stall` seconds after the second, and playback cut off half way
+/// through the third. Replay time: 6.25 s + `stall`.
 inline std::shared_ptr<const RunData> syntheticRun(double stall = 1.0, const QString& id = QStringLiteral("synthetic"))
 {
     auto run = std::make_shared<RunData>();
@@ -18,7 +19,7 @@ inline std::shared_ptr<const RunData> syntheticRun(double stall = 1.0, const QSt
     run->info.playerSegmentDuration = 3.3;
     run->video.frameRate = 30.0;
     run->video.segmentCount = 3;
-    run->video.ladder = {{0, 1'000'000, 64, 36}};
+    run->video.ladder = {{0, 1'000'000, 320, 180}};
     const QString media = dataPath(QStringLiteral("media/two_and_a_half_seconds.mp4"));
     for (int i = 0; i < 3; ++i) {
         Segment segment;

@@ -17,6 +17,7 @@
 #include "abrviz/core/version.h"
 #include "abrviz/media/engine_support.h"
 
+#include <QActionGroup>
 #include <QApplication>
 #include <QDir>
 #include <QDockWidget>
@@ -28,6 +29,7 @@
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QProcessEnvironment>
+#include <QSettings>
 #include <QStatusBar>
 
 #include <tuple>
@@ -49,6 +51,7 @@ struct MainWindow::Impl {
     ReplayPlayer* player = nullptr;
     QAction* playAction = nullptr;
     QAction* renderAction = nullptr;
+    QActionGroup* engineActions = nullptr;
     QLabel* versionLabel = nullptr;
     QProgressBar* progress = nullptr;
     QFutureWatcher<QList<BundleSummaryPtr>>* scanWatcher = nullptr;
@@ -128,7 +131,12 @@ MainWindow::MainWindow(QWidget* parent)
     });
     connect(d_->player, &ReplayPlayer::stateChanged, this, &MainWindow::updateActions);
     connect(d_->player, &ReplayPlayer::engineChanged, this, &MainWindow::updateActions);
-    d_->player->setEngine(ReplaySourceFactory::defaultEngine());
+    connect(d_->player, &ReplayPlayer::engineChanged, this, &MainWindow::updateEngineActions);
+    connect(d_->player, &ReplayPlayer::engineFellBack, this, [this](const QString& reason) {
+        statusBar()->showMessage(tr("GStreamer engine failed (%1); using the pre-rendered engine.")
+                                     .arg(reason), 15000);
+    });
+    d_->player->setEngine(savedEngine());
     updateActions();
 }
 
@@ -159,6 +167,41 @@ LibraryView* MainWindow::library() const { return d_->library; }
 SegmentTimeline* MainWindow::timeline() const { return d_->timeline; }
 ChartsPanel* MainWindow::charts() const { return d_->charts; }
 ReplayPlayer* MainWindow::player() const { return d_->player; }
+
+namespace {
+const QString kEngineSetting = QStringLiteral("replay/engine");
+}
+
+Engine MainWindow::savedEngine()
+{
+    const QSettings settings;
+    const auto saved = engineFromKey(settings.value(kEngineSetting).toString());
+    return saved && ReplaySourceFactory::isAvailable(*saved) ? *saved
+                                                             : ReplaySourceFactory::defaultEngine();
+}
+
+bool MainWindow::setEngine(Engine engine, bool remember)
+{
+    if (!ReplaySourceFactory::isAvailable(engine))
+        return false;
+    if (d_->player->engineKind() != engine)
+        d_->player->setEngine(engine);
+    if (remember) {
+        QSettings settings;
+        settings.setValue(kEngineSetting, engineKey(engine));
+    }
+    updateEngineActions();
+    return true;
+}
+
+void MainWindow::updateEngineActions()
+{
+    if (!d_->engineActions)
+        return;
+    const auto current = d_->player->engineKind();
+    for (QAction* action : d_->engineActions->actions())
+        action->setChecked(current && action->data().toString() == engineKey(*current));
+}
 RenderQueue* MainWindow::renderQueue() const { return d_->renderQueue.get(); }
 LogConsole* MainWindow::logs() const { return d_->logs; }
 SummaryPanel* MainWindow::summary() const { return d_->summary; }
@@ -219,6 +262,20 @@ void MainWindow::createMenus()
     d_->renderAction = playbackMenu->addAction(tr("&Render Video"));
     d_->renderAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
     connect(d_->renderAction, &QAction::triggered, d_->player, &ReplayPlayer::prepare);
+    playbackMenu->addSeparator();
+    auto* engineMenu = playbackMenu->addMenu(tr("&Engine"));
+    d_->engineActions = new QActionGroup(this);
+    for (const Engine engine : {Engine::GStreamer, Engine::Prerendered}) {
+        QAction* action = engineMenu->addAction(engineName(engine));
+        action->setCheckable(true);
+        action->setData(engineKey(engine));
+        action->setActionGroup(d_->engineActions);
+        if (!ReplaySourceFactory::isAvailable(engine)) {
+            action->setEnabled(false);
+            action->setText(tr("%1 (not in this build)").arg(engineName(engine)));
+        }
+        connect(action, &QAction::triggered, this, [this, engine] { setEngine(engine, true); });
+    }
 
     auto* viewMenu = menuBar()->addMenu(tr("&View"));
     for (auto* dock : findChildren<QDockWidget*>())
@@ -344,9 +401,9 @@ void MainWindow::updateActions()
     const bool run = d_->session->run() != nullptr;
     const bool ready = engine && engine->isReady() && run;
     d_->playAction->setEnabled(ready);
-    d_->playAction->setText(engine && engine->state() == ReplaySource::State::Playing ? tr("&Pause")
-                                                                                      : tr("&Play"));
+    d_->playAction->setText(d_->player->isRunning() ? tr("&Pause") : tr("&Play"));
     d_->renderAction->setEnabled(engine && run && !engine->isReady()
+                                 && d_->player->engineKind() == Engine::Prerendered
                                  && engine->state() != ReplaySource::State::Preparing);
 }
 

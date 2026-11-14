@@ -142,6 +142,7 @@ bool ReplayPlayer::setEngine(Engine engine)
     }
     engineKind_ = engine;
     error_.clear();
+    engineShowedPicture_ = false;
     engine_->setVideoSink(video_->videoSink());
     connect(engine_.get(), &ReplaySource::positionChanged, this,
             &ReplayPlayer::enginePositionChanged);
@@ -149,6 +150,17 @@ bool ReplayPlayer::setEngine(Engine engine)
     connect(engine_.get(), &ReplaySource::errorOccurred, this, [this](const QString& message) {
         error_ = message;
         updateMessage();
+        updateControls();
+        // GStreamer could not show this run at all: use the pre-rendered engine instead. Not
+        // from inside the engine's own signal, which may be emitted from its setRun().
+        if (engineKind_ == Engine::GStreamer && !engineShowedPicture_) {
+            QMetaObject::invokeMethod(this, [this, message] {
+                if (engineKind_ != Engine::GStreamer || engineShowedPicture_)
+                    return;
+                setEngine(Engine::Prerendered);
+                emit engineFellBack(message);
+            }, Qt::QueuedConnection);
+        }
     });
     connect(engine_.get(), &ReplaySource::preparationProgress, this, [this](double fraction) {
         progress_->setValue(static_cast<int>(fraction * 1000.0));
@@ -173,6 +185,11 @@ void ReplayPlayer::releaseEngine()
     emit engineChanged();
 }
 
+QVideoSink* ReplayPlayer::videoSink() const
+{
+    return video_->videoSink();
+}
+
 QString ReplayPlayer::overlayText() const
 {
     return overlay_->toPlainText();
@@ -183,9 +200,16 @@ QString ReplayPlayer::messageText() const
     return message_->isVisible() ? message_->toPlainText() : QString();
 }
 
+bool ReplayPlayer::isRunning() const
+{
+    return engine_
+        && (engine_->state() == ReplaySource::State::Playing
+            || engine_->state() == ReplaySource::State::Stalled);
+}
+
 void ReplayPlayer::togglePlay()
 {
-    if (engine_ && engine_->state() == ReplaySource::State::Playing)
+    if (isRunning())
         pause();
     else
         play();
@@ -220,6 +244,7 @@ void ReplayPlayer::prepare()
 void ReplayPlayer::runChanged()
 {
     error_.clear();
+    engineShowedPicture_ = false;
     if (engine_)
         engine_->setRun(session_->run());
     updateOverlay();
@@ -236,8 +261,8 @@ void ReplayPlayer::cursorMoved(double time, TimeCursor::Source source)
 
 void ReplayPlayer::enginePositionChanged(double replayTime)
 {
-    // Only a playing engine moves the cursor; a seek reports the position it was asked for.
-    if (engine_->state() == ReplaySource::State::Playing)
+    // Only a running engine moves the cursor; a seek reports the position it was asked for.
+    if (isRunning())
         session_->cursor()->setTime(session_->clock().replayToSim(replayTime),
                                     TimeCursor::Source::Player);
     updateControls();
@@ -245,6 +270,8 @@ void ReplayPlayer::enginePositionChanged(double replayTime)
 
 void ReplayPlayer::engineStateChanged(ReplaySource::State state)
 {
+    if (state == ReplaySource::State::Paused || state == ReplaySource::State::Playing)
+        engineShowedPicture_ = true;
     // Once ready, show the picture at the cursor.
     if (state == ReplaySource::State::Paused && engine_->position() == 0.0 && session_->run())
         engine_->seek(session_->clock().simToReplay(session_->cursor()->time()));
@@ -313,6 +340,8 @@ void ReplayPlayer::updateMessage()
         text = error_;
     } else if (engine_->state() == ReplaySource::State::Preparing && !engine_->isReady()) {
         text = tr("Rendering the video this viewer saw ...");
+    } else if (!engine_->isReady() && engineKind_ != Engine::Prerendered) {
+        text = tr("This run has no played segments to show.");
     } else if (!engine_->isReady()) {
         text = tr("The %1 engine plays a video rendered from the played segments, with the stalls "
                   "as frozen frames. Render it with Playback, Render Video (it uses every core "
@@ -329,14 +358,15 @@ void ReplayPlayer::updateMessage()
 void ReplayPlayer::updateControls()
 {
     const bool ready = engine_ && engine_->isReady() && session_->run();
-    const bool playing = engine_ && engine_->state() == ReplaySource::State::Playing;
+    const bool playing = isRunning();
     const bool preparing = engine_ && engine_->state() == ReplaySource::State::Preparing
         && !engine_->isReady();
     playButton_->setEnabled(ready);
     playButton_->setIcon(style()->standardIcon(playing ? QStyle::SP_MediaPause
                                                        : QStyle::SP_MediaPlay));
     playButton_->setText(playing ? tr("Pause") : tr("Play"));
-    renderButton_->setVisible(engine_ && session_->run() && !engine_->isReady());
+    // Only the pre-rendered engine has something to prepare.
+    renderButton_->setVisible(engineKind_ == Engine::Prerendered && session_->run() && !engine_->isReady());
     renderButton_->setEnabled(!preparing);
     progress_->setVisible(preparing);
     engineLabel_->setText(engine_ ? tr("Engine: %1").arg(engine_->name()) : QString());

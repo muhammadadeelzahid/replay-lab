@@ -6,6 +6,7 @@
 #include "session.h"
 #include "time_cursor.h"
 
+#include "abrviz/core/load/bundle_reader.h"
 #include "abrviz/core/render/render_queue.h"
 #include "abrviz/core/util/process_guard.h"
 
@@ -15,12 +16,38 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QVideoFrame>
+#include <QVideoSink>
+
+#include <cmath>
 
 using namespace abrviz;
 
 namespace {
 
 constexpr int kTimeoutMs = 30000;
+
+/// The picture in `sink`, small and grey, for comparing engines.
+QImage thumbnail(QVideoSink* sink)
+{
+    return sink->videoFrame().toImage().scaled(96, 54, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+        .convertToFormat(QImage::Format_Grayscale8);
+}
+
+/// Mean absolute difference of two thumbnails, 0..255.
+double difference(const QImage& a, const QImage& b)
+{
+    if (a.size() != b.size() || a.isNull())
+        return 255.0;
+    double total = 0.0;
+    for (int y = 0; y < a.height(); ++y) {
+        const uchar* ra = a.constScanLine(y);
+        const uchar* rb = b.constScanLine(y);
+        for (int x = 0; x < a.width(); ++x)
+            total += std::abs(int(ra[x]) - int(rb[x]));
+    }
+    return total / (a.width() * a.height());
+}
 
 } // namespace
 
@@ -130,12 +157,76 @@ private slots:
         QVERIFY(f.player.overlayText().startsWith(QStringLiteral("Before playback starts")));
         f.session.cursor()->setTime(5.0, TimeCursor::Source::Timeline);
         QVERIFY2(f.player.overlayText().contains(QStringLiteral("Segment 1")), qPrintable(f.player.overlayText()));
-        QVERIFY(f.player.overlayText().contains(QStringLiteral("64 x 36")));
+        QVERIFY(f.player.overlayText().contains(QStringLiteral("320 x 180")));
         QVERIFY(f.player.overlayText().contains(QStringLiteral("Buffer 2.00 s")));
         f.session.cursor()->setTime(8.0, TimeCursor::Source::Timeline);
         QVERIFY2(f.player.overlayText().contains(QStringLiteral("STALLED")), qPrintable(f.player.overlayText()));
         f.session.cursor()->setTime(f.session.endTime(), TimeCursor::Source::Timeline);
         QVERIFY2(f.player.overlayText().contains(QStringLiteral("cut off")), qPrintable(f.player.overlayText()));
+    }
+
+    void bothEnginesShowTheSamePicture()
+    {
+        if (!ReplaySourceFactory::isAvailable(Engine::GStreamer))
+            QSKIP("built without GStreamer");
+        if (!test::haveFullBundles())
+            QSKIP("viewer_bundles/ not present");
+        const LoadResult loaded = loadBundleSync(
+            QDir(test::bundlesPath()).filePath(QStringLiteral("peace_autumn_lake_llm_9Mbps_run_4")));
+        QVERIFY(loaded.run);
+
+        Session session;
+        RenderQueue queue(RenderQueue::Options{cacheDir_.path(), ffmpeg_, 0});
+        ReplayPlayer player(&session, &queue);
+        player.resize(960, 600);
+        player.setAttribute(Qt::WA_DontShowOnScreen);
+        player.show();
+        session.setRun(loaded.run);
+
+        // The middle of segments at different rungs, and the middle of the stall.
+        std::vector<double> times;
+        int lastRung = -2;
+        for (const auto& piece : session.clock().pieces()) {
+            const double middle = (piece.simStart + piece.simEnd) / 2.0;
+            if (piece.kind == PlaybackClock::Piece::Kind::Stall) {
+                times.push_back(middle);
+                continue;
+            }
+            const int rung = loaded.run->segments[static_cast<std::size_t>(piece.segment)].playedRung;
+            if (rung != lastRung && times.size() < 7)
+                times.push_back(middle);
+            lastRung = rung;
+        }
+        QVERIFY(std::ranges::any_of(session.clock().pieces(), [](const auto& p) {
+            return p.kind == PlaybackClock::Piece::Kind::Stall;
+        }));
+
+        std::vector<QImage> pictures[2];
+        for (const Engine engine : {Engine::GStreamer, Engine::Prerendered}) {
+            QVERIFY(player.setEngine(engine));
+            player.prepare();
+            QTRY_VERIFY_WITH_TIMEOUT(player.engine()->state() == ReplaySource::State::Paused, 120000);
+            for (const double time : times) {
+                session.cursor()->setTime(time, TimeCursor::Source::Timeline);
+                const double replay = session.clock().simToReplay(time);
+                QTRY_VERIFY(std::abs(player.engine()->position() - replay) < 0.05);
+                QTest::qWait(800);  // the frame at the new position (and the scrub's pause)
+                pictures[engine == Engine::GStreamer ? 0 : 1].push_back(thumbnail(player.videoSink()));
+            }
+        }
+
+        // Each position looks the same in both engines, and unlike the other positions.
+        for (std::size_t i = 0; i < times.size(); ++i) {
+            const double same = difference(pictures[0][i], pictures[1][i]);
+            double others = 255.0;
+            for (std::size_t j = 0; j < times.size(); ++j) {
+                if (j != i)
+                    others = std::min(others, difference(pictures[0][i], pictures[1][j]));
+            }
+            QVERIFY2(same < 6.0 && same < others / 2.0,
+                     qPrintable(QStringLiteral("sim %1: same %2, closest other %3")
+                                    .arg(times[i]).arg(same).arg(others)));
+        }
     }
 
     void closingTheWindowWhileRenderingIsClean()
@@ -157,6 +248,7 @@ private slots:
         QSignalSpy opened(window.get(), &MainWindow::bundleOpened);
         window->openBundle(test::dataPath(QStringLiteral("chef_cooking_18")));
         QVERIFY(!opened.isEmpty() || opened.wait(kTimeoutMs));
+        QVERIFY(window->setEngine(Engine::Prerendered));
         window->player()->prepare();
         QTRY_VERIFY_WITH_TIMEOUT(ProcessGuard::liveCount() > 0, kTimeoutMs);
 

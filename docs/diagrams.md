@@ -221,17 +221,22 @@ classDiagram
   }
   class GstSegmentSource {
     -shared_ptr~RunData~ run
+    -PlaybackClock clock
+    -vector~Span~ spans
     -QPointer~QVideoSink~ sink
-    -GstElement* appsink
+    -QTimer* stallTimer
     -mutex frameMutex
     -QVideoFrame latestFrame
     -atomic~bool~ framePending
+    -GstElement* appsink
     -PipelineGuard pipeline
     -jthread busThread
-    -onNewSample(GstAppSink* sink, void* self)$ GstFlowReturn
-    -onFormatLocation(GstElement* src, guint index, void* self)$ gchar*
+    +makeSpans(PlaybackClock clock)$ vector~Span~
+    -pull(GstElement* appsink, bool preroll) GstFlowReturn
     -deliverFrame()
-    -busLoop(stop_token stop)
+    -busLoop(stop_token stop, GstBus* bus)
+    -spanFinished()
+    -stallFinished()
     +dtor() join bus thread, stop pipeline
   }
   class ReplaySourceFactory {
@@ -239,19 +244,21 @@ classDiagram
     +create(Engine engine, RenderQueue* queue)$ unique_ptr~ReplaySource~
   }
   class GstRuntime {
-    +ensureInitialized()$
+    +ensureInitialized(QString* error)$ bool
+    +hasPipelineElements(QString* missing)$ bool
   }
   class GstPtr~T~ {
     unique_ptr with gst_object_unref
   }
   class PipelineGuard {
     -GstElement* pipeline
-    +stop()
+    +reset(GstElement* pipeline)
     +dtor() state NULL, then unref
   }
   class GstVideoBuffer {
     -GstSamplePtr sample
-    -VideoFrameMapGuard frame
+    -optional~VideoFrameMapGuard~ mapping
+    +wrap(GstSamplePtr sample)$ QVideoFrame
     +map(MapMode mode) MapData
     +format() QVideoFrameFormat
     +dtor() unmaps, releases the sample
@@ -263,11 +270,11 @@ classDiagram
   ReplaySource <|-- PrerenderedSource
   ReplaySource <|-- GstSegmentSource
   ReplaySourceFactory ..> ReplaySource : creates
-  ReplaySourceFactory ..> GstRuntime
+  GstSegmentSource ..> GstRuntime
   GstSegmentSource *-- PipelineGuard
   GstSegmentSource ..> GstVideoBuffer : one per frame
   GstVideoBuffer *-- VideoFrameMapGuard
-  PipelineGuard ..> GstPtr : bus
+  GstSegmentSource ..> GstPtr : bus, elements
 ```
 
 `GstSegmentSource` members are listed in declaration order and destroyed in reverse: the bus
@@ -373,11 +380,11 @@ flowchart LR
 
   subgraph GST["GStreamer streaming threads"]
     PIPE["splitmuxsrc → decodebin3 → scale → appsink"]
-    CB["onNewSample: wrap frame, store in slot"]
+    CB["appsink new-sample / new-preroll: wrap frame, store in slot"]
   end
 
   subgraph BUS["GstSegmentSource: std::jthread"]
-    BL["busLoop(stop_token)"]
+    BL["busLoop(stop_token, bus)"]
   end
 
   MW -- "loadBundle(dir)" --> FILES

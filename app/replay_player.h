@@ -17,6 +17,7 @@ class QGraphicsView;
 class QLabel;
 class QProgressBar;
 class QPushButton;
+class QVideoSink;
 
 namespace abrviz {
 
@@ -52,7 +53,11 @@ public:
     [[nodiscard]] ReplaySource* engine() const { return engine_.get(); }
     [[nodiscard]] std::optional<Engine> engineKind() const { return engineKind_; }
     [[nodiscard]] QString overlayText() const;
+    /// The sink both engines write into.
+    [[nodiscard]] QVideoSink* videoSink() const;
     [[nodiscard]] QString messageText() const;
+    /// Playing or stalled: the replay is running and moves the cursor.
+    [[nodiscard]] bool isRunning() const;
 
 public slots:
     void togglePlay();
@@ -64,6 +69,9 @@ public slots:
 signals:
     void engineChanged();
     void stateChanged(abrviz::ReplaySource::State state);
+    /// The GStreamer engine failed before showing a picture and was replaced by the
+    /// pre-rendered one; `reason` says why.
+    void engineFellBack(const QString& reason);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -95,6 +103,7 @@ private:
     std::unique_ptr<ReplaySource> engine_;
     std::optional<Engine> engineKind_;
     QString error_;
+    bool engineShowedPicture_ = false;  // reached Paused or Playing for the current run
 };
 
 } // namespace abrviz

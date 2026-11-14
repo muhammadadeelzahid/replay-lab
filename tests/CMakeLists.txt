@@ -67,6 +67,11 @@ if(ABR_WITH_GSTREAMER)
         SOURCES tst_gst_wrappers.cpp
         LIBS abrviz_media PkgConfig::GST)
     target_include_directories(tst_gst_wrappers PRIVATE ${PROJECT_SOURCE_DIR}/media/src)
+
+    abrviz_add_test(tst_gst_segment_source
+        SOURCES tst_gst_segment_source.cpp
+        LIBS abrviz_media PkgConfig::GST)
+    target_include_directories(tst_gst_segment_source PRIVATE ${PROJECT_SOURCE_DIR}/media/src)
 endif()
 
 abrviz_add_test(tst_replay_source

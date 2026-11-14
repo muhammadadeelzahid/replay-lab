@@ -2,6 +2,7 @@
 
 #include "library_view.h"
 #include "main_window.h"
+#include "replay_player.h"
 #include "segment_timeline.h"
 #include "session.h"
 #include "summary_panel.h"
@@ -81,9 +82,48 @@ private slots:
                               QStringLiteral("&Quit")}));
         QCOMPARE(menus[1]->text(), QStringLiteral("&Playback"));
         QCOMPARE(menuTexts(menus[1]->menu()),
-                 (QStringList{QStringLiteral("&Play"), QStringLiteral("&Render Video")}));
+                 (QStringList{QStringLiteral("&Play"), QStringLiteral("&Render Video"),
+                              QStringLiteral("&Engine")}));
+        QMenu* engines = menus[1]->menu()->actions().last()->menu();
+        QVERIFY(engines);
+        QCOMPARE(engines->actions().size(), 2);
+        int checked = 0;
+        for (QAction* action : engines->actions())
+            checked += action->isChecked() ? 1 : 0;
+        QCOMPARE(checked, 1);
         QCOMPARE(menus[2]->menu()->actions().size(), 5);  // one per dock
     }
+
+    void engineCanBeSwitched()
+    {
+        MainWindow window;
+        QVERIFY(window.setEngine(Engine::Prerendered));
+        QCOMPARE(window.player()->engineKind(), std::optional<Engine>(Engine::Prerendered));
+#if ABRVIZ_WITH_GSTREAMER
+        QVERIFY(window.setEngine(Engine::GStreamer));
+        QCOMPARE(window.player()->engineKind(), std::optional<Engine>(Engine::GStreamer));
+#else
+        QVERIFY(!window.setEngine(Engine::GStreamer));
+        QCOMPARE(window.player()->engineKind(), std::optional<Engine>(Engine::Prerendered));
+#endif
+    }
+
+#if ABRVIZ_WITH_GSTREAMER
+    void gstreamerFailureFallsBackToPrerendered()
+    {
+        // The test bundles carry no media files, so GStreamer cannot show them.
+        MainWindow window;
+        QVERIFY(window.setEngine(Engine::GStreamer));
+        QSignalSpy fellBack(window.player(), &ReplayPlayer::engineFellBack);
+        QSignalSpy opened(&window, &MainWindow::bundleOpened);
+        window.openBundle(test::dataPath(QStringLiteral("chef_cooking_18")));
+        QVERIFY(waitFor(opened));
+        QTRY_COMPARE(fellBack.size(), 1);
+        QVERIFY(fellBack.first().first().toString().contains(QStringLiteral("missing")));
+        QCOMPARE(window.player()->engineKind(), std::optional<Engine>(Engine::Prerendered));
+        QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("pre-rendered")));
+    }
+#endif
 
     void timeCursorClampsAndSkipsNoOps()
     {

@@ -2,6 +2,10 @@
 
 #include "abrviz/media/prerendered_source.h"
 
+#if ABRVIZ_WITH_GSTREAMER
+#include "gst/gst_segment_source.h"
+#endif
+
 namespace abrviz {
 
 QString engineName(Engine engine)
@@ -33,7 +37,11 @@ std::optional<Engine> engineFromKey(const QString& key)
 
 QList<Engine> ReplaySourceFactory::available()
 {
+#if ABRVIZ_WITH_GSTREAMER
+    return {Engine::GStreamer, Engine::Prerendered};
+#else
     return {Engine::Prerendered};
+#endif
 }
 
 bool ReplaySourceFactory::isAvailable(Engine engine)
@@ -52,7 +60,11 @@ std::unique_ptr<ReplaySource> ReplaySourceFactory::create(Engine engine, RenderQ
     case Engine::Prerendered:
         return std::make_unique<PrerenderedSource>(queue);
     case Engine::GStreamer:
-        return nullptr;  // added with the GStreamer engine
+#if ABRVIZ_WITH_GSTREAMER
+        return std::make_unique<GstSegmentSource>();
+#else
+        return nullptr;
+#endif
     }
     return nullptr;
 }

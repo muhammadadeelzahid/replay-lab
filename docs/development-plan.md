@@ -37,7 +37,13 @@ replay engines (GStreamer and pre-rendered). Comparing runs side by side is not 
   their tasks run. They run under ThreadSanitizer and AddressSanitizer.
 - RAII tests: `MappedFile` moves, `ProcessGuard` killing a running process, `ClaimGuard`
   releasing on failure, `static_assert`s on the copy and move rules.
-- GStreamer tests: pipeline with `fakesink`, segment order and rungs, stalls, seeking.
+- GStreamer tests: wrappers (reference counts, a pipeline with `fakesink` stopped by its
+  guard, a mapped frame), and the engine on the synthetic run (spans, preroll, seeks into
+  segments and the stall, real-time playback through the stall to the cut-off, pause inside a
+  stall, deleting it while playing or prerolling). They run offscreen, also under TSan.
+  `tst_replay_player` checks that both engines show the same picture at the same cursor
+  positions of a full bundle (skipped without `viewer_bundles/`).
+- The synthetic clip is 320 x 180: VideoToolbox refuses much smaller frames.
 - GUI tests run offscreen: opening a bundle fills the panels; moving the cursor updates them.
   The tests that play video (`tst_replay_source`, `tst_replay_player`) use the Cocoa platform
   on macOS, because Qt's AVFoundation backend delivers media through the Cocoa run loop, which
