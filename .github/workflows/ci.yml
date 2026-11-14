@@ -9,19 +9,26 @@ on:
 jobs:
   build:
     name: ${{ matrix.preset }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - preset: debug
+            os: ubuntu-24.04
             cxx: g++
           - preset: nogst
+            os: ubuntu-24.04
             cxx: g++
           - preset: asan
+            os: ubuntu-24.04
             cxx: g++
-          # The TSan preset uses -fsanitize-ignorelist, which only clang supports.
+          # TSan runs on macOS. On Linux, Qt's mutexes use futex system calls that TSan does not
+          # see, so every hand-off through Qt's thread pool is reported as a race. On macOS they
+          # go through pthread, which TSan intercepts. The preset's -fsanitize-ignorelist also
+          # needs Clang.
           - preset: tsan
+            os: macos-latest
             cxx: clang++
     env:
       CXX: ${{ matrix.cxx }}
@@ -30,13 +37,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Qt
+        if: runner.os == 'Linux'
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.9.3'
           modules: 'qtcharts qtmultimedia'
           cache: true
 
+      - name: Install Qt, GStreamer, ffmpeg and build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install qt gstreamer ffmpeg ninja pkgconf
+
       - name: Install GStreamer, ffmpeg and build tools
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build pkg-config \
@@ -46,7 +59,7 @@ jobs:
             ffmpeg libgl1-mesa-dev libxkbcommon-dev libegl1
 
       - name: Allow sanitizer memory layout
-        if: matrix.preset == 'asan' || matrix.preset == 'tsan'
+        if: runner.os == 'Linux' && matrix.preset == 'asan'
         run: sudo sysctl vm.mmap_rnd_bits=28
 
       - name: Configure
