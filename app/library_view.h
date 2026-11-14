@@ -224,6 +224,19 @@ signals:
      */
     void recentFolderRequested(const QString& folder);
 
+protected:
+    /**
+     * @brief Opens the selected run when Return or Enter is pressed in the table.
+     *
+     * The table's own handling differs by platform (on macOS Return tries to edit the cell and
+     * never emits `activated`), so the key is handled here, once, on every platform.
+     *
+     * @param watched The object the event is for.
+     * @param event The event.
+     * @return True if the event was handled.
+     */
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     /**
      * @brief Shows the details of the newly selected run.
