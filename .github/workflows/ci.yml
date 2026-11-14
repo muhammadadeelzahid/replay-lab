@@ -1,7 +1,9 @@
 name: CI
 
+# Pushes to main and pull requests (tags are built by the release workflow).
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -30,7 +32,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.3'
+          version: '6.9.3'
           modules: 'qtcharts qtmultimedia'
           cache: true
 
@@ -51,7 +53,8 @@ jobs:
         run: cmake --preset ${{ matrix.preset }}
 
       - name: Build
-        run: cmake --build --preset ${{ matrix.preset }}
+        # -k 0: report every file that fails to compile, not only the first.
+        run: cmake --build --preset ${{ matrix.preset }} -- -k 0
 
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
