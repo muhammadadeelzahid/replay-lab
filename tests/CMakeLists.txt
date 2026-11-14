@@ -62,6 +62,13 @@ abrviz_add_test(tst_log_console
     SOURCES tst_log_console.cpp
     LIBS abrviz_gui)
 
+if(ABR_WITH_GSTREAMER)
+    abrviz_add_test(tst_gst_wrappers
+        SOURCES tst_gst_wrappers.cpp
+        LIBS abrviz_media PkgConfig::GST)
+    target_include_directories(tst_gst_wrappers PRIVATE ${PROJECT_SOURCE_DIR}/media/src)
+endif()
+
 abrviz_add_test(tst_replay_source
     SOURCES tst_replay_source.cpp
     LIBS abrviz_media)

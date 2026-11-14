@@ -273,7 +273,7 @@ private slots:
         const auto run = loadTestRun("bbb_36");
         auto future = queue.enqueue({run});
         QTRY_COMPARE_WITH_TIMEOUT(ProcessGuard::liveCount(), 4, kTimeoutMs);
-        QCOMPARE(childrenNamed(QStringLiteral("slow-ffmpeg")), 4);
+        QTRY_COMPARE_WITH_TIMEOUT(childrenNamed(QStringLiteral("slow-ffmpeg")), 4, kTimeoutMs);  // exec may lag the start
 
         QElapsedTimer timer;
         timer.start();
