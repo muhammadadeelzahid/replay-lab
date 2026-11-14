@@ -1,7 +1,10 @@
 #include "library_view.h"
 
+#include "branding.h"
 #include "format.h"
 #include "icons.h"
+
+#include "abrviz/core/version.h"
 
 #include <QDir>
 #include <QFont>
@@ -15,6 +18,8 @@
 #include <QStackedWidget>
 #include <QTableView>
 #include <QVBoxLayout>
+
+#include <functional>
 
 namespace abrviz {
 
@@ -118,10 +123,49 @@ QLabel* makeLabel(const QString& text, qreal scale, bool bold, QWidget* parent)
 {
     auto* label = new QLabel(text, parent);
     QFont font = label->font();
-    font.setPointSizeF(font.pointSizeF() * scale);
+    font = format::scaled(font, scale);
     font.setBold(bold);
     label->setFont(font);
     return label;
+}
+
+/// A row of the welcome screen: an icon, a title and a line of explanation; the whole row is
+/// the button, as in Xcode's welcome window.
+QPushButton* actionRow(Glyph glyph, const QString& title, const QString& detail,
+                       std::function<void()> action, QWidget* parent)
+{
+    auto* row = new QPushButton(parent);
+    row->setObjectName(QStringLiteral("actionRow"));
+    row->setFlat(true);
+    row->setCursor(Qt::PointingHandCursor);
+    row->setFocusPolicy(Qt::NoFocus);
+    auto* icon = new QLabel(row);
+    icon->setPixmap(glyphIcon(glyph, parent->palette().color(QPalette::Highlight)).pixmap(24, 24));
+    auto* name = new QLabel(title, row);
+    QFont font = name->font();
+    font.setBold(true);
+    name->setFont(font);
+    auto* note = new QLabel(detail, row);
+    note->setForegroundRole(QPalette::PlaceholderText);
+    note->setTextFormat(Qt::PlainText);
+    auto* text = new QVBoxLayout();
+    text->setSpacing(1);
+    text->addWidget(name);
+    text->addWidget(note);
+    auto* layout = new QHBoxLayout(row);
+    layout->setContentsMargins(12, 7, 12, 7);
+    layout->setSpacing(12);
+    layout->addWidget(icon);
+    layout->addLayout(text, 1);
+    for (QLabel* label : {icon, name, note})
+        label->setAttribute(Qt::WA_TransparentForMouseEvents);
+    row->setMinimumHeight(layout->sizeHint().height());
+    row->setStyleSheet(QStringLiteral(
+        "QPushButton#actionRow { border: none; border-radius: 8px; text-align: left; background: transparent; }"
+        "QPushButton#actionRow:hover { background: #29808080; }"
+        "QPushButton#actionRow:pressed { background: #47808080; }"));
+    QObject::connect(row, &QPushButton::clicked, row, std::move(action));
+    return row;
 }
 
 } // namespace
@@ -134,7 +178,7 @@ LibraryView::LibraryView(QWidget* parent)
     , welcome_(new QWidget(this))
     , recentBox_(new QWidget(this))
     , browser_(new QWidget(this))
-    , title_(makeLabel(QString(), 1.5, true, this))
+    , title_(makeLabel(tr("All Runs"), 1.9, true, this))
     , path_(new QLabel(this))
     , search_(new QLineEdit(this))
     , table_(new QTableView(this))
@@ -143,46 +187,42 @@ LibraryView::LibraryView(QWidget* parent)
 {
     setObjectName(QStringLiteral("libraryView"));
 
-    // Welcome screen.
+    // Welcome screen, in the style of Xcode's welcome window.
     {
         auto* icon = new QLabel(welcome_);
-        icon->setPixmap(appIcon().pixmap(112, 112));
+        icon->setPixmap(appIcon().pixmap(128, 128));
         icon->setAlignment(Qt::AlignCenter);
-        auto* name = makeLabel(QStringLiteral("abr-viz"), 2.4, true, welcome_);
+        auto* name = makeLabel(tr("Welcome to %1").arg(appDisplayName()), 2.1, true, welcome_);
         name->setAlignment(Qt::AlignCenter);
-        auto* tagline = new QLabel(tr("Replays ns-3 adaptive streaming simulations: the video each "
-                                      "simulated viewer saw, segment by segment, with the stalls, "
-                                      "the policy's decisions, the network and the logs."), welcome_);
-        tagline->setWordWrap(true);
-        tagline->setAlignment(Qt::AlignCenter);
-        tagline->setFixedWidth(520);
-        tagline->setMinimumHeight(tagline->heightForWidth(520));  // centred, so the layout ignores heightForWidth
-        tagline->setForegroundRole(QPalette::PlaceholderText);
-        auto* openFolder = new QPushButton(glyphIcon(Glyph::OpenFolder, palette().color(QPalette::ButtonText)),
-                                           tr("Open Folder of Bundles..."), welcome_);
-        openFolder->setDefault(true);
-        openFolder->setMinimumHeight(34);
-        auto* openBundle = new QPushButton(glyphIcon(Glyph::OpenBundle, palette().color(QPalette::ButtonText)),
-                                           tr("Open One Bundle..."), welcome_);
-        openBundle->setMinimumHeight(34);
-        connect(openFolder, &QPushButton::clicked, this, &LibraryView::openFolderRequested);
-        connect(openBundle, &QPushButton::clicked, this, &LibraryView::openBundleRequested);
-        auto* buttons = new QHBoxLayout();
-        buttons->addStretch(1);
-        buttons->addWidget(openFolder);
-        buttons->addWidget(openBundle);
-        buttons->addStretch(1);
+        auto* version = new QLabel(tr("Version %1").arg(versionString()), welcome_);
+        version->setAlignment(Qt::AlignCenter);
+        version->setForegroundRole(QPalette::PlaceholderText);
+
+        auto* actions = new QVBoxLayout();
+        actions->setSpacing(4);
+        actions->addWidget(actionRow(Glyph::OpenFolder, tr("Open a Folder of Runs..."),
+                                     tr("Lists every run bundle in the folder."),
+                                     [this] { emit openFolderRequested(); }, welcome_));
+        actions->addWidget(actionRow(Glyph::OpenBundle, tr("Open a Single Run..."),
+                                     tr("Opens one run bundle and replays it."),
+                                     [this] { emit openBundleRequested(); }, welcome_));
+        auto* actionBox = new QWidget(welcome_);
+        actionBox->setFixedWidth(400);
+        actionBox->setLayout(actions);
+
         auto* recentLayout = new QVBoxLayout(recentBox_);
-        recentLayout->setContentsMargins(0, 16, 0, 0);
+        recentLayout->setContentsMargins(0, 18, 0, 0);
+        recentLayout->setSpacing(2);
+        recentBox_->setFixedWidth(400);
 
         auto* column = new QVBoxLayout(welcome_);
         column->addStretch(2);
         column->addWidget(icon);
-        column->addSpacing(8);
+        column->addSpacing(10);
         column->addWidget(name);
-        column->addWidget(tagline, 0, Qt::AlignHCenter);
-        column->addSpacing(18);
-        column->addLayout(buttons);
+        column->addWidget(version);
+        column->addSpacing(26);
+        column->addWidget(actionBox, 0, Qt::AlignHCenter);
         column->addWidget(recentBox_, 0, Qt::AlignHCenter);
         column->addStretch(3);
     }
@@ -197,7 +237,7 @@ LibraryView::LibraryView(QWidget* parent)
         table_->setSelectionMode(QAbstractItemView::SingleSelection);
         table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
         table_->verticalHeader()->hide();
-        table_->verticalHeader()->setDefaultSectionSize(fontMetrics().height() + 12);
+        table_->verticalHeader()->setDefaultSectionSize(fontMetrics().height() + 10);
         table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
         table_->horizontalHeader()->setSectionResizeMode(LibraryModel::Video, QHeaderView::Stretch);
         table_->horizontalHeader()->setHighlightSections(false);
@@ -205,9 +245,12 @@ LibraryView::LibraryView(QWidget* parent)
         table_->setAlternatingRowColors(true);
         table_->setShowGrid(false);
         table_->setFrameShape(QFrame::NoFrame);
+        table_->setAttribute(Qt::WA_MacShowFocusRect, false);
 
-        search_->setPlaceholderText(tr("Filter runs"));
+        search_->setPlaceholderText(tr("Search"));
         search_->setClearButtonEnabled(true);
+        search_->addAction(glyphIcon(Glyph::Search, palette().color(QPalette::PlaceholderText)),
+                           QLineEdit::LeadingPosition);
         search_->setFixedWidth(260);
         connect(search_, &QLineEdit::textChanged, proxy_, &QSortFilterProxyModel::setFilterFixedString);
         path_->setForegroundRole(QPalette::PlaceholderText);
@@ -268,7 +311,6 @@ LibraryView::LibraryView(QWidget* parent)
 
 void LibraryView::setBundles(QList<BundleSummaryPtr> bundles, const QString& folder)
 {
-    title_->setText(QDir(folder).dirName());
     path_->setText(tr("%n run(s) in %1", nullptr, static_cast<int>(bundles.size()))
                        .arg(QDir::toNativeSeparators(folder)));
     model_->setBundles(std::move(bundles));
@@ -279,7 +321,6 @@ void LibraryView::setBundles(QList<BundleSummaryPtr> bundles, const QString& fol
 
 void LibraryView::setScanning(const QString& folder)
 {
-    title_->setText(QDir(folder).dirName());
     path_->setText(tr("Reading %1 ...").arg(QDir::toNativeSeparators(folder)));
     stack_->setCurrentWidget(browser_);
 }
@@ -310,17 +351,18 @@ void LibraryView::setRecentFolders(const QStringList& folders)
     recentBox_->setVisible(!folders.isEmpty());
     if (folders.isEmpty())
         return;
-    auto* heading = new QLabel(tr("Recent folders"), recentBox_);
+    auto* heading = new QLabel(tr("Recent"), recentBox_);
+    QFont font = heading->font();
+    font.setBold(true);
+    font = format::scaled(font, 0.85);
+    heading->setFont(font);
     heading->setForegroundRole(QPalette::PlaceholderText);
-    heading->setAlignment(Qt::AlignCenter);
+    heading->setContentsMargins(10, 0, 0, 4);
     layout->addWidget(heading);
     for (const QString& folder : folders) {
-        auto* button = new QPushButton(glyphIcon(Glyph::OpenFolder, palette().color(QPalette::ButtonText)),
-                                       QDir::toNativeSeparators(folder), recentBox_);
-        button->setFlat(true);
-        button->setCursor(Qt::PointingHandCursor);
-        connect(button, &QPushButton::clicked, this, [this, folder] { emit recentFolderRequested(folder); });
-        layout->addWidget(button);
+        layout->addWidget(actionRow(Glyph::OpenFolder, QDir(folder).dirName(),
+                                    QDir::toNativeSeparators(QDir(folder).absolutePath()),
+                                    [this, folder] { emit recentFolderRequested(folder); }, recentBox_));
     }
 }
 

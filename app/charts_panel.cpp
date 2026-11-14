@@ -234,7 +234,7 @@ ChartsPanel::ChartsPanel(Session* session, QWidget* parent)
             axis->setGridLineColor(grid);
             axis->setLinePenColor(grid);
             QFont font = axis->labelsFont();
-            font.setPointSizeF(font.pointSizeF() * 0.85);
+            font = format::scaled(font, 0.85);
             axis->setLabelsFont(font);
             plot->chart->addAxis(axis, alignment);  // takes ownership
             return axis;

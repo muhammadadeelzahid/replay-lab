@@ -1,41 +1,48 @@
-# abr-viz
+# Stream Inspector
 
-A desktop viewer for ns-3 adaptive video streaming simulations. It opens a simulation run
+<img src="app/resources/app-icon.svg" width="96" align="right" alt="">
+
+A Mac app (and Qt desktop app) for ns-3 adaptive video streaming simulations. It opens a simulation run
 bundle and shows what the simulated user saw, segment by segment: the quality the LLM ABR
 policy chose, the experienced video with its stalls, the buffer, throughput, RTT and loss over
 time, and the simulation logs, all linked to one time cursor.
 
-Built with **C++20**, **Qt 6** and **GStreamer**.
+Built with **C++20**, **Qt 6** and **GStreamer**. The project is called abr-viz; the application
+is Stream Inspector.
 
-![Replay: Big Buck Bunny at 36 Mbps, paused inside its stall](docs/images/replay.jpg)
+![Stream Inspector replaying Big Buck Bunny at 36 Mbps, paused inside its stall](docs/images/replay.jpg)
 
 ## What it shows
 
-A sidebar switches between five pages; the transport bar under every page plays the replay and
-holds the segment timeline, which is also the scrubber.
+The window is laid out like a macOS app: a sidebar, a toolbar, the content, an inspector and
+a transport bar.
 
-- **Library**: every run in a folder, with link rate, segments, stalls, whether playback was
-  cut off by the end of the simulation, and how well the logs match the exported data; a
-  filter and the details of the selected run. Without a folder, a welcome screen with the
-  recent folders.
-- **Replay**: the video the simulated user saw, each segment at the rung it was played at,
-  stalls as frozen frames, cut off where playback stopped. Beside it, what was on screen
-  (segment, rung, resolution, bitrate, buffer, stall), the policy's last decision, the network
-  as last measured, and the engine and times.
-- **Analysis**: buffer, throughput and the policy's estimate, chosen and played bitrate, RTT
-  and loss, and decision delay, with a readout at the cursor.
-- **Logs**: `sim.log` and the policy log in one indexed view, filtered in the background, that
-  follows the cursor.
-- **Report**: QoE numbers for the session, with the six that `summary.json` reports checked
-  against it, next to the run's settings and ladder.
+- **Sidebar**: All Runs, then each video with its runs by link rate; a run that stalled or was
+  cut off by the end of the simulation says so. Selecting a run opens it.
+- **All Runs**: the runs of the folder with link rate, segments, stalls, playback and how well
+  the logs match the exported data; search, and the details of the selected run. Without a
+  folder, a welcome screen with the recent folders.
+- **Toolbar**: a segmented control for the views of the open run:
+  - **Replay**: the video the simulated user saw, each segment at the rung it was played at,
+    stalls as frozen frames, cut off where playback stopped.
+  - **Analysis**: buffer, throughput and the policy's estimate, chosen and played bitrate,
+    RTT and loss, and decision delay, with a readout at the cursor.
+  - **Logs**: `sim.log` and the policy log in one indexed view, filtered in the background,
+    following the cursor.
+  - **Report**: QoE numbers, with the six that `summary.json` reports checked against it, and
+    the run's settings and ladder.
+- **Inspector**: what was on screen at the cursor (segment, rung, resolution, bitrate, buffer,
+  stall), the policy's last decision, the network as last measured, and the engine and times.
+- **Transport bar**: elapsed and remaining replay time, play, 5 s and segment steps, and the
+  segment timeline (downloads, segments on screen and decisions, coloured by rung, with stalls,
+  guard overrides and the cut-off marked), which is also the scrubber.
 
-The timeline shows downloads, segments on screen and policy decisions, coloured by rung, with
-stalls, guard overrides and the cut-off marked. Clicking or dragging in the timeline or a chart
-moves the cursor; playing the replay moves it too.
+Clicking or dragging in the timeline or a chart moves the cursor; playing the replay moves it
+too.
 
-| Library | Analysis | Report |
+| All Runs | Analysis | Report |
 | --- | --- | --- |
-| ![Library](docs/images/library.png) | ![Analysis](docs/images/analysis.png) | ![Report](docs/images/report.png) |
+| ![All Runs](docs/images/library.png) | ![Analysis](docs/images/analysis.png) | ![Report](docs/images/report.png) |
 
 ## Replay engines
 
@@ -44,7 +51,7 @@ moves the cursor; playing the replay moves it too.
 | GStreamer (default) | plays the segment files directly: `splitmuxsrc ! decodebin3 ! videoconvert ! videoscale ! appsink`, frames handed to Qt without copying; the engine times the frames itself, and a stall holds the last frame | built with `ABR_WITH_GSTREAMER=ON` |
 | Pre-rendered | `ffmpeg` renders the experienced video once (in parallel, cached), played with Qt Multimedia | always available; used automatically if GStreamer cannot show a run |
 
-Choose in the toolbar or Playback, Engine (saved), or with `--engine gstreamer|prerendered`.
+Choose in Settings (⌘,) or Playback, Engine (saved), or with `--engine gstreamer|prerendered`.
 Both engines show the same picture at the same cursor position; a test checks this on a full
 bundle. All 14 runs were played start to finish with each engine's frame rate checked: 25,
 29.97, 30 and 59.94 fps videos all play at their own rate, with gaps only at the stalls.
@@ -100,23 +107,23 @@ The GStreamer replay engine is built by default. Configure with `-DABR_WITH_GSTR
 
 ## Running
 
-On macOS the app is a bundle with its icon, `build/<preset>/app/abrviz.app`:
+On macOS the app is `build/<preset>/app/Stream Inspector.app`:
 
 ```sh
-open build/release/app/abrviz.app                    # welcome screen, recent folders
-APP=build/release/app/abrviz.app/Contents/MacOS/abrviz
-$APP viewer_bundles                                  # the library of a folder
-$APP viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57
+open "build/release/app/Stream Inspector.app"        # welcome screen, recent folders
+APP="build/release/app/Stream Inspector.app/Contents/MacOS/Stream Inspector"
+"$APP" viewer_bundles                                # all runs of a folder
+"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57
 ```
 
-On Linux the executable is `build/<preset>/app/abrviz`.
+On Linux the executable is `build/<preset>/app/stream-inspector`.
 
 | Option | Effect |
 | --- | --- |
 | `--bundle <name>` | open this bundle of the folder |
 | `--time <s>` | move the cursor to this simulation time |
 | `--engine gstreamer\|prerendered` | replay engine for this start (overrides the saved choice) |
-| `--page library\|replay\|analysis\|logs\|report` | page to show |
+| `--page library\|replay\|analysis\|logs\|report` | view to show (library is All Runs) |
 | `--size WxH` | window size |
 | `--screenshot <file.png>` | save a picture of the window once everything is shown, and quit (no window appears) |
 | `--profile <s>` | play that many seconds and print load, render and playback numbers |
@@ -126,10 +133,12 @@ On Linux the executable is `build/<preset>/app/abrviz`.
 | Space | play / pause |
 | ⌥← / ⌥→ | back / forward 5 s of replay |
 | ⌘[ / ⌘] | previous / next segment |
-| ⌘1 … ⌘5 | Library, Replay, Analysis, Logs, Report |
-| ⌘O / ⇧⌘O | open a folder / one bundle |
+| ⌘1 … ⌘5 | All Runs, Replay, Analysis, Logs, Report |
+| ⌃⌘S / ⌥⌘I | show or hide the sidebar / the inspector |
+| ⌘O / ⇧⌘O | open a folder / one run |
 | ⌘R | render the video for the pre-rendered engine |
 | ⌘I | show the information overlay on the video |
+| ⌘, | Settings: engine, overlay, render cache |
 
 On Linux, Ctrl replaces ⌘ and Alt replaces ⌥. Rendered videos are kept in the user cache
 folder (`ABRVIZ_RENDER_CACHE` overrides it).

@@ -19,14 +19,16 @@ class ReplayPlayer;
 class ReportView;
 class Session;
 class SegmentTimeline;
+class SourceList;
 class SummaryPanel;
 class TransportBar;
 
-/// The application window. A sidebar switches between five pages: Library (the runs of a
-/// folder, or a welcome screen), Replay (the video and what was on screen), Analysis (the
-/// charts), Logs and Report. The toolbar opens folders and bundles, picks a run and the replay
-/// engine; under every page the transport bar plays the replay and holds the segment timeline,
-/// which moves the shared time cursor. Folders and bundles load in the background.
+/// The application window, laid out as macOS apps are: a source-list sidebar (All Runs, then the
+/// runs of each video), a unified toolbar with a segmented control for the views of the open run
+/// (Replay, Analysis, Logs, Report), an inspector on the right showing the moment at the cursor,
+/// and a transport bar that plays the replay and holds the segment timeline, which moves the
+/// shared time cursor. Folders and bundles load in the background; progress and problems show
+/// in a banner over the content. The Library page shows the welcome screen or all runs.
 ///
 /// Shutdown order: the destructor calls `shutdown()` first, which cancels and waits for the
 /// pending scan, load and log indexing, and then destroys the replay engine. Only then is the
@@ -80,6 +82,10 @@ public:
     [[nodiscard]] ReportView* report() const;
     [[nodiscard]] TransportBar* transport() const;
     [[nodiscard]] MomentPanel* moment() const;
+    [[nodiscard]] SourceList* sidebar() const;
+    /// The banner text shown over the content (loading, errors, engine fallback); empty if none.
+    [[nodiscard]] QString noticeText() const;
+    void showNotice(const QString& text, int milliseconds = 8000);
     [[nodiscard]] bool isBusy() const;
 
     /// Moves the cursor by `seconds` of replay time (the step buttons use 5 s).
@@ -104,6 +110,9 @@ private:
     void createActions();
     void createMenus();
     void createToolBar();
+    void showSettings();
+    void updateTitle();
+    void updatePanes();
     void applyStyle();
     void chooseFolder();
     void chooseBundle();
@@ -114,7 +123,7 @@ private:
     void updateStatus();
     void updateActions();
     void updateEngineActions();
-    void updateRunPicker();
+    void updateSidebar();
     void rememberFolder(const QString& folder);
     void restoreSettings();
 

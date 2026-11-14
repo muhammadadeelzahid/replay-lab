@@ -23,7 +23,7 @@ QLabel* heading(const QString& text, QWidget* parent)
     auto* label = new QLabel(text, parent);
     QFont font = label->font();
     font.setBold(true);
-    font.setPointSizeF(font.pointSizeF() * 1.05);
+    font = format::scaled(font, 1.05);
     label->setFont(font);
     label->setContentsMargins(0, 10, 0, 2);
     return label;
@@ -59,7 +59,6 @@ MomentPanel::MomentPanel(Session* session, ReplayPlayer* player, QWidget* parent
     addHeading(tr("Last decision"));
     decisionTime_ = addRow(tr("At"));
     chosen_ = addRow(tr("Chosen"));
-    guard_ = addRow(tr("Guard"));
 
     addHeading(tr("Network"));
     estimate_ = addRow(tr("Estimate"));
@@ -157,10 +156,6 @@ void MomentPanel::refresh()
     if (decision) {
         decisionTime_->setText(tr("%1, for segment %2").arg(format::seconds(decision->time)).arg(decision->forSegment));
         chosen_->setText(format::rungLabel(run->video, decision->chosenRung));
-        guard_->setText(decision->guardOverride
-                            ? QStringLiteral("<b style='color:#e07020'>%1</b>")
-                                  .arg(tr("overrode LLM (rung %1)").arg(decision->llmRung.value_or(-1)))
-                            : tr("kept the LLM's choice"));
     }
 
     // The network as last measured: the newest sample at or before the cursor that has it.

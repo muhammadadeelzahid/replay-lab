@@ -204,26 +204,23 @@ with `static_assert`.
 
 ## GUI
 
-- `MainWindow`: a sidebar of five pages in a `QStackedWidget`: Library, Replay (the player and
-  the `MomentPanel`), Analysis (charts), Logs, and Report (report and summary). A toolbar opens
-  folders and bundles, picks a run of the folder and the engine; the `TransportBar` under every
-  page holds the playback buttons and the `SegmentTimeline`. Menus: File (open folder, open
-  bundle, open recent), View (pages, video overlay, full screen), Playback (play, 5 s steps,
-  segment steps, render video, engine), Help. Every command is a `QAction` shared by the menu,
-  its shortcut and its button. Recent folders, the window geometry, the overlay and the engine
-  are kept with `QSettings`.
-- `TransportBar`: play, 5 s and segment steps, the simulation and replay time, the state, and
-  the segment timeline as the scrubber. Shown while a run is open.
-- `MomentPanel`: what was on screen at the cursor, the last decision before it, the network
-  as last measured, and the engine and times.
-- Labels that change while the replay runs have fixed sizes. A label that grew or shrank would
-  make the main window lay out again, and on a large window that repaint costs about 200 ms.
-- Icons are line drawings in SVG, drawn in the palette's text colour (so light and dark mode
-  both work) by a `QIconEngine`; the application icon is `app/resources/abrviz.svg`, built into
-  `abrviz.icns` for the macOS app bundle.
-- `PlaybackActivity`: while the replay runs, an `NSProcessInfo` activity keeps macOS App Nap
-  from throttling the app's timers when its window is hidden or covered (otherwise timers fire
-  only every 200 ms or so after half a minute, and the replay stutters).
+- `MainWindow`: laid out as a macOS app. A source-list sidebar (`SourceList`) shows All Runs
+  and, per video, its runs by link rate (with a note for stalls or a cut-off); selecting a run
+  opens it. A toolbar holds the sidebar toggle, Open Folder, a `SegmentedControl` for the views
+  of the open run (Replay, Analysis, Logs, Report) and the inspector toggle. The pages are a
+  `QStackedWidget`: Library (welcome screen or all runs), Replay (the player), Analysis (charts),
+  Logs, Report (report and summary). The `MomentPanel` is the inspector on the right; the
+  `TransportBar` is under every view. There is no status bar: loading, errors and the engine
+  fallback show in a banner over the content. Menus: File (open folder, open run, open recent,
+  close window, settings, quit), View (sidebar, inspector, views, overlay, full screen),
+  Playback (play, 5 s and segment steps, render video, engine), Window, Help. Settings (⌘,)
+  hold the engine, the overlay and the render cache. Every command is a `QAction` shared by
+  the menu, its shortcut and its button. Recent folders, the window geometry, the panes, the
+  overlay and the engine are kept with `QSettings`.
+- The application is called Stream Inspector (`app/branding.h`); the project, its libraries
+  and its targets keep the name abr-viz. The macOS bundle is `Stream Inspector.app`.
+- The toolbar is not unified with the title bar: Qt's unified title and toolbar drew the
+  window black around custom widgets.
 - `Session`: the open run (`shared_ptr<const RunData>`), its `LogIndex`, and the `TimeCursor`.
   Emits `runChanged`; every panel connects to it.
 - `TimeCursor`: the current simulation time. `setTime(t, source)`; a panel ignores changes it

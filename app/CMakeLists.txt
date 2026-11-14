@@ -28,21 +28,29 @@ add_library(abrviz_gui STATIC
     transport_bar.h
     transport_bar.cpp
     moment_panel.h
-    moment_panel.cpp)
+    moment_panel.cpp
+    branding.h
+    segmented_control.h
+    segmented_control.cpp
+    source_list.h
+    source_list.cpp
+    settings_dialog.h
+    settings_dialog.cpp)
 
 qt_add_resources(abrviz_gui "abrviz_resources"
     PREFIX "/abrviz"
     BASE resources
-    FILES resources/abrviz.svg)
+    FILES resources/app-icon.svg)
 
-target_sources(abrviz_gui PRIVATE playback_activity.h)
+target_sources(abrviz_gui PRIVATE playback_activity.h background_mode.h)
 if(APPLE)
     enable_language(OBJCXX)
-    target_sources(abrviz_gui PRIVATE playback_activity_mac.mm)
-    set_source_files_properties(playback_activity_mac.mm PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
-    target_link_libraries(abrviz_gui PRIVATE "-framework Foundation")
+    target_sources(abrviz_gui PRIVATE playback_activity_mac.mm background_mode_mac.mm)
+    set_source_files_properties(playback_activity_mac.mm background_mode_mac.mm
+        PROPERTIES COMPILE_OPTIONS "-fno-objc-arc")
+    target_link_libraries(abrviz_gui PRIVATE "-framework Foundation" "-framework AppKit")
 else()
-    target_sources(abrviz_gui PRIVATE playback_activity.cpp)
+    target_sources(abrviz_gui PRIVATE playback_activity.cpp background_mode.cpp)
 endif()
 
 target_include_directories(abrviz_gui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -58,18 +66,21 @@ abrviz_set_warnings(abrviz_gui)
 qt_add_executable(abrviz main.cpp)
 target_link_libraries(abrviz PRIVATE abrviz_gui)
 
-# A macOS app bundle with its icon: build/<preset>/app/abrviz.app.
+# The application is called Stream Inspector: "Stream Inspector.app" on macOS (with its icon),
+# stream-inspector elsewhere.
 if(APPLE)
-    set(ABRVIZ_ICNS ${CMAKE_CURRENT_SOURCE_DIR}/resources/abrviz.icns)
+    set(ABRVIZ_ICNS ${CMAKE_CURRENT_SOURCE_DIR}/resources/AppIcon.icns)
     target_sources(abrviz PRIVATE ${ABRVIZ_ICNS})
     set_source_files_properties(${ABRVIZ_ICNS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     set_target_properties(abrviz PROPERTIES
+        OUTPUT_NAME "Stream Inspector"
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_BUNDLE_NAME "abr-viz"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.muhammadadeelzahid.abrviz"
-        MACOSX_BUNDLE_ICON_FILE abrviz.icns
+        MACOSX_BUNDLE_BUNDLE_NAME "Stream Inspector"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.muhammadadeelzahid.streaminspector"
+        MACOSX_BUNDLE_ICON_FILE AppIcon.icns
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
         MACOSX_BUNDLE_COPYRIGHT "MIT licence")
+else()
+    set_target_properties(abrviz PROPERTIES OUTPUT_NAME "stream-inspector")
 endif()
-abrviz_set_warnings(abrviz)

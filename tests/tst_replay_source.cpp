@@ -1,3 +1,4 @@
+#include "background_mode.h"
 #include "synthetic_run.h"
 #include "test_paths.h"
 
@@ -79,6 +80,8 @@ private:
 private slots:
     void initTestCase()
     {
+        // These tests use the Cocoa platform; never take the focus from the app in use.
+        abrviz::runInBackground();
         const QString ffmpeg = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
         if (ffmpeg.isEmpty())
             QSKIP("ffmpeg not found");

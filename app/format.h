@@ -2,6 +2,7 @@
 
 #include "abrviz/core/model/run_data.h"
 
+#include <QFont>
 #include <QString>
 
 namespace abrviz::format {
@@ -29,6 +30,16 @@ inline QString rungLabel(const VideoInfo& video, int rung)
     if (!r)
         return QStringLiteral("rung %1").arg(rung);
     return QStringLiteral("%1, %2").arg(resolution(*r), bitrate(static_cast<double>(r->bitrate)));
+}
+
+/// `font` scaled by `factor`, whether its size is in points or (from a style sheet) in pixels.
+inline QFont scaled(QFont font, qreal factor)
+{
+    if (font.pointSizeF() > 0)
+        font.setPointSizeF(font.pointSizeF() * factor);
+    else if (font.pixelSize() > 0)
+        font.setPixelSize(qRound(font.pixelSize() * factor));
+    return font;
 }
 
 } // namespace abrviz::format

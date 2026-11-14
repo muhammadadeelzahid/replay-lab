@@ -23,13 +23,18 @@ enum class Glyph {
     Render,
     Engine,
     Overlay,
+    Film,
+    Inspector,
+    Sidebar,
+    Settings,
+    Search,
 };
 
 /// `glyph` drawn in `color` (normally the palette's text colour, so it suits light and dark
 /// themes), sharp at every size Qt asks for. `selected` (if valid) is used for selected items.
 [[nodiscard]] QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected = QColor());
 
-/// The application icon (a bitrate ladder with a play button).
+/// The application icon (a display showing a bitrate ladder).
 [[nodiscard]] QIcon appIcon();
 
 } // namespace abrviz

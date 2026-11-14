@@ -47,8 +47,10 @@ replay engines (GStreamer and pre-rendered). Comparing runs side by side is not 
 - GUI tests run offscreen: opening a bundle fills the panels; moving the cursor updates them.
   The tests that play video (`tst_replay_source`, `tst_replay_player`) use the Cocoa platform
   on macOS, because Qt's AVFoundation backend delivers media through the Cocoa run loop, which
-  the offscreen platform does not run. Their window is marked `Qt::WA_DontShowOnScreen`, so
-  nothing appears on the desktop. They are disabled in the TSan build on macOS: the TSan
+  the offscreen platform does not run. They run as background-only applications
+  (`runInBackground()`: never activated, no Dock icon) and their window is marked
+  `Qt::WA_DontShowOnScreen`, so nothing appears and the keyboard focus stays in the app in use.
+  `--screenshot` and `--profile` do the same. They are disabled in the TSan build on macOS: the TSan
   runtime can deadlock inside itself when CoreMedia threads exit. Every test has a 300 s
   timeout.
 - Tests keep rendered videos in the build folder (`ABRVIZ_RENDER_CACHE`); stand-in `ffmpeg`
@@ -63,8 +65,8 @@ cmake --preset asan  && cmake --build --preset asan  && ctest --preset asan
 cmake --preset tsan  && cmake --build --preset tsan  && ctest --preset tsan
 cmake --preset nogst && cmake --build --preset nogst && ctest --preset nogst
 ./build/debug/tools/validate_bundle viewer_bundles/*
-./build/debug/app/abrviz.app/Contents/MacOS/abrviz --engine=gstreamer viewer_bundles   # macOS
-./build/debug/app/abrviz --engine=gstreamer viewer_bundles                              # Linux
+"./build/debug/app/Stream Inspector.app/Contents/MacOS/Stream Inspector" --engine=gstreamer viewer_bundles  # macOS
+./build/debug/app/stream-inspector --engine=gstreamer viewer_bundles                                       # Linux
 ```
 
 
@@ -74,11 +76,11 @@ Measure with the release build. The numbers in the README come from:
 
 ```sh
 B=build/release
-APP=$B/app/abrviz.app/Contents/MacOS/abrviz   # $B/app/abrviz on Linux
+APP="$B/app/Stream Inspector.app/Contents/MacOS/Stream Inspector"   # $B/app/stream-inspector on Linux
 time $B/tools/print_report viewer_bundles > /dev/null
 $B/tools/render_experienced --cache /tmp/abrviz-cold viewer_bundles/big_buck_bunny_llm_36Mbps_run_2
-$APP viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine gstreamer --time 50 --profile 10
-$APP viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine prerendered --time 50 --profile 10
+"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine gstreamer --time 50 --profile 10
+"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine prerendered --time 50 --profile 10
 ```
 
 `--profile` prints when the bundle and the log index were ready, how long the engine took to
@@ -86,7 +88,7 @@ show its first picture (rendering first if it has to), the frames shown per seco
 played seconds, CPU time as a share of one core, peak memory, and every gap of more than
 150 ms between frames with the segment and rung it happened at. It stops early when the replay
 ends, so `--time 0 --profile 300` plays a whole run; every run was checked this way with both
-engines. The README pictures are made with `--screenshot` (no window appears).
+engines. The README pictures are made with `--screenshot` (the window is fully transparent).
 
 
 ## Setup

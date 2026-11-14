@@ -1,3 +1,5 @@
+#include "background_mode.h"
+#include "branding.h"
 #include "icons.h"
 #include "main_window.h"
 #include "replay_player.h"
@@ -221,13 +223,15 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("abr-viz"));
+    QApplication::setApplicationName(QStringLiteral("Stream Inspector"));
+    QApplication::setApplicationDisplayName(abrviz::appDisplayName());
     QApplication::setApplicationVersion(abrviz::versionString());
-    QApplication::setOrganizationName(QStringLiteral("abr-viz"));
+    QApplication::setOrganizationName(QStringLiteral("Stream Inspector"));
+    QApplication::setOrganizationDomain(QStringLiteral("muhammadadeelzahid.github.io"));
     QApplication::setWindowIcon(abrviz::appIcon());
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Viewer for ns-3 adaptive bitrate run bundles"));
+    parser.setApplicationDescription(QStringLiteral("Stream Inspector: replays ns-3 adaptive bitrate run bundles"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("path"),
@@ -261,6 +265,8 @@ int main(int argc, char* argv[])
     parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption, engineOption,
                        pageOption, profileOption});
     parser.process(app);
+    if (parser.isSet(screenshotOption) || parser.isSet(profileOption))
+        abrviz::runInBackground();
 
     abrviz::MainWindow window;
     if (parser.isSet(engineOption)) {
@@ -294,8 +300,12 @@ int main(int argc, char* argv[])
     }
     // Screenshot and profile runs lay the window out and paint it without putting it on the
     // screen.
-    if (parser.isSet(screenshotOption) || parser.isSet(profileOption))
+    // They run as background-only apps (never activated, so they cannot take the keyboard focus
+    // from the app in use) and paint the window without putting it on the screen.
+    if (parser.isSet(screenshotOption) || parser.isSet(profileOption)) {
         window.setAttribute(Qt::WA_DontShowOnScreen);
+        window.setAttribute(Qt::WA_ShowWithoutActivating);
+    }
     window.show();
 
     const QStringList paths = parser.positionalArguments();

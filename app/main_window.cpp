@@ -1,6 +1,8 @@
 #include "main_window.h"
 
+#include "branding.h"
 #include "charts_panel.h"
+#include "format.h"
 #include "icons.h"
 #include "library_view.h"
 #include "log_console.h"
@@ -8,8 +10,10 @@
 #include "replay_player.h"
 #include "report_view.h"
 #include "segment_timeline.h"
+#include "segmented_control.h"
 #include "session.h"
-#include "format.h"
+#include "settings_dialog.h"
+#include "source_list.h"
 #include "summary_panel.h"
 #include "time_cursor.h"
 #include "transport_bar.h"
@@ -26,7 +30,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
-#include <QComboBox>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -34,16 +38,16 @@
 #include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QListWidget>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QProcessEnvironment>
-#include <QProgressBar>
 #include <QSettings>
 #include <QSplitter>
 #include <QStackedWidget>
-#include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <array>
@@ -57,41 +61,32 @@ const QString kEngineSetting = QStringLiteral("replay/engine");
 const QString kRecentSetting = QStringLiteral("library/recentFolders");
 const QString kGeometrySetting = QStringLiteral("window/geometry");
 const QString kOverlaySetting = QStringLiteral("replay/overlay");
+const QString kSidebarSetting = QStringLiteral("window/sidebar");
+const QString kInspectorSetting = QStringLiteral("window/inspector");
 constexpr int kRecentCount = 6;
 constexpr double kStepSeconds = 5.0;
 
-Glyph pageGlyph(MainWindow::Page page)
+bool isDark(const QPalette& palette)
 {
-    switch (page) {
-    case MainWindow::Page::Library: return Glyph::Library;
-    case MainWindow::Page::Replay: return Glyph::Replay;
-    case MainWindow::Page::Analysis: return Glyph::Analysis;
-    case MainWindow::Page::Logs: return Glyph::Logs;
-    case MainWindow::Page::Report: return Glyph::Report;
-    }
-    return Glyph::Library;
+    return palette.color(QPalette::Window).lightness() < 128;
 }
 
-/// A page with a title over its content.
-QWidget* titledPage(const QString& title, const QString& subtitle, QWidget* content, QWidget* parent)
+/// Content with the usual margins of a macOS window.
+QWidget* padded(QWidget* content, QWidget* parent, int margin = 16)
 {
     auto* page = new QWidget(parent);
-    auto* heading = new QLabel(title, page);
-    QFont font = heading->font();
-    font.setPointSizeF(font.pointSizeF() * 1.5);
-    font.setBold(true);
-    heading->setFont(font);
-    auto* note = new QLabel(subtitle, page);
-    note->setForegroundRole(QPalette::PlaceholderText);
-    note->setWordWrap(true);
     auto* layout = new QVBoxLayout(page);
-    layout->setContentsMargins(20, 16, 20, 10);
-    layout->setSpacing(4);
-    layout->addWidget(heading);
-    layout->addWidget(note);
-    layout->addSpacing(8);
-    layout->addWidget(content, 1);
+    layout->setContentsMargins(margin, margin - 4, margin, 6);
+    layout->addWidget(content);
     return page;
+}
+
+QFrame* divider(Qt::Orientation orientation, QWidget* parent)
+{
+    auto* line = new QFrame(parent);
+    line->setObjectName(QStringLiteral("divider"));
+    line->setFrameShape(orientation == Qt::Vertical ? QFrame::VLine : QFrame::HLine);
+    return line;
 }
 
 } // namespace
@@ -112,12 +107,16 @@ struct MainWindow::Impl {
     ReplayPlayer* player = nullptr;
     MomentPanel* moment = nullptr;
     TransportBar* transport = nullptr;
-    QListWidget* sidebar = nullptr;
+    SourceList* sidebar = nullptr;
+    QWidget* sidebarPane = nullptr;
+    QWidget* inspectorPane = nullptr;
     QStackedWidget* pages = nullptr;
-    QComboBox* runPicker = nullptr;
-    QComboBox* engineBox = nullptr;
+    SegmentedControl* views = nullptr;
+    QLabel* notice = nullptr;
+    QTimer* noticeTimer = nullptr;
     QToolBar* toolBar = nullptr;
     QMenu* recentMenu = nullptr;
+    SettingsDialog* settings = nullptr;
 
     QAction* openFolderAction = nullptr;
     QAction* openBundleAction = nullptr;
@@ -129,11 +128,12 @@ struct MainWindow::Impl {
     QAction* renderAction = nullptr;
     QAction* overlayAction = nullptr;
     QAction* fullScreenAction = nullptr;
+    QAction* sidebarAction = nullptr;
+    QAction* inspectorAction = nullptr;
+    QAction* settingsAction = nullptr;
     std::array<QAction*, kPageCount> pageActions{};
     QActionGroup* engineActions = nullptr;
 
-    QLabel* versionLabel = nullptr;
-    QProgressBar* progress = nullptr;
     QFutureWatcher<QList<BundleSummaryPtr>>* scanWatcher = nullptr;
     QFutureWatcher<LoadResult>* loadWatcher = nullptr;
     QFutureWatcher<LogIndexPtr>* logWatcher = nullptr;
@@ -152,8 +152,11 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , d_(std::make_unique<Impl>())
 {
-    setWindowTitle(QStringLiteral("abr-viz"));
+    setWindowTitle(appDisplayName());
     setWindowIcon(appIcon());
+    // Qt's unified title and toolbar draws the window black around custom widgets; the
+    // toolbar sits under the title bar instead, as in Preview or TextEdit.
+    setUnifiedTitleAndToolBarOnMac(false);
     resize(1440, 900);
 
     // The session has no parent while the panels are created and is made a child of the window
@@ -177,30 +180,10 @@ MainWindow::MainWindow(QWidget* parent)
     createToolBar();
     session.release()->setParent(this);
 
-    d_->versionLabel = new QLabel(this);
-    const auto engines = media::engineSupport();
-    const QString engineText = engines.gstreamer ? engines.gstreamerVersion
-                                                 : tr("GStreamer engine not built");
-    d_->versionLabel->setText(tr("abr-viz %1 · %2").arg(versionString(), engineText));
-    d_->versionLabel->setForegroundRole(QPalette::PlaceholderText);
-    statusBar()->addPermanentWidget(d_->versionLabel);
-
-    d_->progress = new QProgressBar(this);
-    d_->progress->setMaximumWidth(220);
-    d_->progress->setTextVisible(false);
-    d_->progress->hide();
-    statusBar()->addPermanentWidget(d_->progress);
-
     d_->scanWatcher = new QFutureWatcher<QList<BundleSummaryPtr>>(this);
     connect(d_->scanWatcher, &QFutureWatcherBase::finished, this, &MainWindow::scanFinished);
-
     d_->loadWatcher = new QFutureWatcher<LoadResult>(this);
     connect(d_->loadWatcher, &QFutureWatcherBase::finished, this, &MainWindow::loadFinished);
-    connect(d_->loadWatcher, &QFutureWatcherBase::progressRangeChanged, d_->progress,
-            &QProgressBar::setRange);
-    connect(d_->loadWatcher, &QFutureWatcherBase::progressValueChanged, d_->progress,
-            &QProgressBar::setValue);
-
     d_->logWatcher = new QFutureWatcher<LogIndexPtr>(this);
     connect(d_->logWatcher, &QFutureWatcherBase::finished, this, &MainWindow::logIndexFinished);
 
@@ -208,25 +191,27 @@ MainWindow::MainWindow(QWidget* parent)
     connect(d_->library, &LibraryView::openFolderRequested, this, &MainWindow::chooseFolder);
     connect(d_->library, &LibraryView::openBundleRequested, this, &MainWindow::chooseBundle);
     connect(d_->library, &LibraryView::recentFolderRequested, this, &MainWindow::openFolder);
+    connect(d_->sidebar, &SourceList::allRunsSelected, this, [this] { showPage(Page::Library); });
+    connect(d_->sidebar, &SourceList::runSelected, this, &MainWindow::openBundle);
     connect(d_->session, &Session::runChanged, this, [this] {
-        const auto& run = d_->session->run();
-        setWindowTitle(run ? QStringLiteral("%1 - abr-viz").arg(run->info.runId)
-                           : QStringLiteral("abr-viz"));
+        updateTitle();
         updateActions();
-        updateRunPicker();
+        updatePanes();
+        if (const auto& run = d_->session->run())
+            d_->sidebar->selectRun(run->info.bundleDirectory);
     });
     connect(d_->player, &ReplayPlayer::stateChanged, this, &MainWindow::updateActions);
     connect(d_->player, &ReplayPlayer::engineChanged, this, &MainWindow::updateActions);
     connect(d_->player, &ReplayPlayer::engineChanged, this, &MainWindow::updateEngineActions);
     connect(d_->player, &ReplayPlayer::engineFellBack, this, [this](const QString& reason) {
-        statusBar()->showMessage(tr("GStreamer engine failed (%1); using the pre-rendered engine.")
-                                     .arg(reason), 15000);
+        showNotice(tr("GStreamer could not play this run (%1). Using the pre-rendered engine.").arg(reason), 15000);
     });
     d_->player->setEngine(savedEngine());
     restoreSettings();
     applyStyle();
     showPage(Page::Library);
     updateActions();
+    updatePanes();
 }
 
 MainWindow::~MainWindow()
@@ -262,10 +247,26 @@ SummaryPanel* MainWindow::summary() const { return d_->summary; }
 ReportView* MainWindow::report() const { return d_->report; }
 TransportBar* MainWindow::transport() const { return d_->transport; }
 MomentPanel* MainWindow::moment() const { return d_->moment; }
+SourceList* MainWindow::sidebar() const { return d_->sidebar; }
 
 bool MainWindow::isBusy() const
 {
     return d_->scan.isRunning() || d_->load.isRunning() || d_->logIndex.isRunning();
+}
+
+QString MainWindow::noticeText() const
+{
+    return d_->notice->isVisibleTo(this) ? d_->notice->text() : QString();
+}
+
+void MainWindow::showNotice(const QString& text, int milliseconds)
+{
+    d_->notice->setText(text);
+    d_->notice->setVisible(!text.isEmpty());
+    if (milliseconds > 0)
+        d_->noticeTimer->start(milliseconds);
+    else
+        d_->noticeTimer->stop();
 }
 
 Engine MainWindow::savedEngine()
@@ -297,10 +298,8 @@ void MainWindow::updateEngineActions()
         for (QAction* action : d_->engineActions->actions())
             action->setChecked(current && action->data().toString() == engineKey(*current));
     }
-    if (d_->engineBox && current) {
-        const QSignalBlocker block(d_->engineBox);
-        d_->engineBox->setCurrentIndex(d_->engineBox->findData(engineKey(*current)));
-    }
+    if (d_->settings && current)
+        d_->settings->setEngine(*current);
 }
 
 QString MainWindow::pageName(Page page)
@@ -319,11 +318,14 @@ void MainWindow::showPage(Page page)
 {
     const int index = static_cast<int>(page);
     d_->pages->setCurrentIndex(index);
-    {
-        const QSignalBlocker block(d_->sidebar);
-        d_->sidebar->setCurrentRow(index);
-    }
     d_->pageActions[static_cast<std::size_t>(index)]->setChecked(true);
+    // The segmented control shows the run's views; the library is chosen in the sidebar.
+    d_->views->setCurrentIndex(page == Page::Library ? -1 : index - 1);
+    if (page == Page::Library)
+        d_->sidebar->selectAllRuns();
+    else if (const auto& run = d_->session->run())
+        d_->sidebar->selectRun(run->info.bundleDirectory);
+    updatePanes();
 }
 
 MainWindow::Page MainWindow::currentPage() const
@@ -343,72 +345,72 @@ void MainWindow::createPages()
 
     d_->pages = new QStackedWidget(this);
     d_->pages->addWidget(d_->library);
-
-    auto* replay = new QWidget(this);
-    auto* replayLayout = new QHBoxLayout(replay);
-    replayLayout->setContentsMargins(0, 0, 0, 0);
-    replayLayout->setSpacing(0);
-    replayLayout->addWidget(d_->player, 1);
-    auto* divider = new QFrame(replay);
-    divider->setFrameShape(QFrame::VLine);
-    divider->setObjectName(QStringLiteral("divider"));
-    replayLayout->addWidget(divider);
-    replayLayout->addWidget(d_->moment);
-    d_->pages->addWidget(replay);
-
-    d_->pages->addWidget(titledPage(tr("Analysis"),
-                                    tr("Buffer, throughput, bitrate, network and decision delay over "
-                                       "simulation time. Click or drag a chart to move the cursor."),
-                                    d_->charts, this));
-    d_->pages->addWidget(titledPage(tr("Logs"),
-                                    tr("sim.log and the policy log, indexed. The table follows the cursor; "
-                                       "selecting a line moves it."),
-                                    d_->logs, this));
+    d_->pages->addWidget(d_->player);
+    d_->pages->addWidget(padded(d_->charts, this));
+    d_->pages->addWidget(padded(d_->logs, this));
     auto* reportSplit = new QSplitter(Qt::Horizontal, this);
     reportSplit->addWidget(d_->report);
     reportSplit->addWidget(d_->summary);
     reportSplit->setStretchFactor(0, 3);
     reportSplit->setStretchFactor(1, 2);
     reportSplit->setChildrenCollapsible(false);
-    d_->pages->addWidget(titledPage(tr("Report"),
-                                    tr("Quality of experience for the open run, checked against the "
-                                       "exporter's summary.json, and the run's settings and ladder."),
-                                    reportSplit, this));
+    reportSplit->setHandleWidth(1);
+    d_->pages->addWidget(padded(reportSplit, this));
 
-    d_->sidebar = new QListWidget(this);
-    d_->sidebar->setObjectName(QStringLiteral("sidebar"));
-    d_->sidebar->setFixedWidth(176);
-    d_->sidebar->setIconSize(QSize(20, 20));
-    d_->sidebar->setFrameShape(QFrame::NoFrame);
-    d_->sidebar->setFocusPolicy(Qt::NoFocus);
-    d_->sidebar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    for (int i = 0; i < kPageCount; ++i) {
-        auto* item = new QListWidgetItem(pageName(static_cast<Page>(i)), d_->sidebar);
-        item->setSizeHint(QSize(160, 38));
-        item->setToolTip(d_->pageActions[static_cast<std::size_t>(i)]->shortcut().toString(QKeySequence::NativeText));
-    }
-    connect(d_->sidebar, &QListWidget::currentRowChanged, this, [this](int row) {
-        if (row >= 0)
-            showPage(static_cast<Page>(row));
-    });
+    d_->sidebar = new SourceList(this);
+    d_->sidebarPane = new QWidget(this);
+    auto* sidebarLayout = new QHBoxLayout(d_->sidebarPane);
+    sidebarLayout->setContentsMargins(0, 0, 0, 0);
+    sidebarLayout->setSpacing(0);
+    d_->sidebar->setFixedWidth(230);
+    sidebarLayout->addWidget(d_->sidebar);
+    sidebarLayout->addWidget(divider(Qt::Vertical, d_->sidebarPane));
+
+    d_->inspectorPane = new QWidget(this);
+    auto* inspectorLayout = new QHBoxLayout(d_->inspectorPane);
+    inspectorLayout->setContentsMargins(0, 0, 0, 0);
+    inspectorLayout->setSpacing(0);
+    inspectorLayout->addWidget(divider(Qt::Vertical, d_->inspectorPane));
+    inspectorLayout->addWidget(d_->moment);
 
     d_->transport = new TransportBar(d_->session, d_->player, d_->timeline,
                                      {d_->previousSegmentAction, d_->stepBackAction, d_->playAction,
                                       d_->stepForwardAction, d_->nextSegmentAction},
                                      this);
 
+    d_->notice = new QLabel(this);
+    d_->notice->setObjectName(QStringLiteral("notice"));
+    d_->notice->setWordWrap(true);
+    d_->notice->setAlignment(Qt::AlignCenter);
+    d_->notice->hide();
+    d_->noticeTimer = new QTimer(this);
+    d_->noticeTimer->setSingleShot(true);
+    connect(d_->noticeTimer, &QTimer::timeout, d_->notice, &QWidget::hide);
+
+    auto* middle = new QWidget(this);
+    auto* middleLayout = new QHBoxLayout(middle);
+    middleLayout->setContentsMargins(0, 0, 0, 0);
+    middleLayout->setSpacing(0);
+    middleLayout->addWidget(d_->pages, 1);
+    middleLayout->addWidget(d_->inspectorPane);
+
     auto* content = new QWidget(this);
     auto* contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(0, 0, 0, 0);
     contentLayout->setSpacing(0);
-    contentLayout->addWidget(d_->pages, 1);
+    auto* noticeRow = new QHBoxLayout();
+    noticeRow->setContentsMargins(16, 8, 16, 0);
+    noticeRow->addWidget(d_->notice);
+    contentLayout->addLayout(noticeRow);
+    contentLayout->addWidget(middle, 1);
+    contentLayout->addWidget(divider(Qt::Horizontal, content));
     contentLayout->addWidget(d_->transport);
 
     auto* central = new QWidget(this);
     auto* centralLayout = new QHBoxLayout(central);
     centralLayout->setContentsMargins(0, 0, 0, 0);
     centralLayout->setSpacing(0);
-    centralLayout->addWidget(d_->sidebar);
+    centralLayout->addWidget(d_->sidebarPane);
     centralLayout->addWidget(content, 1);
     setCentralWidget(central);
 }
@@ -418,46 +420,71 @@ void MainWindow::createActions()
     auto make = [this](const QString& text, const QKeySequence& shortcut = {}) {
         auto* action = new QAction(text, this);
         action->setShortcut(shortcut);
-        addAction(action);  // shortcuts work whichever page is shown
+        addAction(action);  // shortcuts work whichever view is shown
         return action;
     };
-    d_->openFolderAction = make(tr("Open &Folder..."), QKeySequence::Open);
-    d_->openFolderAction->setToolTip(tr("Open a folder of run bundles"));
+    d_->openFolderAction = make(tr("Open Folder..."), QKeySequence::Open);
+    d_->openFolderAction->setToolTip(tr("Open a folder of runs"));
     connect(d_->openFolderAction, &QAction::triggered, this, &MainWindow::chooseFolder);
-    d_->openBundleAction = make(tr("Open &Bundle..."), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
-    d_->openBundleAction->setToolTip(tr("Open one run bundle"));
+    d_->openBundleAction = make(tr("Open Run..."), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
+    d_->openBundleAction->setToolTip(tr("Open a single run"));
     connect(d_->openBundleAction, &QAction::triggered, this, &MainWindow::chooseBundle);
 
-    d_->playAction = make(tr("&Play"), Qt::Key_Space);
+    d_->playAction = make(tr("Play"), Qt::Key_Space);
     connect(d_->playAction, &QAction::triggered, d_->player, &ReplayPlayer::togglePlay);
-    d_->stepBackAction = make(tr("&Back 5 Seconds"), QKeySequence(Qt::ALT | Qt::Key_Left));
+    d_->stepBackAction = make(tr("Back 5 Seconds"), QKeySequence(Qt::ALT | Qt::Key_Left));
+    d_->stepBackAction->setToolTip(tr("Back 5 seconds"));
     connect(d_->stepBackAction, &QAction::triggered, this, [this] { stepReplay(-kStepSeconds); });
-    d_->stepForwardAction = make(tr("&Forward 5 Seconds"), QKeySequence(Qt::ALT | Qt::Key_Right));
+    d_->stepForwardAction = make(tr("Forward 5 Seconds"), QKeySequence(Qt::ALT | Qt::Key_Right));
+    d_->stepForwardAction->setToolTip(tr("Forward 5 seconds"));
     connect(d_->stepForwardAction, &QAction::triggered, this, [this] { stepReplay(kStepSeconds); });
-    d_->previousSegmentAction = make(tr("P&revious Segment"), QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
+    d_->previousSegmentAction = make(tr("Previous Segment"), QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
     connect(d_->previousSegmentAction, &QAction::triggered, this, [this] { stepSegment(-1); });
-    d_->nextSegmentAction = make(tr("&Next Segment"), QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
+    d_->nextSegmentAction = make(tr("Next Segment"), QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
     connect(d_->nextSegmentAction, &QAction::triggered, this, [this] { stepSegment(1); });
-    d_->renderAction = make(tr("&Render Video"), QKeySequence(Qt::CTRL | Qt::Key_R));
-    d_->renderAction->setToolTip(tr("Render the experienced video for the pre-rendered engine"));
+    d_->renderAction = make(tr("Render Video"), QKeySequence(Qt::CTRL | Qt::Key_R));
     connect(d_->renderAction, &QAction::triggered, d_->player, &ReplayPlayer::prepare);
 
-    d_->overlayAction = make(tr("Show Video &Overlay"), QKeySequence(Qt::CTRL | Qt::Key_I));
+    d_->overlayAction = make(tr("Show Video Overlay"), QKeySequence(Qt::CTRL | Qt::Key_I));
     d_->overlayAction->setCheckable(true);
     connect(d_->overlayAction, &QAction::toggled, this, [this](bool on) {
         d_->player->setOverlayVisible(on);
+        if (d_->settings)
+            d_->settings->setOverlayVisible(on);
         QSettings settings;
         settings.setValue(kOverlaySetting, on);
     });
-    d_->fullScreenAction = make(tr("Enter &Full Screen"), QKeySequence::FullScreen);
+    d_->sidebarAction = make(tr("Show Sidebar"), QKeySequence(Qt::CTRL | Qt::META | Qt::Key_S));
+    d_->sidebarAction->setCheckable(true);
+    d_->sidebarAction->setChecked(true);
+    d_->sidebarAction->setToolTip(tr("Show or hide the sidebar"));
+    connect(d_->sidebarAction, &QAction::toggled, this, [this](bool on) {
+        d_->sidebarPane->setVisible(on);
+        QSettings settings;
+        settings.setValue(kSidebarSetting, on);
+    });
+    d_->inspectorAction = make(tr("Show Inspector"), QKeySequence(Qt::ALT | Qt::CTRL | Qt::Key_I));
+    d_->inspectorAction->setCheckable(true);
+    d_->inspectorAction->setChecked(true);
+    d_->inspectorAction->setToolTip(tr("Show or hide the inspector"));
+    connect(d_->inspectorAction, &QAction::toggled, this, [this](bool on) {
+        QSettings settings;
+        settings.setValue(kInspectorSetting, on);
+        updatePanes();
+    });
+    d_->fullScreenAction = make(tr("Enter Full Screen"), QKeySequence::FullScreen);
     connect(d_->fullScreenAction, &QAction::triggered, this, [this] {
         setWindowState(windowState() ^ Qt::WindowFullScreen);
     });
+    d_->settingsAction = make(tr("Settings..."), QKeySequence::Preferences);
+    d_->settingsAction->setMenuRole(QAction::PreferencesRole);
+    connect(d_->settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
 
     auto* pageGroup = new QActionGroup(this);
     for (int i = 0; i < kPageCount; ++i) {
         const auto page = static_cast<Page>(i);
-        QAction* action = make(pageName(page), QKeySequence(Qt::CTRL | static_cast<Qt::Key>(Qt::Key_1 + i)));
+        const QString text = page == Page::Library ? tr("All Runs") : pageName(page);
+        QAction* action = make(text, QKeySequence(Qt::CTRL | static_cast<Qt::Key>(Qt::Key_1 + i)));
         action->setCheckable(true);
         action->setActionGroup(pageGroup);
         connect(action, &QAction::triggered, this, [this, page] { showPage(page); });
@@ -480,24 +507,33 @@ void MainWindow::createActions()
 
 void MainWindow::createMenus()
 {
-    auto* fileMenu = menuBar()->addMenu(tr("&File"));
+    auto* fileMenu = menuBar()->addMenu(tr("File"));
     fileMenu->addAction(d_->openFolderAction);
     fileMenu->addAction(d_->openBundleAction);
-    d_->recentMenu = fileMenu->addMenu(tr("Open &Recent"));
+    d_->recentMenu = fileMenu->addMenu(tr("Open Recent"));
     fileMenu->addSeparator();
-    auto* quitAction = fileMenu->addAction(tr("&Quit"));
+    auto* closeAction = fileMenu->addAction(tr("Close Window"));
+    closeAction->setShortcut(QKeySequence::Close);
+    connect(closeAction, &QAction::triggered, this, &QWidget::close);
+    // Moved to the application menu on macOS.
+    fileMenu->addAction(d_->settingsAction);
+    auto* quitAction = fileMenu->addAction(tr("Quit %1").arg(appDisplayName()));
     quitAction->setShortcut(QKeySequence::Quit);
     quitAction->setMenuRole(QAction::QuitRole);
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
 
-    auto* viewMenu = menuBar()->addMenu(tr("&View"));
+    auto* viewMenu = menuBar()->addMenu(tr("View"));
+    viewMenu->addAction(d_->sidebarAction);
+    viewMenu->addAction(d_->inspectorAction);
+    viewMenu->addSeparator();
     for (QAction* action : d_->pageActions)
         viewMenu->addAction(action);
     viewMenu->addSeparator();
     viewMenu->addAction(d_->overlayAction);
+    viewMenu->addSeparator();
     viewMenu->addAction(d_->fullScreenAction);
 
-    auto* playbackMenu = menuBar()->addMenu(tr("&Playback"));
+    auto* playbackMenu = menuBar()->addMenu(tr("Playback"));
     playbackMenu->addAction(d_->playAction);
     playbackMenu->addSeparator();
     playbackMenu->addAction(d_->stepBackAction);
@@ -506,138 +542,159 @@ void MainWindow::createMenus()
     playbackMenu->addAction(d_->nextSegmentAction);
     playbackMenu->addSeparator();
     playbackMenu->addAction(d_->renderAction);
-    auto* engineMenu = playbackMenu->addMenu(tr("&Engine"));
+    auto* engineMenu = playbackMenu->addMenu(tr("Engine"));
     engineMenu->addActions(d_->engineActions->actions());
 
-    auto* helpMenu = menuBar()->addMenu(tr("&Help"));
-    auto* aboutAction = helpMenu->addAction(tr("&About abr-viz"));
+    auto* windowMenu = menuBar()->addMenu(tr("Window"));
+    auto* minimize = windowMenu->addAction(tr("Minimize"));
+    minimize->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
+    connect(minimize, &QAction::triggered, this, &QWidget::showMinimized);
+    auto* zoom = windowMenu->addAction(tr("Zoom"));
+    connect(zoom, &QAction::triggered, this, [this] {
+        isMaximized() ? showNormal() : showMaximized();
+    });
+
+    auto* helpMenu = menuBar()->addMenu(tr("Help"));
+    auto* aboutAction = helpMenu->addAction(tr("About %1").arg(appDisplayName()));
     aboutAction->setMenuRole(QAction::AboutRole);
     connect(aboutAction, &QAction::triggered, this, [this] {
         const auto engines = media::engineSupport();
         QMessageBox box(this);
-        box.setWindowTitle(tr("About abr-viz"));
+        box.setWindowTitle(tr("About %1").arg(appDisplayName()));
         box.setIconPixmap(appIcon().pixmap(96, 96));
-        box.setText(QStringLiteral("<h3>abr-viz %1</h3>").arg(versionString()));
+        box.setText(QStringLiteral("<b>%1</b>").arg(appDisplayName()));
         box.setInformativeText(
-            tr("Replays ns-3 adaptive bitrate streaming simulations: the video each simulated viewer "
-               "saw, with the stalls, the policy's decisions, the network and the logs.<br><br>"
-               "Qt %1 · %2<br>MIT licence.")
-                .arg(QString::fromLatin1(qVersion()),
+            tr("Version %1<br><br>Replays ns-3 adaptive bitrate streaming simulations: the video each "
+               "simulated viewer saw, with the stalls, the policy's decisions, the network and the "
+               "logs.<br><br>Qt %2 · %3<br>MIT licence.")
+                .arg(versionString(), QString::fromLatin1(qVersion()),
                      engines.gstreamer ? engines.gstreamerVersion : tr("without GStreamer")));
         box.exec();
     });
-    auto* aboutQt = helpMenu->addAction(tr("About &Qt"));
-    aboutQt->setMenuRole(QAction::AboutQtRole);
-    connect(aboutQt, &QAction::triggered, qApp, &QApplication::aboutQt);
+    auto* helpAction = helpMenu->addAction(tr("%1 Help").arg(appDisplayName()));
+    connect(helpAction, &QAction::triggered, this, [] {
+        QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/abr-viz#readme")));
+    });
 }
 
 void MainWindow::createToolBar()
 {
-    d_->toolBar = addToolBar(tr("Main"));
+    d_->toolBar = addToolBar(tr("Toolbar"));
     d_->toolBar->setObjectName(QStringLiteral("mainToolBar"));
     d_->toolBar->setMovable(false);
     d_->toolBar->setFloatable(false);
-    d_->toolBar->setIconSize(QSize(20, 20));
-    d_->toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    d_->toolBar->setIconSize(QSize(18, 18));
+    d_->toolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     d_->toolBar->toggleViewAction()->setVisible(false);
+    // Toolbar toggles are plain buttons (as in Finder and Mail) that flip the View menu's items.
+    auto* sidebarButton = new QAction(d_->sidebarAction->icon(), d_->sidebarAction->toolTip(), this);
+    sidebarButton->setObjectName(QStringLiteral("sidebarButton"));
+    connect(sidebarButton, &QAction::triggered, d_->sidebarAction, &QAction::toggle);
+    d_->toolBar->addAction(sidebarButton);
     d_->toolBar->addAction(d_->openFolderAction);
-    d_->toolBar->addAction(d_->openBundleAction);
-    d_->toolBar->addSeparator();
 
-    auto* runLabel = new QLabel(tr("Run "), this);
-    runLabel->setForegroundRole(QPalette::PlaceholderText);
-    d_->toolBar->addWidget(runLabel);
-    d_->runPicker = new QComboBox(this);
-    d_->runPicker->setObjectName(QStringLiteral("runPicker"));
-    d_->runPicker->setMinimumContentsLength(34);
-    d_->runPicker->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-    d_->runPicker->setPlaceholderText(tr("No folder open"));
-    d_->runPicker->setToolTip(tr("Open another run of the folder"));
-    connect(d_->runPicker, &QComboBox::activated, this, [this](int index) {
-        const QString directory = d_->runPicker->itemData(index).toString();
-        if (!directory.isEmpty())
-            openBundle(directory);
-    });
-    d_->toolBar->addWidget(d_->runPicker);
+    auto spacer = [this] {
+        auto* widget = new QWidget(this);
+        widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        return widget;
+    };
+    d_->toolBar->addWidget(spacer());
+    d_->views = new SegmentedControl(this);
+    for (int i = 1; i < kPageCount; ++i) {
+        const auto page = static_cast<Page>(i);
+        d_->views->addSegment(pageName(page),
+                              d_->pageActions[static_cast<std::size_t>(i)]->shortcut().toString(QKeySequence::NativeText));
+    }
+    connect(d_->views, &SegmentedControl::currentChanged, this,
+            [this](int index) { showPage(static_cast<Page>(index + 1)); });
+    d_->toolBar->addWidget(d_->views);
+    d_->toolBar->addWidget(spacer());
+    auto* inspectorButton = new QAction(d_->inspectorAction->icon(), d_->inspectorAction->toolTip(), this);
+    inspectorButton->setObjectName(QStringLiteral("inspectorButton"));
+    connect(inspectorButton, &QAction::triggered, d_->inspectorAction, &QAction::toggle);
+    d_->toolBar->addAction(inspectorButton);
+}
 
-    auto* spacer = new QWidget(this);
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    d_->toolBar->addWidget(spacer);
+void MainWindow::showSettings()
+{
+    if (!d_->settings) {
+        d_->settings = new SettingsDialog(d_->renderQueue->cache().directory(), this);
+        connect(d_->settings, &SettingsDialog::engineChosen, this,
+                [this](Engine engine) { setEngine(engine, true); });
+        connect(d_->settings, &SettingsDialog::overlayToggled, d_->overlayAction, &QAction::setChecked);
+    }
+    if (const auto engine = d_->player->engineKind())
+        d_->settings->setEngine(*engine);
+    d_->settings->setOverlayVisible(d_->overlayAction->isChecked());
+    d_->settings->show();
+    d_->settings->raise();
+    d_->settings->activateWindow();
+}
 
-    auto* engineLabel = new QLabel(tr("Engine "), this);
-    engineLabel->setForegroundRole(QPalette::PlaceholderText);
-    d_->toolBar->addWidget(engineLabel);
-    d_->engineBox = new QComboBox(this);
-    d_->engineBox->setObjectName(QStringLiteral("engineBox"));
-    d_->engineBox->setToolTip(tr("GStreamer plays the segment files directly; the pre-rendered "
-                                 "engine plays a video rendered once with ffmpeg"));
-    for (const Engine engine : ReplaySourceFactory::available())
-        d_->engineBox->addItem(engineName(engine), engineKey(engine));
-    connect(d_->engineBox, &QComboBox::activated, this, [this](int index) {
-        if (const auto engine = engineFromKey(d_->engineBox->itemData(index).toString()))
-            setEngine(*engine, true);
-    });
-    d_->toolBar->addWidget(d_->engineBox);
-    d_->toolBar->addAction(d_->renderAction);
+void MainWindow::updateTitle()
+{
+    const auto& run = d_->session->run();
+    if (!run) {
+        setWindowTitle(appDisplayName());
+        return;
+    }
+    const QString link = run->info.feederLinkRate
+        ? format::bitrate(static_cast<double>(*run->info.feederLinkRate))
+        : tr("uncongested");
+    setWindowTitle(QStringLiteral("%1 — %2").arg(run->video.title, link));
+}
+
+void MainWindow::updatePanes()
+{
+    const bool run = d_->session->run() != nullptr;
+    d_->inspectorPane->setVisible(run && d_->inspectorAction->isChecked() && currentPage() != Page::Library);
+    d_->transport->setVisible(run);
 }
 
 void MainWindow::applyStyle()
 {
     const QPalette pal = palette();
     const QColor text = pal.color(QPalette::WindowText);
-    const QColor selectedText = pal.color(QPalette::HighlightedText);
     d_->openFolderAction->setIcon(glyphIcon(Glyph::OpenFolder, text));
     d_->openBundleAction->setIcon(glyphIcon(Glyph::OpenBundle, text));
     d_->stepBackAction->setIcon(glyphIcon(Glyph::StepBack, text));
     d_->stepForwardAction->setIcon(glyphIcon(Glyph::StepForward, text));
     d_->previousSegmentAction->setIcon(glyphIcon(Glyph::PreviousSegment, text));
     d_->nextSegmentAction->setIcon(glyphIcon(Glyph::NextSegment, text));
-    d_->renderAction->setIcon(glyphIcon(Glyph::Render, text));
-    d_->overlayAction->setIcon(glyphIcon(Glyph::Overlay, text));
-    d_->playAction->setIcon(glyphIcon(d_->player->isRunning() ? Glyph::Pause : Glyph::Play, text));
-    for (int i = 0; i < kPageCount; ++i) {
-        const QIcon icon = glyphIcon(pageGlyph(static_cast<Page>(i)), text, selectedText);
-        d_->sidebar->item(i)->setIcon(icon);
-        d_->pageActions[static_cast<std::size_t>(i)]->setIcon(glyphIcon(pageGlyph(static_cast<Page>(i)), text));
+    for (QAction* action : findChildren<QAction*>()) {
+        if (action->objectName() == QLatin1String("sidebarButton"))
+            action->setIcon(glyphIcon(Glyph::Sidebar, text));
+        else if (action->objectName() == QLatin1String("inspectorButton"))
+            action->setIcon(glyphIcon(Glyph::Inspector, text));
     }
+    d_->playAction->setIcon(glyphIcon(d_->player->isRunning() ? Glyph::Pause : Glyph::Play, text));
 
-    // Colours come from the palette, so light and dark mode both work.
+    const bool dark = isDark(pal);
+    const QString line = dark ? QStringLiteral("#1affffff") : QStringLiteral("#1f000000");
+    const QString grouped = dark ? QStringLiteral("#0dffffff") : QStringLiteral("#09000000");
+    const QString noticeBg = dark ? QStringLiteral("#29ffd60a") : QStringLiteral("#38ffcc00");
     setStyleSheet(QStringLiteral(R"(
-        QListWidget#sidebar {
-            background: palette(window);
-            border: none;
-            border-right: 1px solid palette(mid);
-            padding-top: 10px;
-            font-size: 14px;
-        }
-        QListWidget#sidebar::item {
-            border-radius: 7px;
-            margin: 1px 10px;
-            padding-left: 6px;
-        }
-        QListWidget#sidebar::item:selected {
-            background: palette(highlight);
-            color: palette(highlighted-text);
-        }
-        QListWidget#sidebar::item:disabled { color: palette(placeholder-text); }
-        QWidget#transportBar { border-top: 1px solid palette(mid); }
-        QFrame#card {
-            background: palette(base);
-            border: 1px solid palette(mid);
-            border-radius: 10px;
-        }
-        QFrame#divider { color: palette(mid); }
-        QWidget#momentPanel { background: palette(window); }
-    )"));
+        QFrame#divider { color: %1; background: %1; border: none; max-width: 1px; max-height: 1px; }
+        QFrame#divider[frameShape="5"] { max-height: 16777215px; }
+        QFrame#divider[frameShape="4"] { max-width: 16777215px; }
+        QFrame#card { background: %2; border: none; border-radius: 10px; }
+        QLabel#notice { background: %3; border-radius: 8px; padding: 6px 12px; }
+        QSplitter::handle { background: %1; }
+    )").arg(line, grouped, noticeBg));
 }
 
 void MainWindow::changeEvent(QEvent* event)
 {
     QMainWindow::changeEvent(event);
     // Light and dark mode switches: redraw the icons in the new text colour.
+    // Setting a style sheet changes the palette too, so the restyle must not re-enter itself.
+    static bool restyling = false;
     if ((event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange)
-        && d_ && d_->sidebar)
+        && d_ && d_->sidebar && !restyling) {
+        restyling = true;
         applyStyle();
+        restyling = false;
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -654,12 +711,24 @@ void MainWindow::restoreSettings()
         restoreGeometry(settings.value(kGeometrySetting).toByteArray());
     d_->overlayAction->setChecked(settings.value(kOverlaySetting, false).toBool());
     d_->player->setOverlayVisible(d_->overlayAction->isChecked());
+    d_->sidebarAction->setChecked(settings.value(kSidebarSetting, true).toBool());
+    d_->inspectorAction->setChecked(settings.value(kInspectorSetting, true).toBool());
     const QStringList recent = settings.value(kRecentSetting).toStringList();
     d_->library->setRecentFolders(recent);
     d_->recentMenu->clear();
     for (const QString& folder : recent) {
-        QAction* action = d_->recentMenu->addAction(QDir::toNativeSeparators(folder));
+        QAction* action = d_->recentMenu->addAction(QDir(folder).dirName());
+        action->setToolTip(QDir::toNativeSeparators(folder));
         connect(action, &QAction::triggered, this, [this, folder] { openFolder(folder); });
+    }
+    if (!recent.isEmpty()) {
+        d_->recentMenu->addSeparator();
+        QAction* clear = d_->recentMenu->addAction(tr("Clear Menu"));
+        connect(clear, &QAction::triggered, this, [this] {
+            QSettings s;
+            s.remove(kRecentSetting);
+            restoreSettings();
+        });
     }
     d_->recentMenu->setEnabled(!recent.isEmpty());
 }
@@ -676,29 +745,17 @@ void MainWindow::rememberFolder(const QString& folder)
     restoreSettings();
 }
 
-void MainWindow::updateRunPicker()
+void MainWindow::updateSidebar()
 {
-    const QSignalBlocker block(d_->runPicker);
-    d_->runPicker->clear();
     LibraryModel* model = d_->library->model();
-    for (int row = 0; row < model->rowCount(); ++row) {
-        const BundleSummaryPtr bundle = model->bundleAt(row);
-        const QString link = bundle->linkRate ? format::bitrate(static_cast<double>(*bundle->linkRate))
-                                              : tr("uncongested");
-        d_->runPicker->addItem(QStringLiteral("%1 · %2").arg(bundle->videoTitle, link), bundle->directory);
-    }
-    const auto& run = d_->session->run();
-    if (run) {
-        int index = d_->runPicker->findData(run->info.bundleDirectory);
-        if (index < 0) {
-            d_->runPicker->addItem(run->info.runId, run->info.bundleDirectory);
-            index = d_->runPicker->count() - 1;
-        }
-        d_->runPicker->setCurrentIndex(index);
-    } else {
-        d_->runPicker->setCurrentIndex(-1);
-    }
-    d_->runPicker->setEnabled(d_->runPicker->count() > 0);
+    QList<BundleSummaryPtr> runs;
+    for (int row = 0; row < model->rowCount(); ++row)
+        runs.append(model->bundleAt(row));
+    d_->sidebar->setRuns(runs);
+    if (currentPage() == Page::Library)
+        d_->sidebar->selectAllRuns();
+    else if (const auto& run = d_->session->run())
+        d_->sidebar->selectRun(run->info.bundleDirectory);
 }
 
 void MainWindow::stepReplay(double seconds)
@@ -736,14 +793,14 @@ void MainWindow::stepSegment(int direction)
 
 void MainWindow::chooseFolder()
 {
-    const QString folder = QFileDialog::getExistingDirectory(this, tr("Open Folder of Bundles"));
+    const QString folder = QFileDialog::getExistingDirectory(this, tr("Open a Folder of Runs"));
     if (!folder.isEmpty())
         openFolder(folder);
 }
 
 void MainWindow::chooseBundle()
 {
-    const QString bundle = QFileDialog::getExistingDirectory(this, tr("Open Bundle"));
+    const QString bundle = QFileDialog::getExistingDirectory(this, tr("Open a Run"));
     if (!bundle.isEmpty())
         openPath(bundle);
 }
@@ -774,8 +831,6 @@ void MainWindow::openBundle(const QString& directory)
     d_->loadingBundle = QDir(directory).absolutePath();
     auto future = loadBundle(d_->loadingBundle);
     d_->load.reset(future);
-    d_->progress->setRange(0, 0);
-    d_->progress->show();
     d_->loadWatcher->setFuture(future);
     updateStatus();
 }
@@ -793,7 +848,7 @@ void MainWindow::scanFinished()
     if (d_->session->run())
         d_->library->setOpenBundle(d_->session->run()->info.bundleDirectory);
     rememberFolder(d_->scanningFolder);
-    updateRunPicker();
+    updateSidebar();
     updateStatus();
     emit folderScanned(d_->scanningFolder);
 }
@@ -802,7 +857,6 @@ void MainWindow::loadFinished()
 {
     const auto future = d_->loadWatcher->future();
     std::ignore = d_->load.release();
-    d_->progress->hide();
     if (future.isCanceled() || future.resultCount() == 0) {
         updateStatus();
         return;
@@ -818,7 +872,7 @@ void MainWindow::loadFinished()
     }
     updateStatus();
     if (!ok)
-        statusBar()->showMessage(tr("Could not open %1").arg(QDir(d_->loadingBundle).dirName()));
+        showNotice(tr("Could not open %1.").arg(QDir(d_->loadingBundle).dirName()), 10000);
     emit bundleOpened(d_->loadingBundle, ok);
 }
 
@@ -851,34 +905,30 @@ void MainWindow::updateActions()
     const bool ready = engine && engine->isReady() && run;
     const bool running = d_->player->isRunning();
     d_->playAction->setEnabled(ready);
-    d_->playAction->setText(running ? tr("&Pause") : tr("&Play"));
+    d_->playAction->setText(running ? tr("Pause") : tr("Play"));
     d_->playAction->setToolTip(running ? tr("Pause (Space)") : tr("Play (Space)"));
     d_->playAction->setIcon(glyphIcon(running ? Glyph::Pause : Glyph::Play,
                                       palette().color(QPalette::WindowText)));
     for (QAction* action : {d_->stepBackAction, d_->stepForwardAction, d_->previousSegmentAction,
                             d_->nextSegmentAction})
         action->setEnabled(run);
-    const bool canRender = engine && run && !engine->isReady()
-        && d_->player->engineKind() == Engine::Prerendered
-        && engine->state() != ReplaySource::State::Preparing;
-    d_->renderAction->setEnabled(canRender);
-    d_->renderAction->setVisible(d_->player->engineKind() == Engine::Prerendered);
-    d_->transport->setVisible(run);
+    d_->renderAction->setEnabled(engine && run && !engine->isReady()
+                                 && d_->player->engineKind() == Engine::Prerendered
+                                 && engine->state() != ReplaySource::State::Preparing);
     for (int i = 1; i < kPageCount; ++i) {
-        QListWidgetItem* item = d_->sidebar->item(i);
-        item->setFlags(run ? item->flags() | Qt::ItemIsEnabled : item->flags() & ~Qt::ItemIsEnabled);
         d_->pageActions[static_cast<std::size_t>(i)]->setEnabled(run);
+        d_->views->setSegmentEnabled(i - 1, run);
     }
 }
 
 void MainWindow::updateStatus()
 {
     if (d_->load.isRunning())
-        statusBar()->showMessage(tr("Loading %1 ...").arg(QDir(d_->loadingBundle).dirName()));
+        showNotice(tr("Opening %1 ...").arg(QDir(d_->loadingBundle).dirName()), 0);
     else if (d_->scan.isRunning())
-        statusBar()->showMessage(tr("Reading %1 ...").arg(QDir(d_->scanningFolder).dirName()));
-    else
-        statusBar()->clearMessage();
+        showNotice(tr("Reading %1 ...").arg(QDir(d_->scanningFolder).dirName()), 0);
+    else if (d_->noticeTimer && !d_->noticeTimer->isActive())
+        showNotice(QString());
 }
 
 } // namespace abrviz

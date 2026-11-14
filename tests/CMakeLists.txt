@@ -76,7 +76,7 @@ endif()
 
 abrviz_add_test(tst_replay_source
     SOURCES tst_replay_source.cpp
-    LIBS abrviz_media)
+    LIBS abrviz_media abrviz_gui)
 if(APPLE)
     # Qt's AVFoundation backend delivers media through the Cocoa run loop, which the offscreen
     # platform does not run.

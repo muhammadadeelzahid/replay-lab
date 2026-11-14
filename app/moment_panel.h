@@ -11,8 +11,8 @@ class ReplayPlayer;
 class Session;
 
 /// Beside the replay: what the simulated viewer saw at the cursor (segment, rung, resolution,
-/// bitrate, buffer, stall), the policy's last decision before it (chosen rung, estimate, RTT,
-/// whether the guard overrode the LLM), and the engine and times. Fixed width, so its changing
+/// bitrate, buffer, stall), the policy's last decision before it, the network as last
+/// measured, and the engine and times. Fixed width, so its changing
 /// values never relayout the window.
 class MomentPanel final : public QWidget {
     Q_OBJECT
@@ -39,7 +39,6 @@ private:
     QLabel* chosen_;
     QLabel* estimate_;
     QLabel* rtt_;
-    QLabel* guard_;
     QLabel* engine_;
     QLabel* simTime_;
     QLabel* replayTime_;

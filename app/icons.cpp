@@ -52,6 +52,20 @@ QString glyphBody(Glyph glyph)
     case Glyph::Engine:
         return QStringLiteral(R"(<circle cx="12" cy="12" r="3"/>
             <path d="M12 3.5v2.5M12 18v2.5M3.5 12h2.5M18 12h2.5M6 6l1.8 1.8M16.2 16.2L18 18M6 18l1.8-1.8M16.2 7.8L18 6"/>)");
+    case Glyph::Film:
+        return QStringLiteral(R"(<rect x="3.5" y="5" width="17" height="14" rx="2.5"/>
+            <path d="M10 9.2v5.6l4.6-2.8z" fill="C"/>)");
+    case Glyph::Inspector:
+        return QStringLiteral(R"(<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M14.5 4.5v15"/>
+            <path d="M16.8 8.5h1.7M16.8 11h1.7M16.8 13.5h1.7"/>)");
+    case Glyph::Sidebar:
+        return QStringLiteral(R"(<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M9.5 4.5v15"/>
+            <path d="M5.5 8.5h1.7M5.5 11h1.7M5.5 13.5h1.7"/>)");
+    case Glyph::Settings:
+        return QStringLiteral(R"(<circle cx="12" cy="12" r="3.2"/>
+            <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.9 1.9M16.6 16.6l1.9 1.9M5.5 18.5l1.9-1.9M16.6 7.4l1.9-1.9"/>)");
+    case Glyph::Search:
+        return QStringLiteral(R"(<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>)");
     case Glyph::Overlay:
         return QStringLiteral(R"(<rect x="3" y="4.5" width="18" height="15" rx="2"/>
             <rect x="5.5" y="7" width="7.5" height="4" rx="0.8" fill="C"/>)");
@@ -120,7 +134,7 @@ QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected)
 
 QIcon appIcon()
 {
-    return QIcon(QStringLiteral(":/abrviz/abrviz.svg"));
+    return QIcon(QStringLiteral(":/abrviz/app-icon.svg"));
 }
 
 } // namespace abrviz

@@ -14,8 +14,9 @@ class ReplayPlayer;
 class SegmentTimeline;
 class Session;
 
-/// The strip under every page while a run is open: playback buttons, the times at the cursor,
-/// the replay state, and the segment timeline, which doubles as the scrubber.
+/// The strip under every view while a run is open, styled after QuickTime Player: elapsed
+/// replay time, borderless playback buttons, the state and remaining time, and the segment
+/// timeline, which doubles as the scrubber.
 ///
 /// The buttons show the window's actions (so the menu, the shortcuts and the buttons are the
 /// same commands). The labels have fixed widths: they change many times a second while the
@@ -43,8 +44,9 @@ private:
 
     Session* session_;      // not owned
     ReplayPlayer* player_;  // not owned
-    QLabel* time_;
-    QLabel* state_;
+    QLabel* time_;       // elapsed replay time
+    QLabel* remaining_;  // remaining replay time
+    QLabel* state_;      // state and simulation time
 };
 
 } // namespace abrviz

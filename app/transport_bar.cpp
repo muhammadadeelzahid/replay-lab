@@ -7,15 +7,24 @@
 #include "time_cursor.h"
 
 #include <QAction>
-#include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace abrviz {
 
 namespace {
+
+/// Replay time as QuickTime shows it, with tenths: 1:05.3.
+QString clockText(double seconds)
+{
+    seconds = std::max(0.0, seconds);
+    const int minutes = static_cast<int>(seconds / 60.0);
+    return QStringLiteral("%1:%2").arg(minutes).arg(seconds - minutes * 60.0, 4, 'f', 1, QLatin1Char('0'));
+}
 
 QString stateName(ReplaySource::State state)
 {
@@ -31,17 +40,6 @@ QString stateName(ReplaySource::State state)
     return {};
 }
 
-QColor stateColor(ReplaySource::State state)
-{
-    switch (state) {
-    case ReplaySource::State::Playing: return {0x2e, 0x9e, 0x5b};
-    case ReplaySource::State::Stalled: return {0xd0, 0x45, 0x3a};
-    case ReplaySource::State::Error: return {0xd0, 0x45, 0x3a};
-    case ReplaySource::State::Preparing: return {0xd8, 0x8c, 0x1a};
-    default: return {0x7a, 0x80, 0x8c};
-    }
-}
-
 } // namespace
 
 TransportBar::TransportBar(Session* session, ReplayPlayer* player, SegmentTimeline* timeline,
@@ -50,46 +48,69 @@ TransportBar::TransportBar(Session* session, ReplayPlayer* player, SegmentTimeli
     , session_(session)
     , player_(player)
     , time_(new QLabel(this))
+    , remaining_(new QLabel(this))
     , state_(new QLabel(this))
 {
     setObjectName(QStringLiteral("transportBar"));
+    setAttribute(Qt::WA_StyledBackground);
 
     auto button = [this](QAction* action, int size) {
         auto* b = new QToolButton(this);
+        b->setObjectName(QStringLiteral("transportButton"));
         b->setDefaultAction(action);
-        b->setAutoRaise(true);
         b->setIconSize(QSize(size, size));
         b->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        b->setFocusPolicy(Qt::NoFocus);
         return b;
     };
+
+    // Digits that do not move as they change.
+    QFont digits = font();
+    digits.setFeature(QFont::Tag("tnum"), 1);
+    digits = format::scaled(digits, 1.05);
+    for (QLabel* label : {time_, remaining_}) {
+        label->setFont(digits);
+        label->setFixedWidth(QFontMetrics(digits).horizontalAdvance(QStringLiteral("-00:00.0")) + 8);
+    }
+    time_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    remaining_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    remaining_->setForegroundRole(QPalette::PlaceholderText);
+    state_->setForegroundRole(QPalette::PlaceholderText);
+    state_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    state_->setFixedWidth(QFontMetrics(font()).horizontalAdvance(QStringLiteral("Preparing · sim 000.00 s")) + 8);
+
     auto* controls = new QHBoxLayout();
-    controls->setSpacing(2);
-    controls->addWidget(button(actions.previousSegment, 18));
+    controls->setSpacing(6);
+    controls->addWidget(time_);
+    controls->addStretch(1);
+    controls->addWidget(button(actions.previousSegment, 16));
     controls->addWidget(button(actions.stepBack, 18));
     QToolButton* play = button(actions.play, 26);
     play->setObjectName(QStringLiteral("playButton"));
     controls->addWidget(play);
     controls->addWidget(button(actions.stepForward, 18));
-    controls->addWidget(button(actions.nextSegment, 18));
-    controls->addSpacing(12);
-
-    QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    time_->setFont(mono);
-    time_->setFixedWidth(QFontMetrics(mono).horizontalAdvance(QString(46, QLatin1Char('0'))));
-    controls->addWidget(time_);
+    controls->addWidget(button(actions.nextSegment, 16));
     controls->addStretch(1);
-    QFont bold = state_->font();
-    bold.setBold(true);
-    state_->setFont(bold);
-    state_->setAlignment(Qt::AlignCenter);
-    state_->setFixedWidth(QFontMetrics(bold).horizontalAdvance(QStringLiteral("Preparing")) + 24);
     controls->addWidget(state_);
+    controls->addWidget(remaining_);
 
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(8, 4, 8, 6);
+    layout->setContentsMargins(14, 6, 14, 8);
     layout->setSpacing(2);
     layout->addLayout(controls);
     layout->addWidget(timeline);
+
+    setStyleSheet(QStringLiteral(R"(
+        QToolButton#transportButton, QToolButton#playButton {
+            border: none; background: transparent; padding: 4px; border-radius: 6px;
+        }
+        QToolButton#transportButton:hover, QToolButton#playButton:hover {
+            background: #2e808080;
+        }
+        QToolButton#transportButton:pressed, QToolButton#playButton:pressed {
+            background: #52808080;
+        }
+    )"));
 
     connect(session_->cursor(), &TimeCursor::timeChanged, this, &TransportBar::update);
     connect(session_, &Session::runChanged, this, &TransportBar::update);
@@ -100,7 +121,7 @@ TransportBar::TransportBar(Session* session, ReplayPlayer* player, SegmentTimeli
 
 QString TransportBar::timeText() const
 {
-    return time_->text();
+    return time_->text() + QLatin1Char(' ') + remaining_->text();
 }
 
 QString TransportBar::stateText() const
@@ -112,21 +133,22 @@ void TransportBar::update()
 {
     if (!session_->run()) {
         time_->clear();
+        remaining_->clear();
         state_->clear();
         return;
     }
     const double sim = session_->cursor()->time();
     const PlaybackClock& clock = session_->clock();
-    time_->setText(tr("sim %1   replay %2 / %3")
-                       .arg(format::seconds(sim).rightJustified(9),
-                            format::seconds(clock.simToReplay(sim)).rightJustified(9),
-                            format::seconds(clock.replayDuration())));
+    const double replay = clock.simToReplay(sim);
+    time_->setText(clockText(replay));
+    remaining_->setText(QStringLiteral("-") + clockText(clock.replayDuration() - replay));
     const ReplaySource* engine = player_->engine();
     const ReplaySource::State state = engine ? engine->state() : ReplaySource::State::Idle;
-    state_->setText(stateName(state));
-    const QColor color = stateColor(state);
-    state_->setStyleSheet(QStringLiteral("QLabel { color: white; background: %1; border-radius: 9px; padding: 2px 8px; }")
-                              .arg(color.name()));
+    const QString text = tr("%1 · sim %2").arg(stateName(state), format::seconds(sim));
+    if (state == ReplaySource::State::Stalled || state == ReplaySource::State::Error)
+        state_->setText(QStringLiteral("<span style='color:#ff453a'>%1</span>").arg(text.toHtmlEscaped()));
+    else
+        state_->setText(text);
 }
 
 } // namespace abrviz

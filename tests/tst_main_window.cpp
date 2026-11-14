@@ -1,9 +1,11 @@
 #include "test_paths.h"
 
 #include "library_view.h"
+#include "branding.h"
 #include "main_window.h"
 #include "replay_player.h"
 #include "moment_panel.h"
+#include "source_list.h"
 #include "report_view.h"
 #include "transport_bar.h"
 #include "segment_timeline.h"
@@ -13,6 +15,7 @@
 
 #include "abrviz/core/version.h"
 
+#include <QDir>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
@@ -67,10 +70,11 @@ private slots:
         MainWindow window;
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
-        QCOMPARE(window.windowTitle(), QStringLiteral("abr-viz"));
-
+        QCOMPARE(window.windowTitle(), appDisplayName());
+        // No status bar, as in macOS apps; the version is on the welcome screen and in About.
+        QVERIFY(window.findChildren<QStatusBar*>().isEmpty());
         bool found = false;
-        for (QLabel* label : window.statusBar()->findChildren<QLabel*>())
+        for (QLabel* label : window.library()->findChildren<QLabel*>())
             found = found || label->text().contains(versionString());
         QVERIFY(found);
     }
@@ -79,23 +83,25 @@ private slots:
     {
         MainWindow window;
         const auto menus = window.menuBar()->actions();
-        QCOMPARE(menus.size(), 4);
-        QCOMPARE(menus[0]->text(), QStringLiteral("&File"));
+        QCOMPARE(menus.size(), 5);
+        QCOMPARE(menus[0]->text(), QStringLiteral("File"));
         QCOMPARE(menuTexts(menus[0]->menu()),
-                 (QStringList{QStringLiteral("Open &Folder..."), QStringLiteral("Open &Bundle..."),
-                              QStringLiteral("Open &Recent"), QStringLiteral("&Quit")}));
-        QCOMPARE(menus[1]->text(), QStringLiteral("&View"));
+                 (QStringList{QStringLiteral("Open Folder..."), QStringLiteral("Open Run..."),
+                              QStringLiteral("Open Recent"), QStringLiteral("Close Window"),
+                              QStringLiteral("Settings..."), QStringLiteral("Quit Stream Inspector")}));
+        QCOMPARE(menus[1]->text(), QStringLiteral("View"));
         QCOMPARE(menuTexts(menus[1]->menu()),
-                 (QStringList{QStringLiteral("Library"), QStringLiteral("Replay"),
+                 (QStringList{QStringLiteral("Show Sidebar"), QStringLiteral("Show Inspector"),
+                              QStringLiteral("All Runs"), QStringLiteral("Replay"),
                               QStringLiteral("Analysis"), QStringLiteral("Logs"),
-                              QStringLiteral("Report"), QStringLiteral("Show Video &Overlay"),
-                              QStringLiteral("Enter &Full Screen")}));
-        QCOMPARE(menus[2]->text(), QStringLiteral("&Playback"));
+                              QStringLiteral("Report"), QStringLiteral("Show Video Overlay"),
+                              QStringLiteral("Enter Full Screen")}));
+        QCOMPARE(menus[2]->text(), QStringLiteral("Playback"));
         QCOMPARE(menuTexts(menus[2]->menu()),
-                 (QStringList{QStringLiteral("&Play"), QStringLiteral("&Back 5 Seconds"),
-                              QStringLiteral("&Forward 5 Seconds"), QStringLiteral("P&revious Segment"),
-                              QStringLiteral("&Next Segment"), QStringLiteral("&Render Video"),
-                              QStringLiteral("&Engine")}));
+                 (QStringList{QStringLiteral("Play"), QStringLiteral("Back 5 Seconds"),
+                              QStringLiteral("Forward 5 Seconds"), QStringLiteral("Previous Segment"),
+                              QStringLiteral("Next Segment"), QStringLiteral("Render Video"),
+                              QStringLiteral("Engine")}));
         QMenu* engines = menus[2]->menu()->actions().last()->menu();
         QVERIFY(engines);
         QCOMPARE(engines->actions().size(), 2);
@@ -103,7 +109,27 @@ private slots:
         for (QAction* action : engines->actions())
             checked += action->isChecked() ? 1 : 0;
         QCOMPARE(checked, 1);
-        QCOMPARE(menus[3]->text(), QStringLiteral("&Help"));
+        QCOMPARE(menus[3]->text(), QStringLiteral("Window"));
+        QCOMPARE(menus[4]->text(), QStringLiteral("Help"));
+    }
+
+    void sidebarListsTheRuns()
+    {
+        if (!test::haveFullBundles())
+            QSKIP("viewer_bundles/ not present");
+        MainWindow window;
+        QSignalSpy scanned(&window, &MainWindow::folderScanned);
+        window.openFolder(test::bundlesPath());
+        QVERIFY(waitFor(scanned));
+        QCOMPARE(window.sidebar()->runCount(), 14);
+        const QString bbb = QDir(test::bundlesPath()).filePath(QStringLiteral("big_buck_bunny_llm_36Mbps_run_2"));
+        QCOMPARE(window.sidebar()->runLabel(bbb), QStringLiteral("Big Buck Bunny (4K) / 36 Mbps"));
+        // Selecting a run in the sidebar opens it and shows its replay.
+        QSignalSpy opened(&window, &MainWindow::bundleOpened);
+        emit window.sidebar()->runSelected(bbb);
+        QVERIFY(waitFor(opened));
+        QCOMPARE(window.currentPage(), MainWindow::Page::Replay);
+        QVERIFY(window.windowTitle().startsWith(QStringLiteral("Big Buck Bunny (4K)")));
     }
 
     void pagesFollowTheRun()
@@ -147,7 +173,7 @@ private slots:
         QVERIFY(std::ranges::find(starts, next) != starts.end());
         window.stepSegment(-1);
         QVERIFY(session->cursor()->time() < next);
-        QVERIFY(window.transport()->timeText().contains(QStringLiteral("replay")));
+        QVERIFY(window.transport()->timeText().contains(QLatin1Char(':')));
         QVERIFY(!window.moment()->value(QStringLiteral("Segment")).isEmpty());
     }
 
@@ -195,7 +221,7 @@ private slots:
         QTRY_COMPARE(fellBack.size(), 1);
         QVERIFY(fellBack.first().first().toString().contains(QStringLiteral("missing")));
         QCOMPARE(window.player()->engineKind(), std::optional<Engine>(Engine::Prerendered));
-        QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("pre-rendered")));
+        QVERIFY(window.noticeText().contains(QStringLiteral("pre-rendered")));
     }
 #endif
 
@@ -245,7 +271,7 @@ private slots:
         const auto& run = window.session()->run();
         QVERIFY(run);
         QCOMPARE(run->info.runId, QStringLiteral("chef_cooking_llm_18Mbps_run_3"));
-        QVERIFY(window.windowTitle().startsWith(run->info.runId));
+        QVERIFY(window.windowTitle().startsWith(run->video.title));
         QVERIFY(window.summary()->toPlainText().contains(run->info.runId));
         QCOMPARE(window.session()->cursor()->time(), run->playbackStart);
 
