@@ -211,50 +211,75 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     const double sky = top + kLabelHeight + (card ? 18.0 : 0.0) + 4.0 + kNodeRadius;
     const double ground = bottom - kLabelHeight - 4.0 - kNodeRadius;
 
+    // The static diagram is a winter scene at dusk, the same in light and dark mode: names are
+    // white in the sky and navy on the snow.
+    const QColor night(0x17, 0x3c, 0x80);
+    const QColor navy(0x15, 0x2d, 0x57);
+    const QColor slate(0x4a, 0x62, 0x88);
+    const QColor snowLine(0x2f, 0x5f, 0xa8);
+    const double horizon = ground - kNodeRadius - 10.0;
     if (card) {
-        // A card with a night sky over the Earth's horizon; the satellite is in the sky, the
-        // other nodes stand on the ground.
         const QRectF frame = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
         QPainterPath outline;
         outline.addRoundedRect(frame, kCardRadius, kCardRadius);
-        QLinearGradient skyFill(0, 0, 0, height());
-        skyFill.setColorAt(0, dark ? QColor(0x17, 0x2a, 0x52) : QColor(0xe6, 0xee, 0xfb));
-        skyFill.setColorAt(1, dark ? QColor(0x10, 0x14, 0x22) : QColor(0xf6, 0xf7, 0xfa));
-        painter.fillPath(outline, skyFill);
         painter.save();
         painter.setClipPath(outline);
-        // Stars, at fixed places in the upper half.
         painter.setPen(Qt::NoPen);
-        QColor star = dark ? QColor(255, 255, 255) : accent;
-        const std::array<std::array<double, 3>, 9> stars{{{0.06, 0.30, 1.6}, {0.14, 0.62, 1.2},
-            {0.22, 0.50, 1.4}, {0.45, 0.46, 1.1}, {0.58, 0.18, 1.6}, {0.66, 0.40, 1.2},
-            {0.79, 0.27, 1.5}, {0.88, 0.55, 1.1}, {0.95, 0.20, 1.3}}};
-        for (const auto& [x, y, r] : stars) {
-            star.setAlphaF(dark ? 0.45F : 0.25F);
-            painter.setBrush(star);
-            painter.drawEllipse(QPointF(x * w, top + y * (ground - top)), r, r);
-        }
-        // The horizon: a shallow arc of a large circle, its top just under the ground nodes.
-        const double radius = w * 12.0;
-        const QPointF earth(w / 2.0, ground + kNodeRadius + 1.0 + radius);
-        QRadialGradient land(earth, radius);
-        QColor glow = accent;
-        glow.setAlphaF(dark ? 0.16F : 0.10F);
-        QColor deep = accent;
-        deep.setAlphaF(0.0F);
-        land.setColorAt(1.0, glow);
-        land.setColorAt(1.0 - 60.0 / radius, deep);
-        painter.setBrush(land);
-        painter.drawEllipse(earth, radius, radius);
-        QColor rim = accent;
-        rim.setAlphaF(dark ? 0.45F : 0.35F);
-        painter.setPen(QPen(rim, 1.4));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawEllipse(earth, radius, radius);
+        // Sky: deep blue overhead, paler towards the horizon, with a trace of pink at it.
+        QLinearGradient dusk(0, 0, 0, horizon);
+        dusk.setColorAt(0.0, night);
+        dusk.setColorAt(0.55, QColor(0x2f, 0x66, 0xb3));
+        dusk.setColorAt(0.88, QColor(0x86, 0xab, 0xda));
+        dusk.setColorAt(1.0, QColor(0xd8, 0xcf, 0xe2));
+        painter.fillRect(QRectF(0, 0, w, horizon + 2.0), dusk);
+        // A half moon and a few early stars.
+        const QPointF moon(w * 0.60, top + 6.0);
+        painter.setBrush(QColor(0xf7, 0xf4, 0xe8));
+        painter.drawPie(QRectF(moon.x() - 6.0, moon.y() - 6.0, 12.0, 12.0), 90 * 16, 180 * 16);
+        painter.setBrush(QColor(255, 255, 255, 110));
+        for (const auto& [x, y] : std::array<std::array<double, 2>, 4>{
+                 {{0.08, 0.30}, {0.47, 0.12}, {0.83, 0.20}, {0.94, 0.42}}})
+            painter.drawEllipse(QPointF(x * w, top + y * (horizon - top)), 1.2, 1.2);
+        // Distant hills on the left, in the haze.
+        QPainterPath hills(QPointF(0, horizon + 2.0));
+        hills.lineTo(0, horizon - 12.0);
+        hills.quadTo(w * 0.07, horizon - 22.0, w * 0.15, horizon - 10.0);
+        hills.quadTo(w * 0.21, horizon - 4.0, w * 0.30, horizon + 2.0);
+        hills.closeSubpath();
+        painter.setBrush(QColor(0x8c, 0xa6, 0xcb, 200));
+        painter.drawPath(hills);
+        // Snow: a pale plain, and a drift rising towards the right edge.
+        QPainterPath plain(QPointF(0, horizon));
+        plain.cubicTo(w * 0.3, horizon - 3.0, w * 0.6, horizon + 4.0, w, horizon - 2.0);
+        plain.lineTo(w, height());
+        plain.lineTo(0, height());
+        plain.closeSubpath();
+        QLinearGradient snow(0, horizon, 0, height());
+        snow.setColorAt(0.0, QColor(0xd3, 0xdf, 0xf0));
+        snow.setColorAt(1.0, QColor(0xf2, 0xf6, 0xfc));
+        painter.setBrush(snow);
+        painter.drawPath(plain);
+        QPainterPath drift(QPointF(w * 0.45, height()));
+        drift.cubicTo(w * 0.66, height() - 14.0, w * 0.84, horizon + 38.0, w, horizon + 20.0);
+        drift.lineTo(w, height());
+        drift.closeSubpath();
+        painter.setBrush(QColor(255, 255, 255, 150));
+        painter.drawPath(drift);
+        // A ground-station dish beside the video server, turned up towards the satellite.
+        const QPointF foot(80.0 + 52.0, ground + 6.0);
+        painter.setPen(QPen(QColor(0x5d, 0x73, 0x96), 2.0, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(foot, foot + QPointF(0, -14.0));
+        painter.drawLine(foot + QPointF(-7.0, 0), foot + QPointF(7.0, 0));
+        painter.save();
+        painter.translate(foot + QPointF(0, -20.0));
+        painter.rotate(-35.0);
+        painter.setPen(QPen(QColor(0x6f, 0x86, 0xa8), 1.4));
+        painter.setBrush(QColor(0xee, 0xf3, 0xfa));
+        painter.drawChord(QRectF(-15.0, -9.0, 30.0, 18.0), 180 * 16, 180 * 16);
+        painter.drawLine(QPointF(0, 0), QPointF(0, -10.0));
         painter.restore();
-        QColor border = text;
-        border.setAlphaF(0.10F);
-        painter.setPen(QPen(border, 1.0));
+        painter.restore();
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1.0));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(outline);
     } else {
@@ -295,36 +320,50 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     access.lineTo(nodes[3].centre);
 
     const bool active = run_ && downloading_;
-    QColor drift = accent;  // the static diagram's slowly flowing dashes
-    drift.setAlphaF(0.75F);
     for (std::size_t i = 0; i < links.size(); ++i) {
         const QPainterPath& path = i == 2 ? access : links[i].path;
-        QPen pen(active ? accent : (card ? drift : idle), active ? 2.6 : (card ? 2.0 : 1.6));
+        QPen pen(active ? accent : idle, active ? 2.6 : (card ? 2.0 : 1.6));
         pen.setCapStyle(Qt::RoundCap);
         if (active || card) {
             pen.setDashPattern({3.0, 3.0});
             pen.setDashOffset(-phase_);  // moves from the server towards the viewer
         }
-        painter.setPen(pen);
         painter.setBrush(Qt::NoBrush);
-        painter.drawPath(path);
+        if (card) {
+            // The static diagram's dashes flow slowly: white through the sky, blue over the snow.
+            for (const bool above : {true, false}) {
+                painter.save();
+                painter.setClipRect(above ? QRectF(0, 0, w, horizon) : QRectF(0, horizon, w, height()));
+                pen.setColor(above ? QColor(255, 255, 255, 225) : snowLine);
+                painter.setPen(pen);
+                painter.drawPath(path);
+                painter.restore();
+            }
+        } else {
+            painter.setPen(pen);
+            painter.drawPath(path);
+        }
 
         // The link's name at its middle: under the two satellite links (inside the arc, where
-        // there is room), over the access link.
+        // there is room) or over them.
         const QPointF middle = path.pointAtPercent(0.5);
         painter.setFont(small);
         const QFontMetricsF metrics(small);
         const double textWidth = metrics.horizontalAdvance(links[i].label) + 12.0;
         QRectF box(middle.x() - textWidth / 2.0, middle.y() + 8.0, textWidth, metrics.height() + 4.0);
-        if (i == 2)
+        // Over the access link; in the static diagram, over the satellite links too, in the sky.
+        if (i == 2 || card)
             box.moveTop(middle.y() - metrics.height() - 12.0);
         painter.setPen(Qt::NoPen);
         QColor chip = pal.color(QPalette::Window);
-        if (card)
-            chip.setAlphaF(0.85F);
+        QColor chipText = active ? accent : secondary;
+        if (card) {  // frosted glass: clear over the sky, white over the snow
+            chip = i == 2 ? QColor(255, 255, 255, 190) : QColor(255, 255, 255, 46);
+            chipText = i == 2 ? navy : QColor(255, 255, 255);
+        }
         painter.setBrush(chip);
         painter.drawRoundedRect(box, 5, 5);
-        painter.setPen(active ? accent : secondary);
+        painter.setPen(chipText);
         painter.drawText(box, Qt::AlignCenter, links[i].label);
     }
 
@@ -332,18 +371,25 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const Node& node = nodes[i];
         const bool viewer = i == 3;
+        const bool inSky = i == 1;
         QColor fill = viewer && stalled_ ? red : accent;
         fill.setAlphaF(dark ? 0.22F : 0.14F);
         QColor ring = viewer && stalled_ ? red : (run_ ? accent : idle);
+        QColor ink = viewer && stalled_ ? red : text;
+        if (card) {  // frosted discs; white in the sky, navy on the snow
+            fill = inSky ? QColor(255, 255, 255, 40) : QColor(255, 255, 255, 215);
+            ring = inSky ? QColor(255, 255, 255, 200) : snowLine;
+            ink = inSky ? QColor(255, 255, 255) : navy;
+        }
         painter.setPen(QPen(ring, 1.6));
         painter.setBrush(fill);
         painter.drawEllipse(node.centre, kNodeRadius, kNodeRadius);
-        const QIcon icon = glyphIcon(node.glyph, viewer && stalled_ ? red : text);
+        const QIcon icon = glyphIcon(node.glyph, card ? ink : (viewer && stalled_ ? red : text));
         const QRectF iconRect(node.centre.x() - 12, node.centre.y() - 12, 24, 24);
         icon.paint(&painter, iconRect.toRect());
 
         painter.setFont(bold);
-        painter.setPen(viewer && stalled_ ? red : text);
+        painter.setPen(ink);
         const double labelTop = i == 1 ? node.centre.y() - kNodeRadius - 4.0 - kLabelHeight
                                              - (card ? 18.0 : 0.0)
                                        : node.centre.y() + kNodeRadius + 4.0;
@@ -360,7 +406,7 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         heading.setLetterSpacing(QFont::PercentageSpacing, 108);
         heading.setCapitalization(QFont::AllUppercase);
         painter.setFont(heading);
-        painter.setPen(secondary);
+        painter.setPen(QColor(255, 255, 255, 190));
         painter.drawText(QRectF(kPadding + 6.0, kPadding, w - 2.0 * kPadding, kHeaderHeight),
                          Qt::AlignLeft | Qt::AlignVCenter, tr("How every run was streamed"));
         painter.setFont(small);
@@ -383,6 +429,7 @@ void NetworkPathView::paintEvent(QPaintEvent*)
                 noteRect.moveRight(std::min(noteRect.right(), w - kPadding));
             if (i == 0)
                 noteRect.moveLeft(std::max(noteRect.left(), kPadding));
+            painter.setPen(i == 1 ? QColor(0xdc, 0xe8, 0xf8) : slate);
             painter.drawText(noteRect, static_cast<int>((align | Qt::AlignVCenter).toInt()), notes[i]);
         }
     }
