@@ -8,6 +8,11 @@ function(abrviz_add_test name)
         ABRVIZ_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
         ABRVIZ_BUNDLES_DIR="${PROJECT_SOURCE_DIR}/viewer_bundles")
     abrviz_set_warnings(${name})
+    # Qt's QTRY_* macros narrow a std::chrono count to int inside their expansion, which GCC
+    # reports in our files with -Wconversion; only the tests use them.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(${name} PRIVATE -Wno-conversion)
+    endif()
     add_test(NAME ${name} COMMAND ${name})
     # Rendered videos go to the build folder, never to the user's cache.
     set_tests_properties(${name} PROPERTIES TIMEOUT 300 ENVIRONMENT

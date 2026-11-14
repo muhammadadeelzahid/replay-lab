@@ -20,11 +20,10 @@ function(abrviz_set_warnings target)
         -Wsign-conversion
         -Wnull-dereference
         -Wimplicit-fallthrough)
-    # GCC warns about aggregate initialisers that leave out members even when those members
-    # have default initialisers, which is how the model structs are meant to be filled.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_options(${target} PRIVATE -Wno-missing-field-initializers)
-    endif()
+    # GCC and recent Clang warn about aggregate initialisers that leave out members even when
+    # those members have default initialisers, which is how the model structs are meant to be
+    # filled.
+    target_compile_options(${target} PRIVATE -Wno-missing-field-initializers)
     if(ABR_WARNINGS_AS_ERRORS)
         target_compile_options(${target} PRIVATE -Werror)
     endif()
