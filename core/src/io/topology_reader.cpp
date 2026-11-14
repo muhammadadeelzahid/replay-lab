@@ -8,9 +8,18 @@ namespace abrviz {
 
 namespace {
 
-// The set-up lines all come before the first frame of the first segment.
+/**
+ * @brief Lines read from the top of `sim.log`; the set-up lines all come before the first frame.
+ */
 constexpr int kHeaderLines = 600;
 
+/**
+ * @brief Reads a captured group as a number.
+ *
+ * @param match The regular expression match.
+ * @param group Index of the capture group.
+ * @return The number, or nothing if the group is not a number.
+ */
 std::optional<double> number(const QRegularExpressionMatch& match, int group)
 {
     bool ok = false;

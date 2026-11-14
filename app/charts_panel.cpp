@@ -27,18 +27,29 @@ namespace abrviz {
 
 namespace {
 
+/** @brief Space left of the plot area for the y-axis labels, in pixels. */
 constexpr double kLeftMargin = 52.0;
+/** @brief Space right of the plot area, in pixels. */
 constexpr double kRightMargin = 52.0;  // room for the loss axis
-constexpr double kTopMargin = 6.0;
+constexpr double kTopMargin = 6.0;  ///< Space above the plot area, in pixels.
+/** @brief Space below the plot area of a chart without time labels, in pixels. */
 constexpr double kBottomMargin = 6.0;
+/** @brief Space below the plot area of the last chart, which shows the time labels, in pixels. */
 constexpr double kAxisLabelsHeight = 22.0;
 
-const QColor kPrimary(0x2f, 0x6d, 0xb5);
-const QColor kSecondary(0x6b, 0x6b, 0x6b);
-const QColor kStall(0xd6, 0x27, 0x28);
-const QColor kOverride(0xe6, 0x55, 0x0d);
+const QColor kPrimary{0x2f, 0x6d, 0xb5};    ///< Main series of a chart (blue).
+const QColor kSecondary{0x6b, 0x6b, 0x6b};  ///< Second series of a chart (grey).
+const QColor kStall{0xd6, 0x27, 0x28};      ///< Stalls (red).
+const QColor kOverride{0xe6, 0x55, 0x0d};   ///< Guard overrides of the LLM's choice (orange).
 
-/// Last element with `time <= t`, or null.
+/**
+ * @brief The last element at or before a time.
+ *
+ * @tparam T Element type with a `time` member.
+ * @param items Elements sorted by `time`.
+ * @param t Simulation time in seconds.
+ * @return The last element with `time <= t`, or null if there is none.
+ */
 template <typename T>
 const T* lastAtOrBefore(const std::vector<T>& items, double t)
 {
@@ -46,6 +57,14 @@ const T* lastAtOrBefore(const std::vector<T>& items, double t)
     return it == items.begin() ? nullptr : &*std::prev(it);
 }
 
+/**
+ * @brief A coloured legend mark followed by its label, as rich text.
+ *
+ * @param color Colour of the mark.
+ * @param label Label after the mark; HTML-escaped.
+ * @param hollow True for a hollow circle (unfilled points), false for a filled square.
+ * @return The HTML fragment.
+ */
 QString swatch(const QColor& color, const QString& label, bool hollow = false)
 {
     return QStringLiteral("<span style='color:%1'>%2</span>&nbsp;%3")
@@ -53,8 +72,15 @@ QString swatch(const QColor& color, const QString& label, bool hollow = false)
              label.toHtmlEscaped());
 }
 
-/// The smallest of 1, 2, 2.5, 4, 5 or 8 times a power of ten that is at least `value`, so that
-/// the axis maximum and its half (the tick labels) are round numbers.
+/**
+ * @brief Rounds an axis maximum up to a round number.
+ *
+ * Returns the smallest of 1, 2, 2.5, 4, 5 or 8 times a power of ten that is at least `value`,
+ * so that the axis maximum and its half (the tick labels) are round numbers.
+ *
+ * @param value The largest value to show.
+ * @return The rounded maximum; 1 if `value` is 0 or negative.
+ */
 double niceCeiling(double value)
 {
     if (value <= 0.0)
@@ -67,6 +93,13 @@ double niceCeiling(double value)
     return 10.0 * power;
 }
 
+/**
+ * @brief Tick interval for a time axis.
+ *
+ * @param range Length of the axis in seconds.
+ * @return The smallest of 1, 2, 5, 10, 15, 20, 30 or 60 s that gives at most 10 intervals;
+ *         60 s for longer axes.
+ */
 double niceStep(double range)
 {
     static constexpr std::array steps = {1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0};
@@ -79,10 +112,20 @@ double niceStep(double range)
 
 } // namespace
 
-/// A chart view with a fixed plot area, so that all charts share the same x mapping, and with
-/// clicks and drags reported as simulation times.
+/**
+ * @brief A chart view with a fixed plot area and clicks reported as simulation times.
+ *
+ * The fixed plot area makes all charts share the same x mapping. Clicks and drags with the left
+ * button are reported through `onTime`.
+ */
 class ChartView final : public QChartView {
 public:
+    /**
+     * @brief Creates the view with antialiasing and a minimum height of 90 pixels.
+     *
+     * @param chart The chart to show; the view takes ownership.
+     * @param parent Parent widget.
+     */
     ChartView(QChart* chart, QWidget* parent)
         : QChartView(chart, parent)
     {
@@ -90,9 +133,12 @@ public:
         setMinimumHeight(90);
     }
 
-    std::function<void(double)> onTime;
-    double bottomMargin = kBottomMargin;
+    std::function<void(double)> onTime;   ///< Receives the time clicked or dragged to.
+    double bottomMargin = kBottomMargin;  ///< Room below the plot area (more for axis labels).
 
+    /**
+     * @brief Sets the plot area to the chart size minus the fixed margins.
+     */
     void updatePlotArea()
     {
         const QSizeF size = chart()->size();
@@ -104,12 +150,22 @@ public:
     }
 
 protected:
+    /**
+     * @brief Resizes the chart and recomputes the plot area.
+     *
+     * @param event The resize event.
+     */
     void resizeEvent(QResizeEvent* event) override
     {
         QChartView::resizeEvent(event);
         updatePlotArea();
     }
 
+    /**
+     * @brief Reports the time under a left-button press.
+     *
+     * @param event The mouse event.
+     */
     void mousePressEvent(QMouseEvent* event) override
     {
         if (event->button() == Qt::LeftButton)
@@ -117,6 +173,11 @@ protected:
         QChartView::mousePressEvent(event);
     }
 
+    /**
+     * @brief Reports the time under the mouse while the left button is held.
+     *
+     * @param event The mouse event.
+     */
     void mouseMoveEvent(QMouseEvent* event) override
     {
         if (event->buttons() & Qt::LeftButton)
@@ -125,6 +186,14 @@ protected:
     }
 
 private:
+    /**
+     * @brief Converts a view position to a simulation time and passes it to `onTime`.
+     *
+     * The position is clamped to the plot area. Does nothing without a callback or while the
+     * chart has no series.
+     *
+     * @param pos Position in view coordinates.
+     */
     void report(QPointF pos)
     {
         if (!onTime || chart()->series().isEmpty())
@@ -137,17 +206,32 @@ private:
     }
 };
 
+/**
+ * @brief One chart of the panel: its legend, view, axes and cursor line.
+ *
+ * Also tracks the largest y value added on each axis, from which finishRanges() sets the axis
+ * ranges.
+ */
 struct ChartsPanel::Plot {
-    QLabel* legend = nullptr;
-    ChartView* view = nullptr;
-    QChart* chart = nullptr;  // owned by the view
-    QValueAxis* x = nullptr;
-    QValueAxis* y = nullptr;
-    QValueAxis* y2 = nullptr;  // only for RTT and loss
-    QGraphicsLineItem* cursor = nullptr;  // child item of the chart
-    double yMax = 0.0;
-    double y2Max = 0.0;
+    QLabel* legend = nullptr;  ///< Rich-text legend above the chart.
+    ChartView* view = nullptr;  ///< The chart's view; child of the panel.
+    QChart* chart = nullptr;  ///< Owned by the view.
+    QValueAxis* x = nullptr;   ///< Time axis in seconds, at the bottom; owned by the chart.
+    QValueAxis* y = nullptr;   ///< Left value axis; owned by the chart.
+    QValueAxis* y2 = nullptr;  ///< Only for RTT and loss.
+    QGraphicsLineItem* cursor = nullptr;  ///< Child item of the chart.
+    double yMax = 0.0;   ///< Largest value added on the left axis.
+    double y2Max = 0.0;  ///< Largest value added on the right axis.
 
+    /**
+     * @brief Adds a line series.
+     *
+     * @param name Series name.
+     * @param points Points of the line.
+     * @param pen Pen to draw the line with.
+     * @param secondAxis True to plot against the right axis (`y2`).
+     * @return The series, owned by the chart.
+     */
     QLineSeries* addLine(const QString& name, const QList<QPointF>& points, const QPen& pen,
                          bool secondAxis = false)
     {
@@ -159,6 +243,16 @@ struct ChartsPanel::Plot {
         return series;
     }
 
+    /**
+     * @brief Adds a scatter series against the left axis.
+     *
+     * @param name Series name.
+     * @param points The points.
+     * @param color Colour of the markers.
+     * @param size Marker size in pixels.
+     * @param hollow True for unfilled markers.
+     * @return The series, owned by the chart.
+     */
     QScatterSeries* addPoints(const QString& name, const QList<QPointF>& points,
                               const QColor& color, double size, bool hollow = false)
     {
@@ -173,6 +267,13 @@ struct ChartsPanel::Plot {
         return series;
     }
 
+    /**
+     * @brief Adds a series to the chart, attaches it to the axes and raises the axis maximum.
+     *
+     * @param series The series; the chart takes ownership.
+     * @param points The series' points, used for the maximum.
+     * @param secondAxis True to attach it to the right axis (`y2`).
+     */
     void attach(QXYSeries* series, const QList<QPointF>& points, bool secondAxis)
     {
         chart->addSeries(series);  // takes ownership
@@ -183,6 +284,9 @@ struct ChartsPanel::Plot {
             max = std::max(max, p.y());
     }
 
+    /**
+     * @brief Removes all series and resets the axis maxima.
+     */
     void clear()
     {
         chart->removeAllSeries();
@@ -190,6 +294,9 @@ struct ChartsPanel::Plot {
         y2Max = 0.0;
     }
 
+    /**
+     * @brief Sets the y-axis ranges from 0 to a round number above the largest value plus 5%.
+     */
     void finishRanges()
     {
         y->setRange(0.0, niceCeiling(yMax * 1.05));

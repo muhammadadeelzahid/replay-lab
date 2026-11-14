@@ -11,6 +11,12 @@ namespace {
 /// Bumped whenever the encoding settings change, so old files in the cache are not reused.
 constexpr int kRenderVersion = 1;
 
+/**
+ * @brief Formats a number with six decimals, for `ffmpeg` arguments and the cache key.
+ *
+ * @param value The number.
+ * @return The formatted number.
+ */
 QString number(double value)
 {
     return QString::number(value, 'f', 6);

@@ -1,3 +1,9 @@
+/**
+ * @file
+ * @brief The program's entry point: command-line options, the main window, and the
+ *        `--screenshot` and `--profile` modes.
+ */
+
 #include "background_mode.h"
 #include "branding.h"
 #include "icons.h"
@@ -26,8 +32,24 @@
 
 namespace {
 
-/// `--screenshot`: once the bundle (and its log index) or the folder is ready, save a picture of
-/// the window and quit. Used for the README images and to check the layout without a display.
+/**
+ * @brief `--screenshot`: once the bundle (and its log index) or the folder is ready, saves a
+ *        picture of the window and quits.
+ *
+ * Used for the README images and to check the layout without a display. Before grabbing it
+ * waits (at most 10 s) until the engine shows a picture or has nothing to show, then 600 ms
+ * more for the panels to repaint and lay out. Prints "saved <file>" or "could not save <file>"
+ * and exits the event loop with 0 or 1; exits with 1 if the bundle cannot be opened.
+ *
+ * @param window The main window to grab; must outlive the event loop.
+ * @param file The image file to write; the format follows its extension.
+ * @param waitForBundle Wait for logIndexReady() (a bundle is being opened).
+ * @param waitForFolder Wait for folderScanned() (only a folder is being opened); ignored
+ *                      when `waitForBundle` is set.
+ * @param time If set, the simulation time (seconds) to move the cursor to before grabbing.
+ *
+ * @note With neither wait flag, the welcome screen is grabbed as soon as the event loop runs.
+ */
 void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool waitForBundle,
                         bool waitForFolder, std::optional<double> time)
 {
@@ -71,6 +93,11 @@ void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool wa
     }
 }
 
+/**
+ * @brief The CPU time the process has used so far.
+ *
+ * @return User plus system time, in seconds.
+ */
 double cpuSeconds()
 {
     rusage usage{};
@@ -81,6 +108,14 @@ double cpuSeconds()
     return seconds(usage.ru_utime) + seconds(usage.ru_stime);
 }
 
+/**
+ * @brief The process's peak resident memory.
+ *
+ * @note getrusage() reports ru_maxrss in bytes on macOS and in kilobytes elsewhere; both are
+ *       converted.
+ *
+ * @return The maximum resident set size so far, in MiB.
+ */
 double peakMemoryMb()
 {
     rusage usage{};
@@ -92,7 +127,15 @@ double peakMemoryMb()
 #endif
 }
 
-/// The segment shown at `replay`, its rung, and whether the rung changed from the one before.
+/**
+ * @brief Describes the segment shown at a replay time, for the `--profile` gap list.
+ *
+ * @param window The main window, whose session holds the run and the playback clock.
+ * @param replay The replay time, in seconds.
+ * @return "segment N at P%, rung A -> B" (A is the rung of the segment shown before it in
+ *         playback order, -1 if none), with ", stalled" appended during a stall; "before
+ *         playback" without a run or before the first segment.
+ */
 QString describeReplayTime(abrviz::MainWindow& window, double replay)
 {
     const auto& run = window.session()->run();
@@ -120,9 +163,20 @@ QString describeReplayTime(abrviz::MainWindow& window, double replay)
         .arg(position.stalled ? QStringLiteral(", stalled") : QString());
 }
 
-/// `--profile`: once the bundle and its log index are ready, plays `seconds` of the replay with
-/// the current engine (rendering first if the engine needs it) and prints load, render and
-/// playback numbers, then quits.
+/**
+ * @brief `--profile`: once the bundle and its log index are ready, plays part of the replay and
+ *        prints load, render and playback numbers, then quits.
+ *
+ * Uses the current engine, rendering first if the engine needs it. Playback stops after
+ * `seconds` or earlier when the replay ends. The report covers the load, log-index and
+ * engine-ready times, the replay time played, the frames shown and decoded, CPU use, peak
+ * memory, and every gap between frames longer than 150 ms. Exits the event loop with 0, or
+ * with 1 if the bundle cannot be opened or the engine fails.
+ *
+ * @param window The main window; must outlive the event loop.
+ * @param seconds How much of the replay to play, in wall-clock seconds.
+ * @param time If set, the simulation time (seconds) to move the cursor to before playing.
+ */
 void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<double> time)
 {
     auto clock = std::make_shared<QElapsedTimer>();
@@ -220,6 +274,20 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
 
 } // namespace
 
+/**
+ * @brief Starts the application.
+ *
+ * Parses the command line (`[path]`, `--bundle`, `--time`, `--size`, `--screenshot`,
+ * `--engine`, `--page`, `--profile`), creates the main window and opens the path: a folder is
+ * listed, and a bundle (the path itself if it holds a `run.json`, or `--bundle` inside it) is
+ * opened. `--screenshot` and `--profile` run as a background-only application and paint the
+ * window without putting it on the screen.
+ *
+ * @param argc The argument count.
+ * @param argv The arguments.
+ * @return The event loop's exit code; 2 for an engine that is not built or an unknown page;
+ *         1 if `--profile` is given without a bundle.
+ */
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);

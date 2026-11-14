@@ -8,9 +8,18 @@ namespace abrviz {
 
 namespace {
 
+/** @brief Largest difference that agrees, as a fraction of the exported value. */
 constexpr double kRelativeTolerance = 0.01;
+/** @brief Largest absolute difference that agrees, for values near 0. */
 constexpr double kAbsoluteTolerance = 0.001;
 
+/**
+ * @brief Counts how often consecutive values differ.
+ *
+ * @tparam T Value type with `!=`.
+ * @param values The values in order.
+ * @return The number of changes; 0 for fewer than two values.
+ */
 template <typename T>
 int countChanges(const std::vector<T>& values)
 {
@@ -22,6 +31,12 @@ int countChanges(const std::vector<T>& values)
     return changes;
 }
 
+/**
+ * @brief Returns the arithmetic mean.
+ *
+ * @param values The values.
+ * @return The mean, or 0 if `values` is empty.
+ */
 double mean(const std::vector<double>& values)
 {
     if (values.empty())
@@ -30,6 +45,12 @@ double mean(const std::vector<double>& values)
          / static_cast<double>(values.size());
 }
 
+/**
+ * @brief Converts an optional int to an optional double.
+ *
+ * @param value The value, if known.
+ * @return The value as a double, or nothing if `value` is empty.
+ */
 std::optional<double> toDouble(std::optional<int> value)
 {
     return value ? std::optional<double>(*value) : std::nullopt;

@@ -17,25 +17,48 @@ namespace abrviz {
 
 namespace {
 
+/** @brief Presentation timer interval while playing, in milliseconds. */
 constexpr int kTickMs = 5;              // presentation timer while playing
+/** @brief Least interval between position reports while playing, in milliseconds. */
 constexpr int kPositionIntervalMs = 30; // position reports while playing
 // Some decoders fail without posting an error (VideoToolbox on very small frames); without a
 // first picture by then the engine reports an error and the player can fall back.
+/** @brief Time allowed for the first picture before it is an error, in milliseconds. */
 constexpr int kPrerollTimeoutMs = 8000;
-constexpr double kEpsilon = 1e-6;
+constexpr double kEpsilon = 1e-6;  ///< Time tolerance in seconds; spans this short are dropped.
 // A frame this far from a seek's target is from before the seek (normally flushed already).
+/** @brief After a seek, frames further than this from its target are skipped, in seconds. */
 constexpr double kStaleSeconds = 1.0;
 
+/**
+ * @brief Converts seconds to a GStreamer clock time.
+ *
+ * @param seconds Time in seconds; negative values become 0.
+ * @return The time in nanoseconds, rounded.
+ */
 gint64 toClock(double seconds)
 {
     return std::llround(std::max(0.0, seconds) * static_cast<double>(GST_SECOND));
 }
 
-/// The locations `splitmuxsrc` plays, as a NULL-terminated string vector it takes over.
+/**
+ * @brief The files `splitmuxsrc` plays, owned by its "format-location" signal handler.
+ *
+ * `formatLocation()` hands them over as a NULL-terminated string vector that the element takes
+ * over; `deleteLocations()` frees this object when the handler is disconnected.
+ */
 struct Locations {
-    std::vector<QByteArray> files;
+    std::vector<QByteArray> files;  ///< paths in file-system encoding, in playback order
 };
 
+/**
+ * @brief Handler of `splitmuxsrc`'s "format-location" signal: lists the files to play.
+ *
+ * Runs on a GStreamer thread; it only reads the `Locations`, which no other code changes.
+ *
+ * @param data The `Locations` passed when the handler was connected.
+ * @return A newly allocated, NULL-terminated vector of file names; `splitmuxsrc` frees it.
+ */
 gchar** formatLocation(GstElement*, gpointer data)
 {
     const auto* locations = static_cast<const Locations*>(data);
@@ -45,11 +68,24 @@ gchar** formatLocation(GstElement*, gpointer data)
     return list;
 }
 
+/**
+ * @brief Destroy notifier of the "format-location" handler: deletes its `Locations`.
+ *
+ * @param data The `Locations` passed when the handler was connected.
+ */
 void deleteLocations(gpointer data, GClosure*)
 {
     delete static_cast<Locations*>(data);
 }
 
+/**
+ * @brief Formats an error or warning message for the user.
+ *
+ * @param message A `GST_MESSAGE_ERROR` (parsed as an error) or any other message (parsed as a
+ *                warning); borrowed.
+ * @return "element: text" with the name of the source element when there is one, or just the
+ *         text; "unknown error" if the message has no `GError`.
+ */
 QString messageText(GstMessage* message)
 {
     GError* raw = nullptr;

@@ -9,12 +9,25 @@ namespace abrviz {
 
 namespace {
 
+/**
+ * @brief Whether a palette is a dark appearance.
+ *
+ * @param palette The palette to test.
+ * @return True if the window colour's lightness is below 128.
+ */
 bool isDark(const QPalette& palette)
 {
     return palette.color(QPalette::Window).lightness() < 128;
 }
 
-/// A colour for a style sheet: #AARRGGBB (fractions in rgba() are not read as alpha).
+/**
+ * @brief A colour for a style sheet, as `#AARRGGBB`.
+ *
+ * @note Fractions in a style sheet's rgba() are not read as alpha, hence the hex form.
+ *
+ * @param color The colour, alpha included.
+ * @return The colour's `#AARRGGBB` name.
+ */
 QString rgba(const QColor& color)
 {
     return color.name(QColor::HexArgb);

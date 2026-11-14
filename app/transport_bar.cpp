@@ -18,7 +18,12 @@ namespace abrviz {
 
 namespace {
 
-/// Replay time as QuickTime shows it, with tenths: 1:05.3.
+/**
+ * @brief Replay time as QuickTime shows it, with tenths: 1:05.3.
+ *
+ * @param seconds The time in seconds; negative values are shown as 0:00.0.
+ * @return The time as minutes, then seconds with one decimal.
+ */
 QString clockText(double seconds)
 {
     seconds = std::max(0.0, seconds);
@@ -26,6 +31,12 @@ QString clockText(double seconds)
     return QStringLiteral("%1:%2").arg(minutes).arg(seconds - minutes * 60.0, 4, 'f', 1, QLatin1Char('0'));
 }
 
+/**
+ * @brief The translated name of a replay engine state.
+ *
+ * @param state The state.
+ * @return Its name, e.g. "Playing"; empty for an unknown value.
+ */
 QString stateName(ReplaySource::State state)
 {
     switch (state) {

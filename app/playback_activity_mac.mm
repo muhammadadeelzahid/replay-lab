@@ -4,8 +4,9 @@
 
 namespace abrviz {
 
+/** @brief The NSProcessInfo activity held while the replay runs. */
 struct PlaybackActivity::Token {
-    id<NSObject> activity = nil;
+    id<NSObject> activity = nil;  ///< The retained NSProcessInfo activity.
 };
 
 PlaybackActivity::PlaybackActivity()

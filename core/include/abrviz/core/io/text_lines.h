@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file
+ * @brief Line iteration and line-aligned splitting of text buffers.
+ */
+
 #include <QByteArrayView>
 #include <QList>
 
@@ -7,8 +12,15 @@
 
 namespace abrviz {
 
-/// Calls `fn(line, lineNumber)` for every line of `text`, without the line ending.
-/// `lineNumber` starts at `firstLineNumber`. A final line without a newline is included.
+/**
+ * @brief Calls `fn(line, lineNumber)` for every line of `text`, without the line ending.
+ *
+ * Both `\n` and `\r\n` endings are removed. A final line without a newline is included.
+ *
+ * @param text The text to split.
+ * @param fn Called once per line, in order.
+ * @param firstLineNumber Number passed for the first line.
+ */
 template <typename Fn>
     requires std::invocable<Fn&, QByteArrayView, qsizetype>
 void forEachLine(QByteArrayView text, Fn&& fn, qsizetype firstLineNumber = 1)
@@ -28,7 +40,15 @@ void forEachLine(QByteArrayView text, Fn&& fn, qsizetype firstLineNumber = 1)
     }
 }
 
-/// Splits `text` into at most `parts` pieces that each end at a line boundary.
+/**
+ * @brief Splits `text` into at most `parts` pieces that each end at a line boundary.
+ *
+ * Each piece is about `text.size() / parts` bytes, extended to the next newline.
+ *
+ * @param text The text to split.
+ * @param parts Wanted number of pieces; values below 1 are treated as 1.
+ * @return Views into `text` that together cover it; empty if `text` is empty.
+ */
 [[nodiscard]] QList<QByteArrayView> splitAtLines(QByteArrayView text, qsizetype parts);
 
 } // namespace abrviz

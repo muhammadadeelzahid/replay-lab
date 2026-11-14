@@ -12,19 +12,35 @@ namespace abrviz {
 
 namespace {
 
+/**
+ * @brief Whether a palette is a dark appearance.
+ *
+ * @param palette The palette to test.
+ * @return True if the window colour's lightness is below 128.
+ */
 bool isDark(const QPalette& palette)
 {
     return palette.color(QPalette::Window).lightness() < 128;
 }
 
-constexpr int kNoteRole = Qt::UserRole + 10;
+constexpr int kNoteRole = Qt::UserRole + 10;  ///< Item data role holding a run's note.
 
-/// Draws the item as usual, then its note (stalls, cut-off) right-aligned in secondary text,
-/// the way Mail shows unread counts.
+/**
+ * @brief Draws the item as usual, then its note right-aligned in secondary text.
+ *
+ * The note (stalls, cut-off) is shown the way Mail shows unread counts.
+ */
 class NoteDelegate final : public QStyledItemDelegate {
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
 
+    /**
+     * @brief Paints the item, then its kNoteRole text (if any) in a smaller font.
+     *
+     * @param painter The painter; its state is restored afterwards.
+     * @param option The style options for the item.
+     * @param index The item.
+     */
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
     {
         QStyledItemDelegate::paint(painter, option, index);

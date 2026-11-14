@@ -7,6 +7,13 @@ namespace abrviz {
 
 namespace {
 
+/**
+ * @brief One two-column HTML table row with a bold name.
+ *
+ * @param name Text of the first cell; HTML-escaped.
+ * @param value Text of the second cell; HTML-escaped.
+ * @return The `<tr>` element.
+ */
 QString row(const QString& name, const QString& value)
 {
     return QStringLiteral("<tr><td><b>%1</b></td><td>%2</td></tr>")

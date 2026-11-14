@@ -16,8 +16,15 @@ namespace abrviz {
 
 namespace {
 
-constexpr int kWidth = 280;
+constexpr int kWidth = 280;  ///< Fixed width of the panel, in pixels.
 
+/**
+ * @brief A bold section heading, slightly larger than the body text.
+ *
+ * @param text The heading text.
+ * @param parent The label's parent.
+ * @return The new label, owned by `parent`.
+ */
 QLabel* heading(const QString& text, QWidget* parent)
 {
     auto* label = new QLabel(text, parent);

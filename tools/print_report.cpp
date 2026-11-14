@@ -1,8 +1,13 @@
-// print_report: prints the QoE report of run bundles.
-//
-//   print_report <bundle-or-folder>...
-//
-// The exit code is 1 if a bundle cannot be loaded or its numbers disagree with summary.json.
+/**
+ * @file
+ * @brief print_report: prints the QoE report of run bundles.
+ *
+ * Usage:
+ *
+ *     print_report <bundle-or-folder>...
+ *
+ * The exit code is 1 if a bundle cannot be loaded or its numbers disagree with summary.json.
+ */
 
 #include "abrviz/core/load/bundle_reader.h"
 #include "abrviz/core/metrics/qoe_metrics.h"
@@ -14,16 +19,38 @@
 
 namespace {
 
+/**
+ * @brief Formats a bit rate in megabits per second.
+ *
+ * @param bitsPerSecond Bit rate (bit/s).
+ * @return E.g. "4.20 Mbps", with two decimals.
+ */
 QString mbps(double bitsPerSecond)
 {
     return QStringLiteral("%1 Mbps").arg(bitsPerSecond / 1e6, 0, 'f', 2);
 }
 
+/**
+ * @brief Formats a duration in seconds.
+ *
+ * @param value Duration (seconds).
+ * @return E.g. "1.250 s", with three decimals.
+ */
 QString seconds(double value)
 {
     return QStringLiteral("%1 s").arg(value, 0, 'f', 3);
 }
 
+/**
+ * @brief Prints the QoE report of one run.
+ *
+ * Lists segments, bitrates and switches, startup delay, stalls, throughput, guard overrides,
+ * decision delay and replay duration, then one MISMATCH line for every number that disagrees
+ * with summary.json.
+ *
+ * @param out Stream to print to.
+ * @param run The loaded run.
+ */
 void printReport(QTextStream& out, const abrviz::RunData& run)
 {
     const abrviz::QoeReport r = abrviz::computeQoe(run);
@@ -57,6 +84,14 @@ void printReport(QTextStream& out, const abrviz::RunData& run)
 
 } // namespace
 
+/**
+ * @brief Prints the report of every bundle named on the command line.
+ *
+ * @param argc Argument count.
+ * @param argv Bundle folders, or folders searched one level down for bundles.
+ * @return 0 if every bundle loaded and agrees with its summary.json, 1 otherwise, 2 without
+ *         arguments.
+ */
 int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);

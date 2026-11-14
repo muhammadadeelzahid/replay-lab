@@ -17,27 +17,44 @@ namespace abrviz {
 
 namespace {
 
-constexpr int kHeight = 150;
-constexpr double kNodeRadius = 21.0;
+constexpr int kHeight = 150;          ///< Fixed height of the strip, in pixels.
+constexpr double kNodeRadius = 21.0;  ///< Radius of a node's disc, in pixels.
 
+/**
+ * @brief A node of the path as painted: a disc with a glyph and a name.
+ */
 struct Node {
-    Glyph glyph;
-    QString title;
-    QString detail;
-    QPointF centre;
+    Glyph glyph;     ///< Icon drawn in the disc.
+    QString title;   ///< Name drawn under the disc.
+    QPointF centre;  ///< Centre of the disc, in widget coordinates.
 };
 
+/**
+ * @brief A link between two nodes as painted: a curve with its name at the middle.
+ */
 struct Link {
-    QString label;
+    QString label;  ///< Name drawn at the middle of the link.
+    /** @brief Curve in widget coordinates; for the access link only its start, at the relay. */
     QPainterPath path;
-    QPointF labelAt;
 };
 
+/**
+ * @brief A distance in whole kilometres, e.g. "550 km".
+ *
+ * @param metres The distance in metres.
+ * @return The distance in kilometres, rounded, with the unit.
+ */
 QString kilometres(double metres)
 {
     return QStringLiteral("%1 km").arg(metres / 1000.0, 0, 'f', 0);
 }
 
+/**
+ * @brief Whether a palette is a dark appearance.
+ *
+ * @param palette The palette to test.
+ * @return True if the window colour's lightness is below 128.
+ */
 bool isDark(const QPalette& palette)
 {
     return palette.color(QPalette::Window).lightness() < 128;
@@ -190,10 +207,10 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     const double left = 70.0;
     const double right = w - 70.0;
     const std::array<Node, 4> nodes{{
-        {Glyph::Server, label[0], QString(), {left, ground}},
-        {Glyph::Satellite, label[2], QString(), {left + (right - left) * 0.34, sky}},
-        {Glyph::Relay, label[4], QString(), {left + (right - left) * 0.70, ground}},
-        {Glyph::Device, label[6], QString(), {right, ground}},
+        {Glyph::Server, label[0], {left, ground}},
+        {Glyph::Satellite, label[2], {left + (right - left) * 0.34, sky}},
+        {Glyph::Relay, label[4], {left + (right - left) * 0.70, ground}},
+        {Glyph::Device, label[6], {right, ground}},
     }};
 
     // Links: up to the satellite, down to the relay, across to the viewer.
@@ -204,9 +221,9 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         return path;
     };
     const std::array<Link, 3> links{{
-        {label[1], curve(nodes[0].centre, nodes[1].centre, 10.0), {}},
-        {label[3], curve(nodes[1].centre, nodes[2].centre, 10.0), {}},
-        {label[5], QPainterPath(nodes[2].centre), {}},
+        {label[1], curve(nodes[0].centre, nodes[1].centre, 10.0)},
+        {label[3], curve(nodes[1].centre, nodes[2].centre, 10.0)},
+        {label[5], QPainterPath(nodes[2].centre)},
     }};
     QPainterPath access(nodes[2].centre);
     access.lineTo(nodes[3].centre);

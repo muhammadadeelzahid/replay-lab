@@ -20,31 +20,53 @@ namespace abrviz {
 
 namespace {
 
+/**
+ * @brief Returns the default cache folder.
+ *
+ * @return `renders` inside the application's cache location.
+ */
 QString defaultCacheDirectory()
 {
     return QDir(QStandardPaths::writableLocation(QStandardPaths::CacheLocation))
         .filePath(QStringLiteral("renders"));
 }
 
-/// What the part tasks of one job share. Each task writes only its own slot; `mutex` and
-/// `changed` let the worker sleep until a task finishes.
+/**
+ * @brief What the part tasks of one job share.
+ *
+ * Each task writes only its own slot; `mutex` and `changed` let the worker sleep until a task
+ * finishes.
+ */
 struct PartsState {
+    /**
+     * @brief Creates one empty result slot per part.
+     *
+     * @param count Number of parts.
+     */
     explicit PartsState(std::size_t count)
         : results(count)
     {
     }
 
-    std::vector<TranscodeResult> results;
-    std::mutex mutex;
-    std::condition_variable changed;
-    std::size_t finished = 0;  // guarded by mutex
-    bool failed = false;       // guarded by mutex
-    std::atomic<int> running{0};
-    std::atomic<int> peak{0};
+    std::vector<TranscodeResult> results;  ///< Result of each part; each task writes its own slot.
+    std::mutex mutex;                      ///< Guards `results`, `finished` and `failed`.
+    std::condition_variable changed;       ///< Notified when a part finishes.
+    std::size_t finished = 0;              ///< Parts finished so far; guarded by `mutex`.
+    bool failed = false;                   ///< A part failed (not stopped); guarded by `mutex`.
+    std::atomic<int> running{0};           ///< Parts running now.
+    std::atomic<int> peak{0};              ///< Most parts that ran at once.
 };
 
-/// Copies `from` into the cache file `to` through QSaveFile, so `to` is either complete or
-/// untouched.
+/**
+ * @brief Copies `from` into the cache file `to` through QSaveFile.
+ *
+ * `to` is either complete or untouched.
+ *
+ * @param from The joined file in the scratch folder.
+ * @param to The cache file.
+ * @param stop Polled between blocks of 1 MiB; when it returns true the copy is abandoned.
+ * @return An empty string on success, "cancelled" if stopped, otherwise the error message.
+ */
 QString publish(const QString& from, const QString& to, const std::function<bool()>& stop)
 {
     QFile in(from);

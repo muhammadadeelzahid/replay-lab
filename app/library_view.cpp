@@ -120,6 +120,15 @@ QVariant LibraryModel::headerData(int section, Qt::Orientation orientation, int 
 
 namespace {
 
+/**
+ * @brief A label in a scaled, optionally bold, font.
+ *
+ * @param text The label text.
+ * @param scale The font size relative to the label's default font.
+ * @param bold Whether the font is bold.
+ * @param parent The label's parent.
+ * @return The new label, owned by `parent`.
+ */
 QLabel* makeLabel(const QString& text, qreal scale, bool bold, QWidget* parent)
 {
     auto* label = new QLabel(text, parent);
@@ -130,8 +139,18 @@ QLabel* makeLabel(const QString& text, qreal scale, bool bold, QWidget* parent)
     return label;
 }
 
-/// A row of the welcome screen: an icon, a title and a line of explanation; the whole row is
-/// the button, as in Xcode's welcome window.
+/**
+ * @brief A row of the welcome screen: an icon, a title and a line of explanation.
+ *
+ * The whole row is the button, as in Xcode's welcome window.
+ *
+ * @param glyph The icon, drawn in the accent colour of `parent`'s palette.
+ * @param title The bold title.
+ * @param detail The line of explanation, in secondary plain text.
+ * @param action Called when the row is clicked.
+ * @param parent The button's parent; must not be null.
+ * @return The new flat button, owned by `parent`.
+ */
 QPushButton* actionRow(Glyph glyph, const QString& title, const QString& detail,
                        std::function<void()> action, QWidget* parent)
 {

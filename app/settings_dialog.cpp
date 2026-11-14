@@ -16,6 +16,13 @@ namespace abrviz {
 
 namespace {
 
+/**
+ * @brief A word-wrapped explanatory note in smaller, secondary text, 340 pixels wide.
+ *
+ * @param text The note.
+ * @param parent The label's parent.
+ * @return The new label, owned by `parent`.
+ */
 QLabel* note(const QString& text, QWidget* parent)
 {
     auto* label = new QLabel(text, parent);

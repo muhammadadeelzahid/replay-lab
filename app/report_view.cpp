@@ -12,9 +12,21 @@ namespace abrviz {
 
 namespace {
 
+/**
+ * @brief Columns of the report table; ColumnCount is the number of columns.
+ */
 enum Column { Metric, Value, Exported, Check, ColumnCount };
 
-/// How a summary check is shown: bitrates in Mbps, times in seconds, counts as integers.
+/**
+ * @brief Formats the value of a summary check by its kind.
+ *
+ * Bitrates and throughputs are shown as bitrates, delays and times in seconds (three
+ * decimals), everything else as an integer count.
+ *
+ * @param name Name of the check, which tells its kind.
+ * @param value The value (bits per second, seconds or a count).
+ * @return The formatted value.
+ */
 QString formatCheck(const QString& name, double value)
 {
     if (name.contains(QLatin1String("bitrate")) || name.contains(QLatin1String("throughput")))

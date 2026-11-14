@@ -6,8 +6,15 @@ namespace abrviz {
 
 namespace {
 
-constexpr double kFrameDuration = 0.033;
+constexpr double kFrameDuration = 0.033;  ///< Seconds per frame of the simulated player (33 ms).
 
+/**
+ * @brief Returns the start of a piece on one timeline.
+ *
+ * @param p The piece.
+ * @param axis 0 for simulation, 1 for media, anything else for replay time.
+ * @return The start in seconds.
+ */
 double start(const PlaybackClock::Piece& p, int axis)
 {
     switch (axis) {
@@ -17,6 +24,13 @@ double start(const PlaybackClock::Piece& p, int axis)
     }
 }
 
+/**
+ * @brief Returns the end of a piece on one timeline.
+ *
+ * @param p The piece.
+ * @param axis 0 for simulation, 1 for media, anything else for replay time.
+ * @return The end in seconds.
+ */
 double end(const PlaybackClock::Piece& p, int axis)
 {
     switch (axis) {

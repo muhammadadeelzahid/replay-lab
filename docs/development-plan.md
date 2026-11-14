@@ -25,6 +25,19 @@ replay engines (GStreamer and pre-rendered). Comparing runs side by side is not 
 | 11 | `ReportView`, profiling, README with measured numbers | report shown for every bundle; numbers in the README |
 
 
+## Next
+
+| Step | Work | Done when |
+| --- | --- | --- |
+| 12 | API documentation: Doxygen comments on every function, class and file; `docs` build target | `cmake --build --preset release --target docs` builds the HTML with no undocumented-member warnings |
+| 13 | Let people see it without building: a short screen recording or GIF in the README, and the prebuilt Mac app (`Stream Inspector.app`, zipped) attached to a GitHub Release together with `viewer_bundles.tar` | the README shows the app in motion; the release has the app and the data |
+| 14 | Web build with Qt for WebAssembly: the `nogst` configuration compiled to `.wasm`; the pre-rendered engine plays videos rendered ahead of time with `render_experienced` and hosted next to the app; a few sample runs bundled or fetched at start (file reading without memory mapping); Qt's multithreaded WebAssembly build, with the COOP/COEP headers provided by a service worker on GitHub Pages | a sample run opens and plays in a browser from GitHub Pages |
+
+Step 13 is about an hour of work; step 14 is two to four days, mostly data loading and the
+video path. Qt Multimedia is less complete on WebAssembly (seeking may be less precise) and the
+full 680 MB of bundles is too large for a web page, so the web build ships a few sample runs.
+
+
 ## Testing
 
 - Unit tests for every parser, `applySegmentShift`, `PlaybackClock` at its boundaries (before

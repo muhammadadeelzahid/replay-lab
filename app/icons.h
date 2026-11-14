@@ -1,12 +1,19 @@
 #pragma once
 
+/**
+ * @file
+ * @brief The application's line icons, its accent colour and its application icon.
+ */
+
 #include <QColor>
 #include <QIcon>
 #include <QPalette>
 
 namespace abrviz {
 
-/// The line icons used in the toolbar, the sidebar and the transport bar.
+/**
+ * @brief The line icons used in the toolbar, the sidebar and the transport bar.
+ */
 enum class Glyph {
     Library,
     Replay,
@@ -35,15 +42,36 @@ enum class Glyph {
     Device,
 };
 
-/// `glyph` drawn in `color` (normally the palette's text colour, so it suits light and dark
-/// themes), sharp at every size Qt asks for. `selected` (if valid) is used for selected items.
+/**
+ * @brief A line icon drawn in one colour, sharp at every size Qt asks for.
+ *
+ * The icon is rendered from SVG at the requested size and device pixel ratio. Disabled icons
+ * are drawn at 35% opacity.
+ *
+ * @param glyph The icon to draw.
+ * @param color The colour of the strokes and fills; normally the palette's text colour, so the
+ *              icon suits light and dark themes. Its alpha is honoured.
+ * @param selected The colour used for selected items; if invalid, `color` is used for them too.
+ * @return The icon.
+ */
 [[nodiscard]] QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected = QColor());
 
-/// The accent colour for icons and highlights: Apple's system blue for the appearance.
-/// (Qt's Highlight on macOS is the darker selection colour.)
+/**
+ * @brief The accent colour for icons and highlights: Apple's system blue for the appearance.
+ *
+ * @note Qt's Highlight on macOS is the darker selection colour, so it is not used here.
+ *
+ * @param palette The palette whose window colour decides between the light and dark blue.
+ * @return #0A84FF for a dark window colour, #007AFF for a light one.
+ */
 [[nodiscard]] QColor accentColor(const QPalette& palette);
 
-/// The application icon (a play symbol beamed down by a satellite, under a magnifying glass).
+/**
+ * @brief The application icon: a play symbol beamed down by a satellite, under a magnifying
+ *        glass.
+ *
+ * @return The icon, loaded from the `:/abrviz/app-icon.svg` resource.
+ */
 [[nodiscard]] QIcon appIcon();
 
 } // namespace abrviz

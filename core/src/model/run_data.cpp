@@ -8,6 +8,15 @@ namespace abrviz {
 
 namespace {
 
+/**
+ * @brief Returns the items with a `time` in `[from, to]`.
+ *
+ * @tparam T Item type with a `time` member; `items` must be in time order.
+ * @param items The items to search.
+ * @param from Start time in seconds.
+ * @param to End time in seconds.
+ * @return A view into `items`; empty if none fall in the range.
+ */
 template <typename T>
 std::span<const T> between(const std::vector<T>& items, double from, double to)
 {

@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file
+ * @brief A parallel map over a list on a thread pool, returning a cancellable future.
+ */
+
 #include <QFuture>
 #include <QList>
 #include <QPromise>
@@ -15,13 +20,24 @@
 
 namespace abrviz {
 
-/// Applies `fn` to every input on `pool`, one task per input, and returns the results in input
-/// order. The future reports progress and can be cancelled (no result then).
-///
-/// Each task writes only its own output slot; an atomic countdown (acq_rel) lets the last task
-/// to finish see every slot and publish the list, so no thread waits for another. This uses
-/// only standard synchronisation, which ThreadSanitizer can check. Tasks read the inputs
-/// through `at()`: the non-const `operator[]` would detach the shared list in several threads.
+/**
+ * @brief Applies `fn` to every input on `pool`, one task per input.
+ *
+ * The future reports progress and can be cancelled (no result then).
+ *
+ * Each task writes only its own output slot; an atomic countdown (acq_rel) lets the last task
+ * to finish see every slot and publish the list, so no thread waits for another. This uses
+ * only standard synchronisation, which ThreadSanitizer can check. Tasks read the inputs
+ * through `at()`: the non-const `operator[]` would detach the shared list in several threads.
+ *
+ * @tparam Input Element type of the input list.
+ * @tparam Fn Callable taking `const Input&`; called concurrently from pool threads.
+ * @param inputs The inputs.
+ * @param fn The function to apply.
+ * @param pool Thread pool to run on; null for the global pool.
+ * @return A future yielding the results in input order; an empty list at once for empty
+ *         input.
+ */
 template <typename Input, typename Fn>
     requires std::invocable<Fn&, const Input&>
 [[nodiscard]] auto parallelMap(QList<Input> inputs, Fn fn, QThreadPool* pool = nullptr)

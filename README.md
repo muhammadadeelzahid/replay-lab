@@ -115,6 +115,13 @@ Releases page and extract it into the repository root as `viewer_bundles/`.
 
 ## Documentation
 
+API documentation is generated with Doxygen (`brew install doxygen`):
+
+```sh
+cmake --build --preset release --target docs
+open build/release/docs/html/index.html
+```
+
 - [Architecture](docs/architecture.md)
 - [Diagrams](docs/diagrams.md)
 - [Development plan](docs/development-plan.md)

@@ -16,15 +16,32 @@ namespace abrviz {
 
 namespace {
 
-constexpr double kStallTolerance = 0.01;  // seconds
+constexpr double kStallTolerance = 0.01;  ///< Seconds two stall starts may differ and still match.
 
+/**
+ * @brief Returns the path of a file inside a bundle.
+ *
+ * @param directory Directory of the bundle.
+ * @param relative Path relative to the bundle directory.
+ * @return The joined path.
+ */
 QString bundlePath(const QString& directory, const QString& relative)
 {
     return QDir(directory).filePath(relative);
 }
 
-/// Maps a bundle file and hands its contents to `parse`. A missing or unreadable file becomes
-/// an error in the result.
+/**
+ * @brief Maps a bundle file and hands its contents to `parse`.
+ *
+ * A missing or unreadable file becomes an error in the result.
+ *
+ * @tparam T Type of the parsed value.
+ * @tparam Parse Callable taking a `QByteArrayView` and returning `Parsed<T>`.
+ * @param directory Directory of the bundle.
+ * @param relative Path of the file relative to the bundle; also used in error messages.
+ * @param parse The parser; the view is valid only during the call.
+ * @return The parser's result, or an empty result with a `cannot read` error.
+ */
 template <typename T, typename Parse>
 Parsed<T> readMapped(const QString& directory, const QString& relative, Parse&& parse)
 {
@@ -38,11 +55,26 @@ Parsed<T> readMapped(const QString& directory, const QString& relative, Parse&& 
     return parse(file->view());
 }
 
+/**
+ * @brief Appends the errors of one part to the load errors.
+ *
+ * @param to The load errors.
+ * @param from The errors to append.
+ */
 void appendErrors(QStringList& to, const QStringList& from)
 {
     to.append(from);
 }
 
+/**
+ * @brief Compares the stalls of `player_events.jsonl` with those of `sim.log`.
+ *
+ * The lists agree if they have the same length and every pair starts within 10 ms.
+ *
+ * @param exported Stalls from `player_events.jsonl`.
+ * @param fromLog Stalls built from the `sim.log` pause and resume lines.
+ * @return A `StallMismatch` warning, or nothing if the lists agree.
+ */
 std::optional<Warning> stallWarning(const std::vector<Stall>& exported,
                                     const std::vector<Stall>& fromLog)
 {

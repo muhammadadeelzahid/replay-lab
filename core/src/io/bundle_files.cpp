@@ -10,8 +10,14 @@ namespace abrviz {
 
 namespace {
 
-constexpr int kBundleVersion = 1;
+constexpr int kBundleVersion = 1;  ///< The only `bundle_version` of `run.json` that is supported.
 
+/**
+ * @brief Reads a JSON number.
+ *
+ * @param value The JSON value.
+ * @return The number, or nothing if `value` is not a number.
+ */
 std::optional<double> optionalNumber(const QJsonValue& value)
 {
     if (!value.isDouble())
@@ -19,6 +25,12 @@ std::optional<double> optionalNumber(const QJsonValue& value)
     return value.toDouble();
 }
 
+/**
+ * @brief Reads a JSON number as an int.
+ *
+ * @param value The JSON value.
+ * @return The number, or nothing if `value` is not a number.
+ */
 std::optional<int> optionalInt(const QJsonValue& value)
 {
     if (!value.isDouble())
@@ -26,12 +38,26 @@ std::optional<int> optionalInt(const QJsonValue& value)
     return value.toInt();
 }
 
+/**
+ * @brief Reads a JSON number as a 64-bit integer.
+ *
+ * A value that is not an exact integer is truncated.
+ *
+ * @param value The JSON value.
+ * @return The integer; 0 if `value` is not a number.
+ */
 qint64 toInt64(const QJsonValue& value)
 {
     return value.toInteger(static_cast<qint64>(value.toDouble()));
 }
 
-/// Parses one JSON object from a line or a whole file, without copying the bytes.
+/**
+ * @brief Parses one JSON object from a line or a whole file, without copying the bytes.
+ *
+ * @param text The JSON text; must stay valid until the call returns.
+ * @param error Receives the parser message, or "expected a JSON object"; must not be null.
+ * @return The object, or nothing if the text is not valid JSON or not an object.
+ */
 std::optional<QJsonObject> parseObject(QByteArrayView text, QString* error)
 {
     QJsonParseError parseError{};
@@ -48,7 +74,16 @@ std::optional<QJsonObject> parseObject(QByteArrayView text, QString* error)
     return document.object();
 }
 
-/// Calls `fn(object, lineNumber)` for each non-empty line of a JSON Lines file.
+/**
+ * @brief Calls `fn(object, lineNumber)` for each non-empty line of a JSON Lines file.
+ *
+ * A line that is not a JSON object is reported in `result` and skipped.
+ *
+ * @param jsonl Contents of the file.
+ * @param file File name used in error messages.
+ * @param result Receives the parse errors.
+ * @param fn Called with each parsed object and its one-based line number.
+ */
 template <typename T, typename Fn>
 void forEachRecord(QByteArrayView jsonl, const QString& file, Parsed<T>& result, Fn&& fn)
 {
@@ -65,6 +100,16 @@ void forEachRecord(QByteArrayView jsonl, const QString& file, Parsed<T>& result,
     });
 }
 
+/**
+ * @brief Checks that a JSON object has all the given keys.
+ *
+ * @param object The object to check.
+ * @param keys Keys that must be present.
+ * @param file File name used in error messages.
+ * @param line Line number used in error messages.
+ * @param errors Receives one `missing field` message per missing key.
+ * @return True if every key is present.
+ */
 bool requireKeys(const QJsonObject& object, std::initializer_list<const char*> keys,
                  const QString& file, qsizetype line, QStringList& errors)
 {

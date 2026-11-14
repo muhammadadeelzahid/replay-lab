@@ -10,14 +10,25 @@ namespace abrviz {
 
 namespace {
 
+/** @brief A four-character MP4 box type, such as `moov`. */
 using FourCC = std::array<char, 4>;
 
+/**
+ * @brief Position and type of one MP4 box.
+ */
 struct Box {
-    FourCC type{};
+    FourCC type{};  ///< four-character box type, for example `moov`
     qint64 payloadStart = 0;  ///< offset after the header
     qint64 end = 0;           ///< offset after the box
 };
 
+/**
+ * @brief Reads a big-endian integer at the current file position.
+ *
+ * @tparam T Unsigned integer type to read.
+ * @param file The open file.
+ * @return The value, or nothing if fewer than `sizeof(T)` bytes could be read.
+ */
 template <typename T>
 std::optional<T> readBigEndian(QFile& file)
 {
@@ -27,6 +38,16 @@ std::optional<T> readBigEndian(QFile& file)
     return qFromBigEndian<T>(bytes.data());
 }
 
+/**
+ * @brief Reads the header of the box at `offset`.
+ *
+ * Handles 64-bit sizes (size 1) and boxes that extend to the end of their parent (size 0).
+ *
+ * @param file The open file.
+ * @param offset File offset of the box header.
+ * @param limit End of the parent box or of the file; the box must not extend past it.
+ * @return The box, or nothing if the header cannot be read or the size is invalid.
+ */
 std::optional<Box> readBox(QFile& file, qint64 offset, qint64 limit)
 {
     if (offset + 8 > limit || !file.seek(offset))
@@ -53,12 +74,26 @@ std::optional<Box> readBox(QFile& file, qint64 offset, qint64 limit)
     return box;
 }
 
+/**
+ * @brief Makes a box type from a four-character string literal.
+ *
+ * @param text Four characters plus the terminating null.
+ * @return The box type.
+ */
 constexpr FourCC fourCC(const char (&text)[5])
 {
     return {text[0], text[1], text[2], text[3]};
 }
 
-/// Calls `fn(box)` for each child of the range `[from, to)` until it returns true.
+/**
+ * @brief Returns the first box in the range `[from, to)` for which `matches(box)` is true.
+ *
+ * @param file The open file.
+ * @param from Offset of the first box.
+ * @param to End of the range.
+ * @param matches Predicate called for each box in order.
+ * @return The matching box, or nothing if none matches or a box header cannot be read.
+ */
 template <typename Fn>
 std::optional<Box> findChild(QFile& file, qint64 from, qint64 to, Fn&& matches)
 {
@@ -71,13 +106,27 @@ std::optional<Box> findChild(QFile& file, qint64 from, qint64 to, Fn&& matches)
     return std::nullopt;
 }
 
+/**
+ * @brief Returns the first child of `parent` with the given type.
+ *
+ * @param file The open file.
+ * @param parent The box to search in.
+ * @param type The box type to look for.
+ * @return The child, or nothing if there is none.
+ */
 std::optional<Box> findChild(QFile& file, const Box& parent, FourCC type)
 {
     return findChild(file, parent.payloadStart, parent.end,
                      [type](const Box& box) { return box.type == type; });
 }
 
-/// Reads the timescale and duration of an `mvhd` or `mdhd` box (same layout for both).
+/**
+ * @brief Reads the timescale and duration of an `mvhd` or `mdhd` box (same layout for both).
+ *
+ * @param file The open file.
+ * @param header The `mvhd` or `mdhd` box.
+ * @return The duration in seconds, or nothing if it cannot be read or the timescale is 0.
+ */
 std::optional<double> readHeaderDuration(QFile& file, const Box& header)
 {
     if (!file.seek(header.payloadStart))
@@ -102,6 +151,13 @@ std::optional<double> readHeaderDuration(QFile& file, const Box& header)
     return static_cast<double>(*duration) / static_cast<double>(*timescale);
 }
 
+/**
+ * @brief Tells whether a `trak` box is a video track.
+ *
+ * @param file The open file.
+ * @param trak The `trak` box.
+ * @return True if its `mdia/hdlr` handler type is `vide`.
+ */
 bool isVideoTrack(QFile& file, const Box& trak)
 {
     const auto mdia = findChild(file, trak, fourCC("mdia"));

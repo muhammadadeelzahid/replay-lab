@@ -9,9 +9,17 @@ namespace abrviz {
 
 namespace {
 
-constexpr double kFrameDuration = 0.033;  // the simulated player renders a frame every 33 ms
+/** @brief Seconds per frame: the simulated player renders one every 33 ms. */
+constexpr double kFrameDuration = 0.033;
 
-/// `t=56.8597s.` -> 56.8597
+/**
+ * @brief Returns the time of a `[MPEG_PLAYER]` line.
+ *
+ * Example: `t=56.8597s.` gives 56.8597.
+ *
+ * @param tokens The words of the line.
+ * @return The time in seconds, or nothing if there is no `t=` word or it is not a number.
+ */
 std::optional<double> timeAssignment(const Tokens& tokens)
 {
     for (const QByteArrayView token : tokens.all()) {
@@ -25,7 +33,14 @@ std::optional<double> timeAssignment(const Tokens& tokens)
     return std::nullopt;
 }
 
-/// `ID=2` -> 2
+/**
+ * @brief Returns the player id of a `[MPEG_PLAYER]` line.
+ *
+ * Example: `ID=2` gives 2.
+ *
+ * @param tokens The words of the line.
+ * @return The player id, or nothing if there is no `ID=` word.
+ */
 std::optional<int> playerIdAssignment(const Tokens& tokens)
 {
     for (const QByteArrayView token : tokens.all()) {
@@ -35,6 +50,15 @@ std::optional<int> playerIdAssignment(const Tokens& tokens)
     return std::nullopt;
 }
 
+/**
+ * @brief Adds a decision line of UE `nodeId` to `part`.
+ *
+ * Lines of other UEs, and lines without a time, segment, new or old bit rate, are ignored.
+ *
+ * @param t The words of the line.
+ * @param nodeId The ns-3 node of the UE.
+ * @param part Receives the decision.
+ */
 void parseDecision(const Tokens& t, int nodeId, SimLogPart& part)
 {
     if (t.intAfter("ue-id:") != nodeId)
@@ -60,6 +84,16 @@ void parseDecision(const Tokens& t, int nodeId, SimLogPart& part)
     part.decisions.push_back(d);
 }
 
+/**
+ * @brief Adds a `PLAYING FRAME` line of player `playerId` to `part`.
+ *
+ * Adds a buffer point (`queueLength` frames of 33 ms each) and starts or extends the playback
+ * entry of the frame's segment. Lines of other players or with a missing field are ignored.
+ *
+ * @param t The words of the line.
+ * @param playerId The player id of the UE.
+ * @param part Receives the buffer point and playback.
+ */
 void parseFrame(const Tokens& t, int playerId, SimLogPart& part)
 {
     if (t.intAfter("PlayerId:") != playerId)

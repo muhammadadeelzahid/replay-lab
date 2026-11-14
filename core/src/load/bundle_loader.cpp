@@ -17,40 +17,60 @@ namespace abrviz {
 
 namespace {
 
-/// Shared by every task of one load.
-///
-/// Synchronisation uses only standard atomics and mutexes, so ThreadSanitizer can check it even
-/// though Qt is not built with TSan:
-/// - `ready` (release/acquire) publishes everything prepared before the tasks start;
-/// - each task writes only its own member of `parts` or its own slot of `logParts`;
-/// - `remaining` counts unfinished tasks; the task that brings it to zero (acq_rel) sees every
-///   other task's writes and assembles the result. No thread waits for another.
+/**
+ * @brief State shared by every task of one load.
+ *
+ * Synchronisation uses only standard atomics and mutexes, so ThreadSanitizer can check it even
+ * though Qt is not built with TSan:
+ * - `ready` (release/acquire) publishes everything prepared before the tasks start;
+ * - each task writes only its own member of `parts` or its own slot of `logParts`;
+ * - `remaining` counts unfinished tasks; the task that brings it to zero (acq_rel) sees every
+ *   other task's writes and assembles the result. No thread waits for another.
+ */
 struct LoadState {
-    QPromise<LoadResult> promise;
-    BundleParts parts;
-    QThreadPool* pool = nullptr;
+    QPromise<LoadResult> promise;  ///< Reports progress and the result to the caller's future.
+    BundleParts parts;             ///< What the tasks have read; each task writes its own member.
+    QThreadPool* pool = nullptr;   ///< Pool the tasks run on.
 
-    std::shared_ptr<const MappedFile> simLog;  // the chunks below are views into it
-    QList<QByteArrayView> logChunks;
-    std::vector<SimLogPart> logParts;           // one slot per chunk
+    /** @brief Mapping of `sim.log`; `logChunks` are views into it. */
+    std::shared_ptr<const MappedFile> simLog;
+    QList<QByteArrayView> logChunks;   ///< Line-aligned pieces of `sim.log`, one task each.
+    std::vector<SimLogPart> logParts;  ///< Parse result of each chunk; one slot per chunk.
 
-    std::atomic<bool> ready{false};
-    std::atomic<int> remaining{0};
+    std::atomic<bool> ready{false};  ///< Set (release) once everything the tasks read is prepared.
+    std::atomic<int> remaining{0};   ///< Unfinished tasks; the task that brings it to 0 assembles.
 
-    std::mutex progressMutex;  // keeps the reported progress increasing
-    int progress = 0;
+    std::mutex progressMutex;  ///< Keeps the reported progress increasing.
+    int progress = 0;          ///< Steps done so far; guarded by `progressMutex`.
 
+    /**
+     * @brief Advances the reported progress by one step.
+     *
+     * Thread-safe; the mutex keeps the reported progress increasing.
+     */
     void step()
     {
         const std::scoped_lock lock(progressMutex);
         promise.setProgressValue(++progress);
     }
 
+    /**
+     * @brief Tells whether the caller cancelled the load.
+     *
+     * @return True if the promise was cancelled.
+     */
     [[nodiscard]] bool canceled() const { return promise.isCanceled(); }
 };
 
+/** @brief The load's shared state, held by every task of the load and freed after the last. */
 using State = std::shared_ptr<LoadState>;
 
+/**
+ * @brief Reports the result, unless the load was cancelled, and finishes the promise.
+ *
+ * @param state The load.
+ * @param result The result to report.
+ */
 void finish(const State& state, LoadResult result)
 {
     if (!state->canceled())
@@ -58,7 +78,13 @@ void finish(const State& state, LoadResult result)
     state->promise.finish();
 }
 
-/// Runs in whichever task finishes last.
+/**
+ * @brief Merges the log chunks and assembles the result.
+ *
+ * Runs in whichever task finishes last. If the load was cancelled it only finishes the promise.
+ *
+ * @param state The load.
+ */
 void completeLoad(const State& state)
 {
     if (state->canceled()) {
@@ -74,8 +100,16 @@ void completeLoad(const State& state)
     finish(state, assembleRunData(std::move(state->parts)));
 }
 
-/// Starts `work` on the pool. Every task counts one step of progress and one fewer task
-/// remaining, even when the load was cancelled and the work skipped.
+/**
+ * @brief Starts `work` on the pool.
+ *
+ * Every task counts one step of progress and one fewer task remaining, even when the load was
+ * cancelled and the work skipped. The task that brings `remaining` to zero calls completeLoad().
+ *
+ * @tparam Work Callable taking no arguments.
+ * @param state The load.
+ * @param work The work of the task.
+ */
 template <typename Work>
 void startTask(const State& state, Work work)
 {
@@ -93,7 +127,14 @@ void startTask(const State& state, Work work)
     });
 }
 
-/// Maps `sim.log` and cuts it into line-aligned chunks, one task each.
+/**
+ * @brief Maps `sim.log` and cuts it into line-aligned chunks, one task each.
+ *
+ * If the file cannot be mapped, an error is added to `parts.simLog` and there are no chunks.
+ *
+ * @param state The load; receives the mapping, the chunks and one empty slot per chunk.
+ * @param chunks Wanted number of chunks.
+ */
 void prepareSimLog(LoadState& state, qsizetype chunks)
 {
     QString error;
@@ -108,7 +149,14 @@ void prepareSimLog(LoadState& state, qsizetype chunks)
     state.logParts.resize(static_cast<std::size_t>(state.logChunks.size()));
 }
 
-/// Starts the parallel stage, once the run, video and segment records are known.
+/**
+ * @brief Starts the parallel stage, once the run, video and segment records are known.
+ *
+ * Starts one task for each of `samples.jsonl`, `player_events.jsonl`, `summary.json` and
+ * `policy.log`, one per `sim.log` chunk (twice the pool's thread count) and one per media file.
+ *
+ * @param state The load.
+ */
 void startParallelStage(const State& state)
 {
     BundleParts& parts = state->parts;

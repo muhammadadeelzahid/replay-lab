@@ -10,11 +10,21 @@ namespace abrviz::gst {
 
 namespace {
 
+/**
+ * @brief The outcome of `gst_init_check`, kept for the whole process.
+ */
 struct InitResult {
-    bool ok = false;
-    QString error;
+    bool ok = false;  ///< whether `gst_init_check` succeeded
+    QString error;  ///< the reason initialisation failed; empty on success
 };
 
+/**
+ * @brief Initialises GStreamer on the first call and returns the stored outcome.
+ *
+ * Thread-safe: the initialisation runs once under `std::call_once`.
+ *
+ * @return The result of the one `gst_init_check` call, valid for the life of the process.
+ */
 const InitResult& initResult()
 {
     static std::once_flag once;

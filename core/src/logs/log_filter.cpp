@@ -10,15 +10,26 @@ namespace abrviz {
 
 namespace {
 
-constexpr qsizetype kStopCheckInterval = 2048;
+constexpr qsizetype kStopCheckInterval = 2048;  ///< Lines between two calls of the stop callback.
 
+/**
+ * @brief One word or quoted phrase of the filter text.
+ */
 struct Term {
-    QByteArray bytes;
-    bool exclude = false;
-    bool caseSensitive = false;
+    QByteArray bytes;            ///< UTF-8 text to look for, without quotes or the leading `-`.
+    bool exclude = false;        ///< Lines containing the term are dropped (leading `-`).
+    bool caseSensitive = false;  ///< The term has an upper-case letter, so case matters.
 };
 
-/// Splits the filter text into words and quoted phrases.
+/**
+ * @brief Splits the filter text into words and quoted phrases.
+ *
+ * A leading `-` marks a term as excluded. A term with an upper-case letter is case-sensitive.
+ * An unclosed quote runs to the end of the text. Empty terms are dropped.
+ *
+ * @param text The filter text.
+ * @return The terms in order.
+ */
 std::vector<Term> parseTerms(const QString& text)
 {
     std::vector<Term> terms;

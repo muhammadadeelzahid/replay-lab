@@ -23,9 +23,10 @@ namespace abrviz {
 
 namespace {
 
+/** @brief Delay from the last edit of the filter text to the request, in milliseconds. */
 constexpr int kDebounceMs = 150;
 
-const QColor kWarning(0xc0, 0x39, 0x2b);
+const QColor kWarning{0xc0, 0x39, 0x2b};  ///< Text colour of warning lines (red).
 
 } // namespace
 

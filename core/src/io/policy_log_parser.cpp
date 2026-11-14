@@ -7,7 +7,14 @@ namespace abrviz {
 
 namespace {
 
-/// `llm_policy_model+guard(buf5.8:r5->r4)` -> 5
+/**
+ * @brief Returns the rung the LLM chose, from a guard override reason.
+ *
+ * Example: `llm_policy_model+guard(buf5.8:r5->r4)` gives 5.
+ *
+ * @param reason The `reason:` text of a `policy.log` line.
+ * @return The `r<from>` rung, or nothing if the reason has no guard override.
+ */
 std::optional<int> guardFromRung(QByteArrayView reason)
 {
     const qsizetype guard = reason.indexOf("guard(");

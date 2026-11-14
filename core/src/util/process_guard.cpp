@@ -7,9 +7,10 @@ namespace abrviz {
 
 namespace {
 
-std::atomic<int> gLive{0};
+std::atomic<int> gLive{0};  ///< Processes started by any guard that have not exited yet.
 
-constexpr qint64 kMaxOutput = 64 * 1024;  // keep the start of the output for error messages
+/** @brief Bytes of output kept, from the start, for error messages. */
+constexpr qint64 kMaxOutput = 64 * 1024;
 
 } // namespace
 

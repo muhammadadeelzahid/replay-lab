@@ -9,7 +9,15 @@ namespace abrviz {
 
 namespace {
 
-/// The body of a 24 x 24 SVG; `C` stands for the colour. Strokes are 1.8 wide and round.
+/**
+ * @brief The body of a 24 x 24 SVG for a glyph.
+ *
+ * `C` stands for the colour, which the caller substitutes. Strokes are 1.8 wide and round
+ * (set on the enclosing `<svg>` element by the caller).
+ *
+ * @param glyph The icon.
+ * @return The SVG elements without the `<svg>` element; empty for an unknown glyph.
+ */
 QString glyphBody(Glyph glyph)
 {
     switch (glyph) {
@@ -92,14 +100,36 @@ QString glyphBody(Glyph glyph)
     return {};
 }
 
-/// Renders the SVG at whatever size is asked for, so the icon stays sharp on Retina screens.
+/**
+ * @brief An icon engine that renders a glyph's SVG at whatever size is asked for.
+ *
+ * Rendering at the requested size keeps the icon sharp on Retina screens.
+ */
 class GlyphEngine final : public QIconEngine {
 public:
+    /**
+     * @brief Creates an engine for one glyph in the given colours.
+     *
+     * @param glyph The icon to draw.
+     * @param color The normal colour.
+     * @param selected The colour for QIcon::Selected; ignored if invalid.
+     */
     GlyphEngine(Glyph glyph, QColor color, QColor selected)
         : glyph_(glyph), color_(std::move(color)), selected_(std::move(selected))
     {
     }
 
+    /**
+     * @brief Renders the glyph into `rect`.
+     *
+     * Uses the selected colour in QIcon::Selected mode (if valid) and 35% alpha in
+     * QIcon::Disabled mode. SVG Tiny has no `#AARRGGBB` colours, so the colour's alpha is applied
+     * as painter opacity.
+     *
+     * @param painter The painter to draw with; its state is restored afterwards.
+     * @param rect The area to fill with the 24 x 24 view box.
+     * @param mode The icon mode, which picks the colour.
+     */
     void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode, QIcon::State) override
     {
         QColor color = mode == QIcon::Selected && selected_.isValid() ? selected_ : color_;
@@ -120,11 +150,29 @@ public:
         painter->restore();
     }
 
+    /**
+     * @brief Renders the glyph into a pixmap at a device pixel ratio of 1.
+     *
+     * @param size The pixmap size in pixels.
+     * @param mode The icon mode, which picks the colour.
+     * @param state The icon state (the glyph looks the same in both).
+     * @return A transparent pixmap with the glyph drawn on it.
+     * @see scaledPixmap()
+     */
     QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override
     {
         return scaledPixmap(size, mode, state, 1.0);
     }
 
+    /**
+     * @brief Renders the glyph into a pixmap for a given device pixel ratio.
+     *
+     * @param size The pixmap size in device-independent pixels.
+     * @param mode The icon mode, which picks the colour.
+     * @param state The icon state (the glyph looks the same in both).
+     * @param scale The device pixel ratio; the pixmap has `size * scale` physical pixels.
+     * @return A transparent, antialiased pixmap with the glyph drawn on it.
+     */
     QPixmap scaledPixmap(const QSize& size, QIcon::Mode mode, QIcon::State state, qreal scale) override
     {
         QPixmap pixmap(size * scale);
@@ -136,12 +184,17 @@ public:
         return pixmap;
     }
 
+    /**
+     * @brief Copies the engine, as QIcon does when it detaches.
+     *
+     * @return A new engine with the same glyph and colours; the caller owns it.
+     */
     [[nodiscard]] QIconEngine* clone() const override { return new GlyphEngine(glyph_, color_, selected_); }
 
 private:
-    Glyph glyph_;
-    QColor color_;
-    QColor selected_;
+    Glyph glyph_;      ///< The icon to draw.
+    QColor color_;     ///< Normal colour; alpha is applied as painter opacity.
+    QColor selected_;  ///< Colour for selected items; invalid means use color_.
 };
 
 } // namespace

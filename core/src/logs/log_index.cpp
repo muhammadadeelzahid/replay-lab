@@ -15,7 +15,16 @@ namespace abrviz {
 
 namespace {
 
-/// The number in a `key=<number>` word, ignoring trailing `s` and `.` (`t=4.84331s.`).
+/**
+ * @brief Returns the number in a `key=<number>` word, ignoring trailing `s` and `.`.
+ *
+ * Example: `t=4.84331s.` gives 4.84331.
+ *
+ * @param tokens The words of the line.
+ * @param key The prefix to look for, including `=`.
+ * @return The number of the first word starting with `key`, or nothing if there is none or it
+ *         is not a number.
+ */
 std::optional<double> assignment(const Tokens& tokens, QByteArrayView key)
 {
     for (const QByteArrayView token : tokens.all()) {
@@ -29,6 +38,12 @@ std::optional<double> assignment(const Tokens& tokens, QByteArrayView key)
     return std::nullopt;
 }
 
+/**
+ * @brief Converts an optional node id to the `LogLine::ue` value.
+ *
+ * @param node The node id, if known.
+ * @return The node id, or -1 if `node` is empty.
+ */
 qint16 toUe(std::optional<int> node)
 {
     return node ? static_cast<qint16>(*node) : qint16(-1);

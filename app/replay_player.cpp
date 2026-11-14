@@ -20,10 +20,19 @@ namespace abrviz {
 
 namespace {
 
-constexpr double kVideoWidth = 1920.0;
+constexpr double kVideoWidth = 1920.0;  ///< Width of the scene and the video item, in scene units.
+/** @brief Height of the scene and the video item, in scene units. */
 constexpr double kVideoHeight = 1080.0;
+/** @brief Offset of the overlay box from the scene's top-left corner, in scene units. */
 constexpr double kOverlayMargin = 24.0;
 
+/**
+ * @brief The last buffer sample at or before a time.
+ *
+ * @param run Run whose buffer samples (sorted by time) are searched.
+ * @param time Simulation time in seconds.
+ * @return The sample, or null if every sample is later than `time`.
+ */
 const BufferPoint* bufferAt(const RunData& run, double time)
 {
     const auto it = std::ranges::upper_bound(run.buffer, time, {}, &BufferPoint::time);
@@ -352,10 +361,8 @@ void ReplayPlayer::updateMessage()
 
 void ReplayPlayer::updateControls()
 {
-    const bool ready = engine_ && engine_->isReady() && session_->run();
     const bool preparing = engine_ && engine_->state() == ReplaySource::State::Preparing
         && !engine_->isReady();
-    Q_UNUSED(ready);
     // Only the pre-rendered engine has something to prepare.
     const bool needsRender = engineKind_ == Engine::Prerendered && session_->run() && !engine_->isReady();
     renderBar_->setVisible(needsRender);

@@ -21,27 +21,42 @@ namespace abrviz {
 
 namespace {
 
+/** @brief Width of the lane-name column left of the plot, in pixels. */
 constexpr double kLabelWidth = 84.0;
-constexpr double kRightMargin = 12.0;
-constexpr double kTopMargin = 6.0;
-constexpr double kLaneHeight = 26.0;
-constexpr double kLaneGap = 6.0;
-constexpr double kAxisHeight = 20.0;
-constexpr double kPointWidth = 7.0;
+constexpr double kRightMargin = 12.0;  ///< Space right of the plot, in pixels.
+constexpr double kTopMargin = 6.0;     ///< Space above the first lane, in pixels.
+constexpr double kLaneHeight = 26.0;   ///< Height of one lane, in pixels.
+constexpr double kLaneGap = 6.0;       ///< Space after each lane, in pixels.
+constexpr double kAxisHeight = 20.0;   ///< Height of the time axis below the lanes, in pixels.
+constexpr double kPointWidth = 7.0;    ///< Width of a point mark, in pixels.
+/** @brief Smallest width of a stall bar, in pixels. */
 constexpr double kMinStallWidth = 4.0;  // a short stall stays visible at any zoom
 
+/** @brief The lanes, top to bottom. */
 constexpr std::array kLanes = {SegmentTimeline::Lane::Downloads, SegmentTimeline::Lane::Playback,
                                SegmentTimeline::Lane::Decisions};
 
-const QColor kStallColor(0xd6, 0x27, 0x28);
-const QColor kOverrideColor(0xe6, 0x55, 0x0d);
+const QColor kStallColor{0xd6, 0x27, 0x28};     ///< Stalls (red).
+const QColor kOverrideColor{0xe6, 0x55, 0x0d};  ///< Guard overrides of the LLM's choice (orange).
 
+/**
+ * @brief Whether a kind of mark is drawn as a point rather than a bar.
+ *
+ * @param kind Kind of mark.
+ * @return True for CutOff, Decision and GuardOverride.
+ */
 bool isPoint(SegmentTimeline::Kind kind)
 {
     using K = SegmentTimeline::Kind;
     return kind == K::CutOff || kind == K::Decision || kind == K::GuardOverride;
 }
 
+/**
+ * @brief Label shown left of a lane.
+ *
+ * @param lane The lane.
+ * @return The translated lane name.
+ */
 QString laneName(SegmentTimeline::Lane lane)
 {
     switch (lane) {
@@ -52,12 +67,26 @@ QString laneName(SegmentTimeline::Lane lane)
     return {};
 }
 
+/**
+ * @brief Formats a time interval as "A to B s" with two decimals.
+ *
+ * @param start Start in seconds.
+ * @param end End in seconds.
+ * @return The formatted interval.
+ */
 QString span(double start, double end)
 {
     return QStringLiteral("%1 to %2 s").arg(start, 0, 'f', 2).arg(end, 0, 'f', 2);
 }
 
-/// A tick step that leaves at least `minPixels` between labels.
+/**
+ * @brief A tick step that leaves at least `minPixels` between labels.
+ *
+ * @param secondsPerPixel Scale of the time axis.
+ * @param minPixels Smallest distance between ticks in pixels.
+ * @return The smallest of 0.5, 1, 2, 5, 10, 15, 20, 30, 60 or 120 s that is wide enough;
+ *         120 s if none is.
+ */
 double tickStep(double secondsPerPixel, double minPixels)
 {
     static constexpr std::array steps = {0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0, 120.0};

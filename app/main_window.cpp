@@ -58,21 +58,41 @@ namespace abrviz {
 
 namespace {
 
+/** @brief Settings key of the chosen replay engine. */
 const QString kEngineSetting = QStringLiteral("replay/engine");
+/** @brief Settings key of the recent folders, as absolute paths. */
 const QString kRecentSetting = QStringLiteral("library/recentFolders");
+/** @brief Settings key of the window geometry. */
 const QString kGeometrySetting = QStringLiteral("window/geometry");
+/** @brief Settings key of whether the video overlay is shown. */
 const QString kOverlaySetting = QStringLiteral("replay/overlay");
+/** @brief Settings key of whether the sidebar is shown. */
 const QString kSidebarSetting = QStringLiteral("window/sidebar");
+/** @brief Settings key of whether the inspector is shown. */
 const QString kInspectorSetting = QStringLiteral("window/inspector");
-constexpr int kRecentCount = 6;
-constexpr double kStepSeconds = 5.0;
+constexpr int kRecentCount = 6;         ///< Most recent folders kept.
+constexpr double kStepSeconds = 5.0;    ///< Replay seconds moved by the step actions.
 
+/**
+ * @brief Whether a palette is a dark appearance.
+ *
+ * @param palette The palette to test.
+ * @return True if the window colour's lightness is below 128.
+ */
 bool isDark(const QPalette& palette)
 {
     return palette.color(QPalette::Window).lightness() < 128;
 }
 
-/// Content with the usual margins of a macOS window.
+/**
+ * @brief Wraps content in a page with the usual margins of a macOS window.
+ *
+ * @param content The widget to wrap; reparented to the page.
+ * @param parent The page's parent.
+ * @param margin The left and right margin in pixels; the top is 4 pixels less and the
+ *               bottom is 6 pixels.
+ * @return The new page, owned by `parent`.
+ */
 QWidget* padded(QWidget* content, QWidget* parent, int margin = 16)
 {
     auto* page = new QWidget(parent);
@@ -82,6 +102,13 @@ QWidget* padded(QWidget* content, QWidget* parent, int margin = 16)
     return page;
 }
 
+/**
+ * @brief A one-pixel divider line, coloured by the window's style sheet.
+ *
+ * @param orientation Qt::Vertical for a vertical line, Qt::Horizontal for a horizontal one.
+ * @param parent The line's parent.
+ * @return The new frame, owned by `parent`.
+ */
 QFrame* divider(Qt::Orientation orientation, QWidget* parent)
 {
     auto* line = new QFrame(parent);
@@ -92,61 +119,70 @@ QFrame* divider(Qt::Orientation orientation, QWidget* parent)
 
 } // namespace
 
+/**
+ * @brief The window's private state: the render queue, the widgets, the actions and the
+ *        pending background tasks.
+ */
 struct MainWindow::Impl {
-    // Renders the experienced video for the pre-rendered engine. Destroyed with Impl, after
-    // shutdown() has destroyed the engine that uses it and before the child widgets.
+    /**
+     * @brief Renders the experienced video for the pre-rendered engine.
+     *
+     * Destroyed with Impl, after shutdown() has destroyed the engine that uses it and before
+     * the child widgets.
+     */
     std::unique_ptr<RenderQueue> renderQueue;
 
     // Widgets and watchers are owned by the window through Qt's parent-child tree.
-    Session* session = nullptr;
-    LibraryView* library = nullptr;
-    SummaryPanel* summary = nullptr;
-    ReportView* report = nullptr;
-    SegmentTimeline* timeline = nullptr;
-    ChartsPanel* charts = nullptr;
-    LogConsole* logs = nullptr;
-    ReplayPlayer* player = nullptr;
-    MomentPanel* moment = nullptr;
-    TransportBar* transport = nullptr;
-    SourceList* sidebar = nullptr;
-    QWidget* sidebarPane = nullptr;
-    QWidget* inspectorPane = nullptr;
-    QStackedWidget* pages = nullptr;
-    SegmentedControl* views = nullptr;
-    QLabel* notice = nullptr;
-    QTimer* noticeTimer = nullptr;
-    QToolBar* toolBar = nullptr;
-    QMenu* recentMenu = nullptr;
-    SettingsDialog* settings = nullptr;
+    Session* session = nullptr;           ///< The open run; made a child after the panels.
+    LibraryView* library = nullptr;       ///< Library page.
+    SummaryPanel* summary = nullptr;      ///< Run summary, beside the report on the Report page.
+    ReportView* report = nullptr;         ///< QoE report on the Report page.
+    SegmentTimeline* timeline = nullptr;  ///< Segment timeline, shown in the transport bar.
+    ChartsPanel* charts = nullptr;        ///< Charts of the Analysis page.
+    LogConsole* logs = nullptr;           ///< Log console of the Logs page.
+    ReplayPlayer* player = nullptr;       ///< Video replay of the Replay page.
+    MomentPanel* moment = nullptr;        ///< Values at the cursor, in the inspector pane.
+    TransportBar* transport = nullptr;    ///< Playback controls; shown while a run is open.
+    SourceList* sidebar = nullptr;        ///< Library and runs list, in the sidebar pane.
+    QWidget* sidebarPane = nullptr;       ///< Sidebar and its divider; see sidebarAction.
+    QWidget* inspectorPane = nullptr;     ///< Moment panel and its divider; see updatePanes().
+    QStackedWidget* pages = nullptr;      ///< One page per Page value, in the same order.
+    SegmentedControl* views = nullptr;    ///< Page switcher; segment i shows Page i + 1.
+    QLabel* notice = nullptr;             ///< Message shown by showNotice(); hidden while empty.
+    QTimer* noticeTimer = nullptr;        ///< Single-shot timer that hides notice.
+    QToolBar* toolBar = nullptr;          ///< The window's only toolbar.
+    QMenu* recentMenu = nullptr;          ///< File > Open Recent, rebuilt from the saved folders.
+    SettingsDialog* settings = nullptr;   ///< Settings dialog; null until first shown.
 
-    QAction* openFolderAction = nullptr;
-    QAction* openBundleAction = nullptr;
-    QAction* playAction = nullptr;
-    QAction* stepBackAction = nullptr;
-    QAction* stepForwardAction = nullptr;
-    QAction* previousSegmentAction = nullptr;
-    QAction* nextSegmentAction = nullptr;
-    QAction* renderAction = nullptr;
-    QAction* overlayAction = nullptr;
-    QAction* fullScreenAction = nullptr;
-    QAction* sidebarAction = nullptr;
-    QAction* inspectorAction = nullptr;
-    QAction* settingsAction = nullptr;
+    QAction* openFolderAction = nullptr;       ///< Opens a folder of runs.
+    QAction* openBundleAction = nullptr;       ///< Opens a single run.
+    QAction* playAction = nullptr;             ///< Toggles play and pause.
+    QAction* stepBackAction = nullptr;         ///< Moves the replay back by kStepSeconds.
+    QAction* stepForwardAction = nullptr;      ///< Moves the replay forward by kStepSeconds.
+    QAction* previousSegmentAction = nullptr;  ///< Moves to the previous segment.
+    QAction* nextSegmentAction = nullptr;      ///< Moves to the next segment.
+    QAction* renderAction = nullptr;           ///< Renders the video for the pre-rendered engine.
+    QAction* overlayAction = nullptr;          ///< Checkable; shows the video overlay.
+    QAction* fullScreenAction = nullptr;       ///< Toggles full screen.
+    QAction* sidebarAction = nullptr;          ///< Checkable; shows the sidebar pane.
+    QAction* inspectorAction = nullptr;        ///< Checkable; shows the inspector pane.
+    QAction* settingsAction = nullptr;         ///< Opens the settings dialog.
+    /** @brief Checkable page actions in an exclusive group, indexed by Page. */
     std::array<QAction*, kPageCount> pageActions{};
-    QActionGroup* engineActions = nullptr;
+    QActionGroup* engineActions = nullptr;  ///< Replay engine choices; data is the engine key.
 
-    QFutureWatcher<QList<BundleSummaryPtr>>* scanWatcher = nullptr;
-    QFutureWatcher<LoadResult>* loadWatcher = nullptr;
-    QFutureWatcher<LogIndexPtr>* logWatcher = nullptr;
+    QFutureWatcher<QList<BundleSummaryPtr>>* scanWatcher = nullptr;  ///< Watches the folder scan.
+    QFutureWatcher<LoadResult>* loadWatcher = nullptr;               ///< Watches the bundle load.
+    QFutureWatcher<LogIndexPtr>* logWatcher = nullptr;               ///< Watches the log index.
 
     // Pending tasks. The guards cancel and wait when replaced or destroyed.
-    FutureGuard<QList<BundleSummaryPtr>> scan;
-    FutureGuard<LoadResult> load;
-    FutureGuard<LogIndexPtr> logIndex;
-    std::shared_ptr<const RunData> logIndexRun;  // the run the pending index is for
-    QString scanningFolder;
-    QString loadingBundle;
-    bool shutDown = false;
+    FutureGuard<QList<BundleSummaryPtr>> scan;   ///< Folder scan; empty if none is pending.
+    FutureGuard<LoadResult> load;                ///< Bundle load; empty if none is pending.
+    FutureGuard<LogIndexPtr> logIndex;           ///< Log index build; empty if none is pending.
+    std::shared_ptr<const RunData> logIndexRun;  ///< The run the pending index is for.
+    QString scanningFolder;  ///< Absolute path of the folder last scanned.
+    QString loadingBundle;   ///< Absolute path of the bundle last loaded.
+    bool shutDown = false;   ///< Set by shutdown(); no new tasks start after it.
 };
 
 MainWindow::MainWindow(QWidget* parent)

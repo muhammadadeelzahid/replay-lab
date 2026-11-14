@@ -1,11 +1,17 @@
-// render_experienced: renders the video a run's viewer saw (every played segment at its played
-// rung, stalls as frozen frames, cut off where playback stopped) with the same RenderQueue the
-// viewer uses.
-//
-//   render_experienced [--output file.mp4] [--cache dir] [--threads n] [--ffmpeg path] <bundle>
-//
-// Prints progress, the number of ffmpeg processes that ran at once, the time taken, and the
-// duration of the result compared with the replay time of the PlaybackClock.
+/**
+ * @file
+ * @brief render_experienced: renders the video a run's viewer saw.
+ *
+ * Every played segment is rendered at its played rung, stalls as frozen frames, cut off where
+ * playback stopped, with the same RenderQueue the viewer uses.
+ *
+ * Usage:
+ *
+ *     render_experienced [--output file.mp4] [--cache dir] [--threads n] [--ffmpeg path] <bundle>
+ *
+ * Prints progress, the number of ffmpeg processes that ran at once, the time taken, and the
+ * duration of the result compared with the replay time of the PlaybackClock.
+ */
 
 #include "abrviz/core/io/mp4_duration.h"
 #include "abrviz/core/load/bundle_reader.h"
@@ -22,8 +28,14 @@
 
 namespace {
 
-QFuture<abrviz::RenderResult>* gRunning = nullptr;
+QFuture<abrviz::RenderResult>* gRunning = nullptr;  ///< the render SIGINT cancels; null when idle
 
+/**
+ * @brief SIGINT handler: cancels the running render.
+ *
+ * Only sets a flag inside `QFutureInterface`; the job notices within 100 ms and the tool exits
+ * with 130.
+ */
 extern "C" void onInterrupt(int)
 {
     // Only sets a flag inside QFutureInterface; the job notices within 100 ms.
@@ -33,6 +45,14 @@ extern "C" void onInterrupt(int)
 
 } // namespace
 
+/**
+ * @brief Renders the experienced video of one bundle and prints what happened.
+ *
+ * @param argc Argument count.
+ * @param argv Options and the bundle folder (see the usage above).
+ * @return 0 on success; 1 if the bundle cannot be loaded, the render fails or the copy to
+ *         `--output` fails; 2 for wrong arguments; 130 if cancelled.
+ */
 int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);

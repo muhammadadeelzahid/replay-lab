@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file
+ * @brief The Library page: the welcome screen and the table of runs in a folder.
+ */
+
 #include "abrviz/core/load/bundle_library.h"
 
 #include <QAbstractTableModel>
@@ -14,75 +19,243 @@ class QTableView;
 
 namespace abrviz {
 
-/// Rows of the library: one per bundle, sorted by video and link rate.
+/**
+ * @brief The rows of the library: one per bundle, sorted by video and link rate.
+ *
+ * The open bundle's row is shown in bold. Bundles with load errors show the errors as their
+ * tool tip; the others show their directory.
+ */
 class LibraryModel final : public QAbstractTableModel {
     Q_OBJECT
 
 public:
+    /** @brief The table's columns. */
     enum Column { Video, LinkRate, Segments, Stalls, CutOff, LogAgreement, ColumnCount };
 
     using QAbstractTableModel::QAbstractTableModel;
 
+    /**
+     * @brief Replaces the rows, sorting them into library order (resets the model).
+     *
+     * @param bundles The bundle summaries.
+     */
     void setBundles(QList<BundleSummaryPtr> bundles);
+
+    /**
+     * @brief Marks the open bundle, whose row is drawn in bold.
+     *
+     * @param directory The bundle's directory; made absolute before it is compared.
+     */
     void setOpenBundle(const QString& directory);
+
+    /**
+     * @brief The bundle of a row.
+     *
+     * @param row The source-model row.
+     * @return The bundle summary, or null if `row` is out of range.
+     */
     [[nodiscard]] BundleSummaryPtr bundleAt(int row) const;
+
+    /**
+     * @brief The row of a bundle.
+     *
+     * @param directory The bundle's directory; made absolute before it is compared.
+     * @return The source-model row, or -1 if the bundle is not listed.
+     */
     [[nodiscard]] int rowOf(const QString& directory) const;
 
+    /**
+     * @brief The number of bundles.
+     *
+     * @param parent Must be invalid (the model is a flat table).
+     * @return The bundle count, or 0 for a valid `parent`.
+     */
     int rowCount(const QModelIndex& parent = {}) const override;
+
+    /**
+     * @brief The number of columns.
+     *
+     * @param parent Must be invalid (the model is a flat table).
+     * @return ColumnCount, or 0 for a valid `parent`.
+     */
     int columnCount(const QModelIndex& parent = {}) const override;
+
+    /**
+     * @brief A cell's data.
+     *
+     * Supports the display, tool-tip, font (bold for the open bundle) and text-alignment
+     * (right-aligned except the Video column) roles.
+     *
+     * @param index The cell.
+     * @param role The data role.
+     * @return The value, or an invalid QVariant for other roles or an invalid row.
+     */
     QVariant data(const QModelIndex& index, int role) const override;
+
+    /**
+     * @brief A column title.
+     *
+     * @param section The column.
+     * @param orientation Only Qt::Horizontal has titles.
+     * @param role Only Qt::DisplayRole has titles.
+     * @return The title, or an invalid QVariant otherwise.
+     */
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
 
 private:
-    QList<BundleSummaryPtr> bundles_;
-    QString openBundle_;
+    QList<BundleSummaryPtr> bundles_;  ///< The table's rows, in the order of sortLibrary().
+    QString openBundle_;  ///< Absolute directory of the open bundle.
 };
 
-/// The Library page. Without a folder it shows a welcome screen (open a folder or a bundle,
-/// recent folders); with one, a searchable table of its runs and the details of the selected
-/// run. Double-click, Enter or the Open button opens a run.
+/**
+ * @brief The Library page.
+ *
+ * Without a folder it shows a welcome screen (open a folder or a bundle, recent folders); with
+ * one, a searchable table of its runs and the details of the selected run. Double-click, Enter
+ * or the Open button opens a run.
+ */
 class LibraryView final : public QWidget {
     Q_OBJECT
 
 public:
+    /**
+     * @brief Builds the page, showing the welcome screen.
+     *
+     * @param parent The parent widget.
+     */
     explicit LibraryView(QWidget* parent = nullptr);
 
+    /**
+     * @brief Shows the runs of a folder in the table and switches to it.
+     *
+     * Selects the first row if nothing is selected.
+     *
+     * @param bundles The bundle summaries of the folder.
+     * @param folder The folder, shown with the run count under the title.
+     */
     void setBundles(QList<BundleSummaryPtr> bundles, const QString& folder);
+
+    /**
+     * @brief Switches to the table and says that `folder` is being read.
+     *
+     * @param folder The folder being scanned.
+     */
     void setScanning(const QString& folder);
+
+    /**
+     * @brief Marks the open bundle in bold and selects its row.
+     *
+     * @param directory The bundle's directory.
+     */
     void setOpenBundle(const QString& directory);
+
+    /**
+     * @brief Replaces the Recent list of the welcome screen.
+     *
+     * @param folders The recent folders, most recent first; an empty list hides the section.
+     */
     void setRecentFolders(const QStringList& folders);
 
+    /**
+     * @brief The model behind the table.
+     *
+     * @return The model, owned by the view.
+     */
     [[nodiscard]] LibraryModel* model() const { return model_; }
+
+    /**
+     * @brief The search field above the table.
+     *
+     * @return The line edit, owned by the view.
+     */
     [[nodiscard]] QLineEdit* searchEdit() const { return search_; }
-    /// Rows shown after the search filter.
+
+    /**
+     * @brief The number of rows shown after the search filter.
+     *
+     * @return The visible row count.
+     */
     [[nodiscard]] int visibleRows() const;
+
+    /**
+     * @brief Whether the welcome screen is shown rather than the table.
+     *
+     * @return True while the welcome screen is shown.
+     */
     [[nodiscard]] bool isShowingWelcome() const;
+
+    /**
+     * @brief The details card's text, for tests.
+     *
+     * @return The card's rich text.
+     */
     [[nodiscard]] QString detailsText() const;
-    /// Selects the row of `directory` (if listed and not filtered out).
+
+    /**
+     * @brief Selects the row of a bundle.
+     *
+     * @param directory The bundle's directory; nothing happens if it is not listed or is
+     *                  filtered out.
+     */
     void selectBundle(const QString& directory);
 
 signals:
+    /**
+     * @brief Emitted when the user opens a run (double-click, Enter or the Open button).
+     *
+     * @param directory The run's bundle directory.
+     */
     void openRequested(const QString& directory);
+
+    /**
+     * @brief Emitted when the user clicks "Open a Folder of Runs..." on the welcome screen.
+     */
     void openFolderRequested();
+
+    /**
+     * @brief Emitted when the user clicks "Open a Single Run..." on the welcome screen.
+     */
     void openBundleRequested();
+
+    /**
+     * @brief Emitted when the user clicks a recent folder on the welcome screen.
+     *
+     * @param folder The folder, as given to setRecentFolders().
+     */
     void recentFolderRequested(const QString& folder);
 
 private:
+    /**
+     * @brief Shows the details of the newly selected run.
+     */
     void selectionChanged();
+
+    /**
+     * @brief Fills the details card and enables the Open button for a loadable run.
+     *
+     * @param bundle The run to describe; null shows a hint to select a run.
+     */
     void showDetails(const BundleSummaryPtr& bundle);
+
+    /**
+     * @brief The bundle of the table's current row.
+     *
+     * @return The bundle summary, or null if no row is current.
+     */
     [[nodiscard]] BundleSummaryPtr selectedBundle() const;
 
-    LibraryModel* model_;
-    QSortFilterProxyModel* proxy_;
-    QStackedWidget* stack_;
-    QWidget* welcome_;
-    QWidget* recentBox_;
-    QWidget* browser_;
-    QLabel* title_;
-    QLabel* path_;
-    QLineEdit* search_;
-    QTableView* table_;
-    QLabel* details_;
+    LibraryModel* model_;           ///< All bundles of the library; child of the view.
+    QSortFilterProxyModel* proxy_;  ///< Filters model_ by the search text, in any column.
+    QStackedWidget* stack_;         ///< Holds welcome_ and browser_.
+    QWidget* welcome_;              ///< Welcome screen; shown until a folder is opened.
+    QWidget* recentBox_;            ///< The Recent list on the welcome screen.
+    QWidget* browser_;              ///< The table page.
+    QLabel* title_;                 ///< "All Runs" heading above the table.
+    QLabel* path_;                  ///< Run count and folder, or the scanning message.
+    QLineEdit* search_;             ///< Search field; its text filters the table through proxy_.
+    QTableView* table_;             ///< The runs, through proxy_.
+    QLabel* details_;               ///< Rich-text details of the selected run.
+    /** @brief Opens the selected run; enabled only for a run without load errors. */
     QPushButton* openButton_;
 };
 
