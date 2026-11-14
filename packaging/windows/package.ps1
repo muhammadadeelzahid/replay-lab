@@ -18,7 +18,10 @@ $stage = Join-Path "dist" $name
 Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $stage | Out-Null
 
-Copy-Item (Join-Path $Build "app/stream-inspector.exe") $stage
+# Qt puts Windows executables at the top of the build folder (next to their DLLs), not in app/.
+$exe = Get-ChildItem $Build -Recurse -Filter stream-inspector.exe | Select-Object -First 1
+if (-not $exe) { throw "stream-inspector.exe not found under $Build; build the dist preset first" }
+Copy-Item $exe.FullName $stage
 # ffmpeg goes next to the executable, where the app looks for it first.
 Copy-Item $Ffmpeg (Join-Path $stage "ffmpeg.exe")
 # Qt libraries and plugins, including the multimedia backend.

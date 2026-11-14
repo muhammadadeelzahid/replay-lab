@@ -66,6 +66,8 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true  # stop if a command fails
+          $ErrorActionPreference = "Stop"
           cmake --preset dist -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
           cmake --build --preset dist
 
