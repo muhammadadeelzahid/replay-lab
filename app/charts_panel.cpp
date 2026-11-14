@@ -455,10 +455,13 @@ void ChartsPanel::fillBuffer(Plot& plot, const RunData& run)
     // Stalls as shaded bands from 0 to the top of the buffer range.
     const double top = std::max(1.0, plot.yMax * 1.1);
     for (const Stall& stall : run.stalls) {
-        auto* upper = new QLineSeries();
+        // QAreaSeries does not own its line series: make the line a child of the area, so it
+        // is deleted with it when the chart removes its series.
+        auto* area = new QAreaSeries();
+        auto* upper = new QLineSeries(area);
         upper->append(stall.start, top);
         upper->append(std::max(stall.end, stall.start + 0.2), top);  // visible when short
-        auto* area = new QAreaSeries(upper);  // takes ownership of `upper`
+        area->setUpperSeries(upper);
         area->setName(QStringLiteral("stall"));
         QColor fill = kStall;
         fill.setAlphaF(0.25F);

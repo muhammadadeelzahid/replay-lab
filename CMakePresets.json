@@ -130,7 +130,8 @@
       "configurePreset": "asan",
       "environment": {
         "QT_QPA_PLATFORM": "offscreen",
-        "UBSAN_OPTIONS": "print_stacktrace=1"
+        "UBSAN_OPTIONS": "print_stacktrace=1",
+        "LSAN_OPTIONS": "suppressions=${sourceDir}/cmake/lsan.supp"
       }
     },
     {

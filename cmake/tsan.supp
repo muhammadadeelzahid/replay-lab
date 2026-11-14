@@ -12,3 +12,12 @@ race:QFutureInterface<*>::reportAndEmplaceResult
 race:QFutureInterface<*>::reportResult
 race:QFutureInterface<*>::resultReference
 race:QFuture<*>::result
+
+# On Linux, Qt's shared libraries are not built with TSan either, and their internal hand-offs
+# (the thread pool's queue, implicitly shared containers moved between threads) are reported
+# with only Qt frames on both sides. A race with any frame of our own is still reported.
+called_from_lib:libQt6Core.so.6
+called_from_lib:libQt6Gui.so.6
+called_from_lib:libQt6Widgets.so.6
+called_from_lib:libQt6Multimedia.so.6
+called_from_lib:libQt6Charts.so.6

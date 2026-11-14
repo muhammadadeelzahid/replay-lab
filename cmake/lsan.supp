@@ -1,0 +1,6 @@
+# LeakSanitizer suppressions for the asan preset (LeakSanitizer runs on Linux).
+#
+# FFmpeg (through GStreamer's libav decoder and video converter) keeps small internal
+# allocations (about 100 bytes each, made by av_malloc) until the process exits. They are not
+# frames: a leaked frame would be a 3 MB buffer.
+leak:libavutil.so
