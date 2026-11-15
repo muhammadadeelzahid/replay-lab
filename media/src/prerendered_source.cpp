@@ -1,10 +1,13 @@
 #include "abrviz/media/prerendered_source.h"
 
+#include "abrviz/core/playback/playback_clock.h"
+
 #include <QMediaPlayer>
 #include <QTimer>
 #include <QUrl>
 #include <QVideoSink>
 
+#include <algorithm>
 #include <cmath>
 #include <tuple>
 
@@ -52,6 +55,9 @@ QString PrerenderedSource::name() const
 void PrerenderedSource::setRun(std::shared_ptr<const RunData> run)
 {
     render_.reset();  // cancels a render of the previous run and waits for it
+    // A paused seek's scrub ends here: finishing it later would move the new run to its target.
+    scrubbing_ = false;
+    disconnect(scrubConnection_);
     player_->stop();
     player_->setSource(QUrl());
     file_.clear();
@@ -157,7 +163,9 @@ void PrerenderedSource::play()
         playWhenReady_ = true;
         return;
     }
-    if (state() == State::Ended)
+    // At the end (also after a seek there while paused), playing starts again from 0, as in the
+    // GStreamer engine. The file can run a fraction of a frame past the replay's end.
+    if (state() == State::Ended || (run_ && position() >= PlaybackClock(*run_).replayDuration() - 1e-3))
         player_->setPosition(0);
     player_->play();
 }
@@ -172,6 +180,11 @@ void PrerenderedSource::pause()
 
 void PrerenderedSource::seek(double replayTime)
 {
+    if (std::isnan(replayTime))
+        return;
+    // Within [0, the file's length]; an infinite target must not reach llround().
+    const qint64 duration = player_->duration();
+    replayTime = std::clamp(replayTime, 0.0, duration > 0 ? static_cast<double>(duration) / 1000.0 : 1e9);
     if (!isReady() || state() == State::Preparing) {
         pendingSeek_ = replayTime;
         return;

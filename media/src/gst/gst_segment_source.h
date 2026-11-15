@@ -124,9 +124,10 @@ public:
      * @brief Seeks the pipeline to the media time of a replay time.
      *
      * Before the preroll the target is kept and applied when it completes. The target is clamped
-     * to the replay duration; a seek after the end moves back to `Paused`. Seeking into a stall
-     * shows the last frame before it. The seek is flushing and accurate, and the first frame
-     * after it is shown at once, also while paused. Does nothing without a pipeline.
+     * to the replay duration, and NaN is ignored; a seek after the end moves back to `Paused`.
+     * Seeking into a stall shows the last frame before it, and seeking to the end the last frame.
+     * The seek is flushing and accurate, and the first frame after it is shown at once, also
+     * while paused. Does nothing without a pipeline.
      *
      * @param replayTime Target position on the replay timeline (seconds).
      */
@@ -235,15 +236,17 @@ private:
      *
      * @param stop Stop token of the `std::jthread`.
      * @param bus The pipeline's bus; the thread owns a reference to it.
+     * @param generation The pipeline's `generation_`; events posted after the pipeline was
+     *                   replaced are dropped on the GUI thread.
      */
-    void busLoop(const std::stop_token& stop, GstBus* bus);
+    void busLoop(const std::stop_token& stop, GstBus* bus, quint64 generation);
 
     /**
      * @brief Handles a bus event on the GUI thread.
      *
      * The first async-done ends the preroll: the state becomes `Paused`, a pending seek (or a
-     * seek to 0) is made and a pending play is applied. An error fails the engine; a warning is
-     * logged. Ignored once the pipeline is gone.
+     * seek to 0) is made and a pending play is applied. An error stops the pipeline and fails
+     * the engine; a warning is logged. Ignored once the pipeline is gone.
      *
      * @param event The event posted by `busLoop()`.
      */
@@ -361,6 +364,7 @@ private:
     qint64 framesShown_ = 0;              ///< frames handed to the sink since the run was set
     qint64 framesDecoded_ = 0;            ///< samples pulled since the run was set
     bool prerolled_ = false;              ///< the first async-done has arrived
+    quint64 generation_ = 0;              ///< counts pipelines built; GUI thread only
     bool wantPlay_ = false;               ///< play requested before the preroll
     std::optional<double> pendingSeek_;   ///< seek requested before the preroll
 

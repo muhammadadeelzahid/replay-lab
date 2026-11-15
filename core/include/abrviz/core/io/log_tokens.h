@@ -39,6 +39,23 @@ namespace abrviz {
 }
 
 /**
+ * @brief Converts a double to a 64-bit integer, truncating towards zero.
+ *
+ * Casting a double that is NaN or outside the range of `qint64` is undefined behaviour, so such
+ * values are refused.
+ *
+ * @param value The value to convert.
+ * @return The integer, or nothing if `value` is not finite or does not fit in a `qint64`.
+ */
+[[nodiscard]] inline std::optional<qint64> doubleToInt64(double value)
+{
+    constexpr double kTwoTo63 = 9223372036854775808.0;  // exactly representable
+    if (!(value >= -kTwoTo63 && value < kTwoTo63))      // also false for NaN
+        return std::nullopt;
+    return static_cast<qint64>(value);
+}
+
+/**
  * @brief The space-separated words of a log line, as views into the line.
  *
  * Used for the `Key: value Key: value` format of the ns-3 and policy logs. The views point into

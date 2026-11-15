@@ -1,6 +1,7 @@
 #include "abrviz/core/io/mp4_duration.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QtEndian>
 
 #include <algorithm>
@@ -68,7 +69,9 @@ std::optional<Box> readBox(QFile& file, qint64 offset, qint64 limit)
     } else if (size == 0) {
         size = limit - offset;  // the box extends to the end of its parent
     }
-    if (size < box.payloadStart - offset || offset + size > limit)
+    // `size > limit - offset` rather than `offset + size > limit`: a 64-bit size near the
+    // maximum would overflow the sum.
+    if (size < box.payloadStart - offset || size > limit - offset)
         return std::nullopt;
     box.end = offset + size;
     return box;
@@ -135,6 +138,9 @@ std::optional<double> readHeaderDuration(QFile& file, const Box& header)
     if (!versionAndFlags)
         return std::nullopt;
     const bool version1 = (*versionAndFlags >> 24) == 1;
+    // The fields must lie inside the box, not in whatever follows it.
+    if (header.end - header.payloadStart < (version1 ? 32 : 20))
+        return std::nullopt;
 
     // version 0: creation(4) modification(4) timescale(4) duration(4)
     // version 1: creation(8) modification(8) timescale(4) duration(8)
@@ -165,7 +171,7 @@ bool isVideoTrack(QFile& file, const Box& trak)
         return false;
     const auto hdlr = findChild(file, *mdia, fourCC("hdlr"));
     // hdlr: version and flags(4) pre_defined(4) handler_type(4)
-    if (!hdlr || !file.seek(hdlr->payloadStart + 8))
+    if (!hdlr || hdlr->end - hdlr->payloadStart < 12 || !file.seek(hdlr->payloadStart + 8))
         return false;
     FourCC handler{};
     return file.read(handler.data(), 4) == 4 && handler == fourCC("vide");
@@ -175,6 +181,9 @@ bool isVideoTrack(QFile& file, const Box& trak)
 
 std::optional<double> readMp4Duration(const QString& path)
 {
+    // Only regular files: opening a FIFO for reading would block until a writer appears.
+    if (!QFileInfo(path).isFile())
+        return std::nullopt;
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return std::nullopt;

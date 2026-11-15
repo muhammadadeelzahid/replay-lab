@@ -24,6 +24,11 @@ namespace abrviz {
  * next piece in simulation time, and for its real media duration in media and replay time. A
  * stall lasts its duration in simulation and replay time and takes no media time. Within a
  * piece the mapping is linear; outside the session times are clamped.
+ *
+ * Stalls before the first downloaded segment is shown are start-up and not part of the replay. A stall ends at the
+ * next piece at the latest in simulation time, so pieces never overlap. Records with times that
+ * are not finite are left out, and invalid durations count as 0. A NaN time maps like a time
+ * before the session.
  */
 class PlaybackClock {
 public:

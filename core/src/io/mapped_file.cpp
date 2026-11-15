@@ -1,6 +1,7 @@
 #include "abrviz/core/io/mapped_file.h"
 
 #include <QFile>
+#include <QFileInfo>
 
 #include <utility>
 
@@ -8,6 +9,12 @@ namespace abrviz {
 
 std::optional<MappedFile> MappedFile::open(const QString& path, QString* error)
 {
+    // Opening a FIFO for reading blocks until a writer appears; only regular files are read.
+    if (const QFileInfo info(path); info.exists() && !info.isFile()) {
+        if (error)
+            *error = QStringLiteral("not a regular file");
+        return std::nullopt;
+    }
     auto file = std::make_unique<QFile>(path);
     if (!file->open(QIODevice::ReadOnly)) {
         if (error)

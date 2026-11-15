@@ -81,7 +81,7 @@ public:
     void setVideoSink(QVideoSink* sink) override;
 
     /**
-     * @brief Starts playback, from the start if playback has ended.
+     * @brief Starts playback, from the start if playback has ended or is at the end.
      *
      * Ends a running scrub first. Before the file is loaded, the request is kept and playback
      * starts once the media is loaded.
@@ -100,7 +100,8 @@ public:
      * after the end moves the state back to `Paused`. While paused, the frame at the target is
      * shown with a short scrub (see `showFrameAt()`).
      *
-     * @param replayTime Target position (seconds); rounded to milliseconds.
+     * @param replayTime Target position (seconds); clamped to the file and rounded to
+     *                   milliseconds; NaN is ignored.
      */
     void seek(double replayTime) override;
 

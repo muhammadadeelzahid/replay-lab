@@ -4,6 +4,9 @@
 
 #include <QCryptographicHash>
 
+#include <algorithm>
+#include <cmath>
+
 namespace abrviz {
 
 namespace {
@@ -27,7 +30,7 @@ QString number(double value)
 RenderPlan makeRenderPlan(const RunData& run)
 {
     RenderPlan plan;
-    if (run.video.frameRate > 0.0)
+    if (std::isfinite(run.video.frameRate) && run.video.frameRate > 0.0)
         plan.frameRate = run.video.frameRate;
     const PlaybackClock clock(run);
     for (const PlaybackClock::Piece& piece : clock.pieces()) {
@@ -59,8 +62,10 @@ QString RenderPlan::cacheKey(const QString& runId) const
     hash.addData(QByteArray::number(kRenderVersion));
     hash.addData(QStringLiteral("%1x%2@%3").arg(width).arg(height).arg(number(frameRate)).toUtf8());
     for (const RenderPart& part : parts) {
-        hash.addData(QStringLiteral("|%1|%2|%3|%4")
+        // The path's length keeps a path containing '|' from running into the next part.
+        hash.addData(QStringLiteral("|%1|%2:%3|%4|%5")
                          .arg(part.segment)
+                         .arg(part.mediaPath.size())
                          .arg(part.mediaPath, number(part.duration), number(part.freezeAfter))
                          .toUtf8());
     }
@@ -84,7 +89,9 @@ QStringList transcodeArguments(const RenderPlan& plan, const RenderPart& part,
         filters << QStringLiteral("tpad=stop_mode=clone:stop_duration=%1").arg(number(part.freezeAfter));
     filters << QStringLiteral("format=yuv420p");
 
-    const int gop = std::max(1, static_cast<int>(plan.frameRate * 2.0 + 0.5));
+    // Two seconds of frames; clamped before the conversion, which is undefined out of range.
+    const double frames = plan.frameRate * 2.0 + 0.5;
+    const int gop = std::isfinite(frames) ? static_cast<int>(std::clamp(frames, 1.0, 1e6)) : 1;
     return {
         QStringLiteral("-hide_banner"), QStringLiteral("-nostdin"), QStringLiteral("-y"),
         QStringLiteral("-loglevel"), QStringLiteral("error"),

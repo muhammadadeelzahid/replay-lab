@@ -4,6 +4,7 @@
 #include "abrviz/core/io/text_lines.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace abrviz {
 
@@ -11,6 +12,19 @@ namespace {
 
 /** @brief Seconds per frame: the simulated player renders one every 33 ms. */
 constexpr double kFrameDuration = 0.033;
+
+/**
+ * @brief Returns the bit rate after `key` as an integer.
+ *
+ * @param t The words of the line.
+ * @param key The word before the value, for example `"Res:"`.
+ * @return The bit rate, or nothing if it is missing, not a number, or does not fit in 64 bits.
+ */
+std::optional<qint64> bitRateAfter(const Tokens& t, QByteArrayView key)
+{
+    const auto value = t.doubleAfter(key);
+    return value ? doubleToInt64(*value) : std::nullopt;
+}
 
 /**
  * @brief Returns the time of a `[MPEG_PLAYER]` line.
@@ -65,15 +79,15 @@ void parseDecision(const Tokens& t, int nodeId, SimLogPart& part)
         return;
     const auto time = toDouble(t.at(0));
     const auto segment = t.intAfter("segmentId:");
-    const auto newRate = t.doubleAfter("newBitRate:");
-    const auto oldRate = t.doubleAfter("oldBitRate:");
+    const auto newRate = bitRateAfter(t, "newBitRate:");
+    const auto oldRate = bitRateAfter(t, "oldBitRate:");
     if (!time || !segment || !newRate || !oldRate)
         return;
     SimLogDecision d;
     d.time = *time;
     d.segment = *segment;
-    d.newBitRate = static_cast<qint64>(*newRate);
-    d.oldBitRate = static_cast<qint64>(*oldRate);
+    d.newBitRate = *newRate;
+    d.oldBitRate = *oldRate;
     d.throughputEstimate = t.doubleAfter("estBitRate:").value_or(0.0);
     d.interruptionTime = t.doubleAfter("interTime:").value_or(0.0);
     d.bufferLevel = t.doubleAfter("T:").value_or(0.0);
@@ -101,16 +115,17 @@ void parseFrame(const Tokens& t, int playerId, SimLogPart& part)
     const auto time = toDouble(t.at(1));
     const auto segment = t.intAfter("SegId:");
     const auto frame = t.intAfter("FrameId:");
-    const auto rate = t.doubleAfter("Res:");
+    const auto rate = bitRateAfter(t, "Res:");
     const auto queue = t.intAfter("queueLength:");
-    if (!time || !segment || !frame || !rate || !queue)
+    // The frame count is FrameId + 1, which must not overflow.
+    if (!time || !segment || !frame || !rate || !queue
+        || *frame == std::numeric_limits<int>::max())
         return;
 
     part.buffer.push_back(BufferPoint{*time, *queue * kFrameDuration});
 
     if (part.playback.empty() || part.playback.back().segment != *segment) {
-        part.playback.push_back(
-            SegmentPlayback{*segment, *time, *time, *frame + 1, static_cast<qint64>(*rate)});
+        part.playback.push_back(SegmentPlayback{*segment, *time, *time, *frame + 1, *rate});
         return;
     }
     SegmentPlayback& current = part.playback.back();

@@ -1,16 +1,27 @@
 #include "abrviz/core/io/bundle_files.h"
 
+#include "abrviz/core/io/log_tokens.h"
 #include "abrviz/core/io/text_lines.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <algorithm>
+
 namespace abrviz {
 
 namespace {
 
 constexpr int kBundleVersion = 1;  ///< The only `bundle_version` of `run.json` that is supported.
+
+/**
+ * @brief Largest (segment, rung) table a video's `segments.jsonl` is read into.
+ *
+ * Far beyond any real video (hours of segments on dozens of rungs); a corrupt `segment_count`
+ * must not make the reader allocate gigabytes.
+ */
+constexpr qint64 kMaxSegmentTableEntries = qint64(1) << 22;
 
 /**
  * @brief Reads a JSON number.
@@ -44,11 +55,11 @@ std::optional<int> optionalInt(const QJsonValue& value)
  * A value that is not an exact integer is truncated.
  *
  * @param value The JSON value.
- * @return The integer; 0 if `value` is not a number.
+ * @return The integer; 0 if `value` is not a number or does not fit in 64 bits.
  */
 qint64 toInt64(const QJsonValue& value)
 {
-    return value.toInteger(static_cast<qint64>(value.toDouble()));
+    return value.toInteger(doubleToInt64(value.toDouble()).value_or(0));
 }
 
 /**
@@ -131,9 +142,9 @@ bool requireKeys(const QJsonObject& object, std::initializer_list<const char*> k
 // --- VideoSegmentTable ---------------------------------------------------------------------
 
 VideoSegmentTable::VideoSegmentTable(int segmentCount, int rungCount)
-    : segmentCount_(segmentCount)
-    , rungCount_(rungCount)
-    , bytes_(static_cast<std::size_t>(segmentCount) * static_cast<std::size_t>(rungCount))
+    : segmentCount_(std::max(segmentCount, 0))
+    , rungCount_(std::max(rungCount, 0))
+    , bytes_(static_cast<std::size_t>(segmentCount_) * static_cast<std::size_t>(rungCount_))
 {
 }
 
@@ -200,7 +211,7 @@ Parsed<RunInfo> parseRunJson(QByteArrayView json, const QString& bundleDirectory
     info.congestionControl = network.value(QLatin1StringView("congestion_control")).toString();
     info.rlcMode = network.value(QLatin1StringView("rlc_mode")).toString();
     if (const auto rate = optionalNumber(network.value(QLatin1StringView("feeder_link_rate_bps"))))
-        info.feederLinkRate = static_cast<qint64>(*rate);
+        info.feederLinkRate = doubleToInt64(*rate);
 
     const QJsonObject player = root->value(QLatin1StringView("player")).toObject();
     info.playerSegmentDuration =
@@ -389,6 +400,12 @@ Parsed<VideoSegmentTable> parseVideoSegments(QByteArrayView jsonl, int segmentCo
 {
     const QString file = QStringLiteral("videos/segments.jsonl");
     Parsed<VideoSegmentTable> result;
+    if (qint64(segmentCount) * qint64(rungCount) > kMaxSegmentTableEntries) {
+        result.addError(file, 0, QStringLiteral("%1 segments at %2 rungs is too large a table")
+                                     .arg(segmentCount)
+                                     .arg(rungCount));
+        return result;
+    }
     result.value = VideoSegmentTable(segmentCount, rungCount);
     forEachRecord(jsonl, file, result, [&](const QJsonObject& o, qsizetype line) {
         if (!requireKeys(o, {"segment", "rung", "bytes"}, file, line, result.errors))

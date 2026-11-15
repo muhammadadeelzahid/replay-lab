@@ -1,6 +1,7 @@
 #include "abrviz/core/playback/playback_clock.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace abrviz {
 
@@ -40,6 +41,36 @@ double end(const PlaybackClock::Piece& p, int axis)
     }
 }
 
+/**
+ * @brief Returns a length that can go on a timeline.
+ *
+ * @param seconds A duration from the run.
+ * @return `seconds`, or 0 if it is negative, infinite or NaN.
+ */
+double validLength(double seconds)
+{
+    return std::isfinite(seconds) && seconds > 0.0 ? seconds : 0.0;
+}
+
+/**
+ * @brief Finds a downloaded segment.
+ *
+ * @param run The run.
+ * @param segment Zero-based segment index.
+ * @return The segment, or null if it was not downloaded.
+ */
+const Segment* findSegment(const RunData& run, int segment)
+{
+    if (segment < 0)
+        return nullptr;
+    const auto index = static_cast<std::size_t>(segment);
+    // `segments` is in index order, normally with segment i at position i.
+    if (index < run.segments.size() && run.segments[index].index == segment)
+        return &run.segments[index];
+    const auto it = std::ranges::find(run.segments, segment, &Segment::index);
+    return it == run.segments.end() ? nullptr : &*it;
+}
+
 } // namespace
 
 PlaybackClock::PlaybackClock(const RunData& run)
@@ -50,12 +81,24 @@ PlaybackClock::PlaybackClock(const RunData& run)
         bool isStall;
         std::size_t index;
     };
+    // Times that are not finite cannot be placed on the timeline (and NaN would break the sort).
     std::vector<Event> events;
-    for (std::size_t i = 0; i < run.playback.size(); ++i)
-        events.push_back({run.playback[i].firstFrameTime, false, i});
-    for (std::size_t i = 0; i < run.stalls.size(); ++i)
-        events.push_back({run.stalls[i].start, true, i});
+    for (std::size_t i = 0; i < run.playback.size(); ++i) {
+        if (std::isfinite(run.playback[i].firstFrameTime))
+            events.push_back({run.playback[i].firstFrameTime, false, i});
+    }
+    for (std::size_t i = 0; i < run.stalls.size(); ++i) {
+        if (std::isfinite(run.stalls[i].start))
+            events.push_back({run.stalls[i].start, true, i});
+    }
     std::ranges::stable_sort(events, {}, &Event::simStart);
+    // A stall before the first frame of a downloaded segment has no frame to freeze: it is
+    // start-up, not replayed (the render plan drops it too).
+    const auto firstShown = std::ranges::find_if(events, [&run](const Event& e) {
+        return !e.isStall && findSegment(run, run.playback[e.index].segment);
+    });
+    events.erase(std::remove_if(events.begin(), firstShown, [](const Event& e) { return e.isStall; }),
+                 firstShown);
 
     const bool cutOff = run.playbackCutOff();
     double media = 0.0;
@@ -70,10 +113,13 @@ PlaybackClock::PlaybackClock(const RunData& run)
             const Stall& stall = run.stalls[event.index];
             piece.kind = Piece::Kind::Stall;
             piece.segment = lastSegment;
-            piece.simEnd = stall.end;
+            // Ends at the next piece at the latest, so pieces never overlap in simulation time.
+            piece.simEnd = std::isfinite(stall.end) ? stall.end : piece.simStart;
+            if (e + 1 < events.size())
+                piece.simEnd = std::min(piece.simEnd, events[e + 1].simStart);
             piece.mediaStart = piece.mediaEnd = media;
             piece.replayStart = replay;
-            replay += stall.duration();
+            replay += validLength(stall.duration());
             piece.replayEnd = replay;
         } else {
             const SegmentPlayback& p = run.playback[event.index];
@@ -85,9 +131,11 @@ PlaybackClock::PlaybackClock(const RunData& run)
             piece.simEnd = e + 1 < events.size() ? events[e + 1].simStart
                                                  : p.lastFrameTime + kFrameDuration;
 
-            double duration = 0.0;
-            if (p.segment >= 0 && static_cast<std::size_t>(p.segment) < run.segments.size())
-                duration = run.segments[static_cast<std::size_t>(p.segment)].mediaDuration;
+            if (!std::isfinite(piece.simEnd))
+                piece.simEnd = piece.simStart;
+
+            const Segment* segment = findSegment(run, p.segment);
+            double duration = segment ? validLength(segment->mediaDuration) : 0.0;
             if (last && cutOff)
                 duration *= std::clamp(static_cast<double>(p.framesPlayed) / kFramesPerSegment,
                                        0.0, 1.0);
@@ -123,7 +171,7 @@ double PlaybackClock::convert(double value, Axis from, Axis to) const
         return 0.0;
     const int f = static_cast<int>(from);
     const int t = static_cast<int>(to);
-    const Piece* piece = pieceAt(value, from);
+    const Piece* piece = std::isnan(value) ? nullptr : pieceAt(value, from);
     if (!piece)
         return start(pieces_.front(), t);
     if (value >= end(pieces_.back(), f))
@@ -174,7 +222,7 @@ PlaybackClock::Position PlaybackClock::positionIn(const Piece& piece, double val
 PlaybackClock::Position PlaybackClock::positionAtSim(double simTime) const
 {
     Position position;
-    if (pieces_.empty() || simTime < pieces_.front().simStart) {
+    if (pieces_.empty() || std::isnan(simTime) || simTime < pieces_.front().simStart) {
         position.beforeStart = true;
         return position;
     }
@@ -189,7 +237,7 @@ PlaybackClock::Position PlaybackClock::positionAtSim(double simTime) const
 PlaybackClock::Position PlaybackClock::positionAtReplay(double replayTime) const
 {
     Position position;
-    if (pieces_.empty() || replayTime < 0.0) {
+    if (pieces_.empty() || std::isnan(replayTime) || replayTime < 0.0) {
         position.beforeStart = true;
         return position;
     }

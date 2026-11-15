@@ -31,7 +31,8 @@ public:
      *
      * @param path Path of the file.
      * @param error Receives the reason on failure; may be null.
-     * @return The mapping, or nothing if the file cannot be opened or mapped.
+     * @return The mapping, or nothing if the file is not a regular file or cannot be opened or
+     *         mapped.
      */
     static std::optional<MappedFile> open(const QString& path, QString* error = nullptr);
 

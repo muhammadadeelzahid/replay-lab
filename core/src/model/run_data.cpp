@@ -20,6 +20,8 @@ namespace {
 template <typename T>
 std::span<const T> between(const std::vector<T>& items, double from, double to)
 {
+    if (!(from <= to))  // also a NaN bound
+        return {};
     const auto first = std::ranges::lower_bound(items, from, {}, &T::time);
     const auto last = std::ranges::upper_bound(items, to, {}, &T::time);
     if (first >= last)

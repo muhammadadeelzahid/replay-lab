@@ -68,6 +68,8 @@ public:
     /**
      * @brief Creates a table of the given dimensions with every entry empty.
      *
+     * Negative dimensions are treated as 0.
+     *
      * @param segmentCount Number of segments in the video.
      * @param rungCount Number of rungs in the ladder.
      */
@@ -187,7 +189,8 @@ private:
  * @param jsonl Contents of `videos/<name>/segments.jsonl`.
  * @param segmentCount Number of segments of the video.
  * @param rungCount Number of rungs of the video.
- * @return The table, with an error for every (segment, rung) pair that has no entry.
+ * @return The table, with an error for every (segment, rung) pair that has no entry; an empty
+ *         table with a single error if the dimensions are far beyond any real video.
  */
 [[nodiscard]] Parsed<VideoSegmentTable> parseVideoSegments(QByteArrayView jsonl, int segmentCount,
                                                            int rungCount);

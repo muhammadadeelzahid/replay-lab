@@ -96,7 +96,10 @@ the next piece in simulation time, and for its real media duration in media and 
 A stall piece lasts the stall duration in simulation and replay time and zero in media time.
 Within a piece the mapping is linear. Before playback starts every time maps to 0; after the
 last frame it is clamped to the end. If playback was cut off in the middle of a segment, that
-segment's media duration is scaled by the fraction of its frames that were played.
+segment's media duration is scaled by the fraction of its frames that were played. A stall
+before the first frame of a downloaded segment is start-up and not replayed (the rendered file
+has no frame to freeze), and a stall ends at the next piece at the latest in simulation time, so
+the pieces never overlap and every mapping is monotonic.
 
 
 ## Threads

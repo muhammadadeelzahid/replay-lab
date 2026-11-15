@@ -19,6 +19,26 @@ struct InitResult {
 };
 
 /**
+ * @brief Ranks VideoToolbox's hardware H.264 decoder (macOS) below libav's, when both exist.
+ *
+ * After a flushing seek, `vtdec_hw` hands out frames with stale or repeated timestamps (and
+ * skips the first frames after a seek to 0); the engine times every frame by its timestamp and
+ * seeks all the time, so a seek showed the wrong moment and playback then froze until the bad
+ * timestamps were reached. Without `avdec_h264`, VideoToolbox still decodes.
+ */
+void preferSoftwareH264()
+{
+    GstRegistry* registry = gst_registry_get();
+    const GstPtr<GstPluginFeature> software(gst_registry_lookup_feature(registry, "avdec_h264"));
+    const GstPtr<GstPluginFeature> hardware(gst_registry_lookup_feature(registry, "vtdec_hw"));
+    if (!software || !hardware)
+        return;
+    const guint rank = gst_plugin_feature_get_rank(software.get());
+    if (gst_plugin_feature_get_rank(hardware.get()) >= rank && rank > 0)
+        gst_plugin_feature_set_rank(hardware.get(), rank - 1);
+}
+
+/**
  * @brief Initialises GStreamer on the first call and returns the stored outcome.
  *
  * Thread-safe: the initialisation runs once under `std::call_once`.
@@ -36,6 +56,8 @@ const InitResult& initResult()
         if (!result.ok)
             result.error = error ? QString::fromUtf8(error->message)
                                  : QStringLiteral("gst_init failed");
+        else
+            preferSoftwareH264();
     });
     return result;
 }

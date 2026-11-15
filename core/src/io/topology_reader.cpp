@@ -1,6 +1,7 @@
 #include "abrviz/core/io/topology_reader.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QTextStream>
 
@@ -89,6 +90,9 @@ NetworkTopology parseNetworkTopology(const QString& text, int nodeId)
 
 NetworkTopology readNetworkTopology(const QString& simLogPath, int nodeId)
 {
+    // Only regular files: opening a FIFO for reading would block until a writer appears.
+    if (!QFileInfo(simLogPath).isFile())
+        return {};
     QFile file(simLogPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
         return {};

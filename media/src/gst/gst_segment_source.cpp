@@ -204,7 +204,7 @@ bool GstSegmentSource::buildPipeline(QString* error)
         if (piece.kind != PlaybackClock::Piece::Kind::Segment)
             continue;
         const auto it = std::ranges::find(run_->segments, piece.segment, &Segment::index);
-        if (it == run_->segments.end() || it->mediaPath.isEmpty() || !QFileInfo::exists(it->mediaPath)) {
+        if (it == run_->segments.end() || it->mediaPath.isEmpty() || !QFileInfo(it->mediaPath).isFile()) {
             *error = tr("The media file of segment %1 is missing.").arg(piece.segment);
             return false;
         }
@@ -240,8 +240,9 @@ bool GstSegmentSource::buildPipeline(QString* error)
 
     gst::GstPtr<GstBus> bus(gst_element_get_bus(raw));
     // The thread owns its reference to the bus; it never touches pipeline_.
-    busThread_ = std::jthread([this, bus = std::move(bus)](const std::stop_token& stop) {
-        busLoop(stop, bus.get());
+    const quint64 generation = ++generation_;
+    busThread_ = std::jthread([this, bus = std::move(bus), generation](const std::stop_token& stop) {
+        busLoop(stop, bus.get(), generation);
     });
 
     // The pipeline stays PLAYING: without sync it only decodes until the appsink queue is full.
@@ -252,7 +253,7 @@ bool GstSegmentSource::buildPipeline(QString* error)
     return true;
 }
 
-void GstSegmentSource::busLoop(const std::stop_token& stop, GstBus* bus)
+void GstSegmentSource::busLoop(const std::stop_token& stop, GstBus* bus, quint64 generation)
 {
     while (!stop.stop_requested()) {
         const gst::GstMessagePtr message(gst_bus_timed_pop_filtered(
@@ -268,10 +269,13 @@ void GstSegmentSource::busLoop(const std::stop_token& stop, GstBus* bus)
         case GST_MESSAGE_WARNING: event = BusEvent{BusEvent::Kind::Warning, messageText(message.get())}; break;
         default: break;
         }
-        // Only plain values cross to the GUI thread, never the GstMessage.
+        // Only plain values cross to the GUI thread, never the GstMessage. Events still queued
+        // when the pipeline is replaced are from the old one and are dropped.
         if (event)
-            QMetaObject::invokeMethod(this, [this, e = *event] { handleBusEvent(e); },
-                                      Qt::QueuedConnection);
+            QMetaObject::invokeMethod(this, [this, e = *event, generation] {
+                if (generation == generation_)
+                    handleBusEvent(e);
+            }, Qt::QueuedConnection);
     }
 }
 
@@ -293,6 +297,8 @@ void GstSegmentSource::handleBusEvent(const BusEvent& event)
         }
         break;
     case BusEvent::Kind::Error:
+        // The first error ends the pipeline; further messages from it are not reported.
+        stopPipeline();
         fail(event.text);
         break;
     case BusEvent::Kind::Warning:
@@ -373,7 +379,7 @@ void GstSegmentSource::updateTicker()
 
 void GstSegmentSource::seek(double replayTime)
 {
-    if (!pipeline_)
+    if (!pipeline_ || std::isnan(replayTime))
         return;
     if (!prerolled_) {
         pendingSeek_ = replayTime;
@@ -384,8 +390,10 @@ void GstSegmentSource::seek(double replayTime)
         setState(State::Paused);
 
     const Span& span = spans_[spanAt(replayTime)];
-    // Seeking into a stall shows the last frame before it: a moment before its media time.
-    const double media = span.stall ? std::max(0.0, span.mediaStart - 0.001) : mediaFor(replayTime);
+    // Seeking into a stall shows the last frame before it: a moment before its media time. A
+    // seek to the end shows the last frame (a seek to the media's end would show nothing).
+    const double media = span.stall ? std::max(0.0, span.mediaStart - 0.001)
+                                    : std::min(mediaFor(replayTime), std::max(0.0, span.mediaEnd - frameDuration_));
     pending_.reset();
     gst_element_seek(pipeline_.get(), 1.0, GST_FORMAT_TIME,
                      static_cast<GstSeekFlags>(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE),
@@ -489,8 +497,12 @@ void GstSegmentSource::tick()
     // a frame from after a stall paired with the Stalled state (or the reverse) when a tick is
     // late. The position at a stall's start or end is reported at once.
     setState(running);
+    if (state() != running)
+        return;  // a listener paused, or replaced the run, on the change
+    // Never a frame from after the span: just before a stall, the first frame after it is
+    // nearly due, and it would be held through the stall.
     if (!awaitingSeekFrame_)
-        presentUpTo(mediaFor(now));
+        presentUpTo(std::min(mediaFor(now), span.mediaEnd - frameDuration_));
     if (changed || positionClock_.elapsed() >= kPositionIntervalMs) {
         positionClock_.start();
         setPosition(now);
