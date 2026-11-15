@@ -8,11 +8,13 @@ by segment, with its stalls, the bitrate decisions of the LLM ABR policy, the bu
 throughput, RTT and loss, and the simulation logs.
 
 Network: a LEO satellite gNB at 550 km (28 GHz, 100 MHz) backhauls an IAB relay, which serves
-three UEs. The video server reaches the satellite over a feeder link of 9, 18 or 36 Mbps.
+three users. The video server reaches the satellite over a feeder link of 9, 18 or 36 Mbps.
 
 Built with C++20, Qt 6 and GStreamer.
 
-![Replay of Big Buck Bunny at 36 Mbps: the buffer runs dry while segment 17 is still coming over the satellite, the viewer stalls, then playback resumes](docs/images/demo.gif)
+![Replay of Big Buck Bunny at 36 Mbps: the buffer runs dry while segment 17 is still coming over the satellite, the user stalls, then playback resumes](docs/images/demo.gif)
+
+[Full-quality video (MP4)](docs/images/demo.mp4)
 
 ## Download
 
@@ -38,9 +40,27 @@ its video is rendered (a few seconds) and cached. Build from source for the GStr
 - QoE report checked against `summary.json`
 - Segment timeline shared by all views
 
-| All Runs | Analysis | Report |
-| --- | --- | --- |
-| ![All Runs](docs/images/library.png) | ![Analysis](docs/images/analysis.png) | ![Report](docs/images/report.png) |
+## Screenshots
+
+The app follows the system's light or dark appearance.
+
+![The welcome screen in light and dark mode](docs/images/welcome.jpg)
+
+**All Runs.** The featured run, the path it was streamed over, and a row of runs for each video.
+
+![All Runs](docs/images/home.jpg)
+
+**Replay.** The video as the user saw it, under the satellite path, with the segment timeline.
+
+![Replay](docs/images/replay.jpg)
+
+**Analysis.** Buffer, throughput, bitrate, RTT and decision delay, following the cursor.
+
+![Analysis](docs/images/analysis.jpg)
+
+**Report.** The QoE numbers, checked against `summary.json`.
+
+![Report](docs/images/report.jpg)
 
 ## Replay engines
 
@@ -112,13 +132,16 @@ On Linux the executable is `build/release/app/satreplay`.
 | ⌘R | render the video |
 | ⌘, | settings |
 
-The GIF above was made with:
+The pictures in this README were made with the app itself (`ABRVIZ_APPEARANCE=light` or
+`dark` picks the appearance):
 
 ```sh
 "$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 50 --size 1440x900 \
     --record frames --duration 9
 ffmpeg -framerate 10 -i frames/frame-%04d.png -vf "fps=8,scale=880:-1:flags=lanczos,\
 split[a][b];[a]palettegen=max_colors=144[p];[b][p]paletteuse=dither=bayer" docs/images/demo.gif
+"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57 --page analysis \
+    --size 1440x900 --screenshot analysis.png
 ```
 
 Command-line tools in `build/release/tools/`: `validate_bundle`, `print_report`,
