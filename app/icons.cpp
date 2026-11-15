@@ -205,6 +205,30 @@ private:
 };
 
 /**
+ * @brief A line glyph in white on a rounded square with a vertical gradient, as an SVG document
+ *        in a 48 x 48 view box.
+ *
+ * @param glyph The symbol.
+ * @param top The square's colour at the top.
+ * @param bottom Its colour at the bottom.
+ * @return The SVG document.
+ */
+QString tileSvg(Glyph glyph, const QString& top, const QString& bottom)
+{
+    QString body = glyphBody(glyph);
+    body.replace(QStringLiteral("\"C\""), QStringLiteral("\"#ffffff\""));
+    return QStringLiteral(R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs><linearGradient id="t" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="%1"/><stop offset="1" stop-color="%2"/></linearGradient></defs>
+  <rect x="1" y="1" width="46" height="46" rx="11" fill="url(#t)"/>
+  <rect x="1.5" y="1.5" width="45" height="45" rx="10.5" fill="none" stroke="#ffffff" stroke-opacity="0.18"/>
+  <g transform="translate(9 9) scale(1.25)" fill="none" stroke="#ffffff" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">%3</g>
+</svg>)svg")
+        .arg(top, bottom, body);
+}
+
+/**
  * @brief A node of the network path as an app-style tile: the node's line symbol in white on a
  *        rounded square with a gradient of the node's colour, as in System Settings.
  *
@@ -238,17 +262,7 @@ QString nodeSvg(Glyph glyph)
     default:
         return {};
     }
-    QString body = glyphBody(glyph);
-    body.replace(QStringLiteral("\"C\""), QStringLiteral("\"#ffffff\""));
-    return QStringLiteral(R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <defs><linearGradient id="t" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="%1"/><stop offset="1" stop-color="%2"/></linearGradient></defs>
-  <rect x="1" y="1" width="46" height="46" rx="11" fill="url(#t)"/>
-  <rect x="1.5" y="1.5" width="45" height="45" rx="10.5" fill="none" stroke="#ffffff" stroke-opacity="0.18"/>
-  <g transform="translate(9 9) scale(1.25)" fill="none" stroke="#ffffff" stroke-width="1.7"
-     stroke-linecap="round" stroke-linejoin="round">%3</g>
-</svg>)svg")
-        .arg(top, bottom, body);
+    return tileSvg(glyph, top, bottom);
 }
 
 /**
@@ -314,6 +328,11 @@ QIcon nodeIcon(Glyph glyph)
     if (svg.isEmpty())
         return glyphIcon(glyph, Qt::white);
     return QIcon(new SvgEngine(svg));  // QIcon takes ownership of the engine
+}
+
+QIcon tileIcon(Glyph glyph, const QColor& color)
+{
+    return QIcon(new SvgEngine(tileSvg(glyph, color.lighter(118).name(), color.darker(118).name())));
 }
 
 QColor accentColor(const QPalette& palette)

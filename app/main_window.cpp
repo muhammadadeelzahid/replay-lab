@@ -531,20 +531,21 @@ void MainWindow::createPages()
     auto* footer = new QWidget(sidebarColumn);
     footer->setObjectName(QStringLiteral("sidebarFooter"));
     footer->setAttribute(Qt::WA_StyledBackground);
-    auto* footerLayout = new QHBoxLayout(footer);
-    footerLayout->setContentsMargins(16, 10, 12, 12);
-    footerLayout->setSpacing(10);
+    // A satellite tile in the accent colour above a short note.
+    auto* footerLayout = new QVBoxLayout(footer);
+    footerLayout->setContentsMargins(16, 12, 14, 16);
+    footerLayout->setSpacing(8);
     auto* footerIcon = new QLabel(footer);
     footerIcon->setObjectName(QStringLiteral("networkIcon"));
-    footerIcon->setAlignment(Qt::AlignTop);
+    // Drawn in the accent colour by applyStyle().
     auto* footerText = new QLabel(tr("<b>Satellite 5G with IAB</b><br>Every run was streamed from a "
-                                     "LEO satellite gNB through an IAB relay to the viewer."),
+                                     "LEO satellite gNB through an IAB relay to the user."),
                                   footer);
     footerText->setWordWrap(true);
     footerText->setFont(format::scaled(footerText->font(), 0.9));
     footerText->setForegroundRole(QPalette::PlaceholderText);
     footerLayout->addWidget(footerIcon);
-    footerLayout->addWidget(footerText, 1);
+    footerLayout->addWidget(footerText);
     columnLayout->addWidget(footer);
     auto* sidebarLayout = new QHBoxLayout(d_->sidebarPane);
     sidebarLayout->setContentsMargins(0, 0, 0, 0);
@@ -856,7 +857,7 @@ void MainWindow::applyStyle()
     }
     d_->playAction->setIcon(glyphIcon(d_->player->isRunning() ? Glyph::Pause : Glyph::Play, text));
     if (auto* icon = findChild<QLabel*>(QStringLiteral("networkIcon")))
-        icon->setPixmap(glyphIcon(Glyph::Satellite, accentColor(pal)).pixmap(22, 22));
+        icon->setPixmap(tileIcon(Glyph::Satellite, accentColor(pal)).pixmap(40, 40));
 
     const bool dark = isDark(pal);
     const QString line = dark ? QStringLiteral("#1affffff") : QStringLiteral("#1f000000");

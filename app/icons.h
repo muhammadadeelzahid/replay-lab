@@ -71,6 +71,16 @@ enum class Glyph {
 [[nodiscard]] QIcon nodeIcon(Glyph glyph);
 
 /**
+ * @brief A glyph as an app-style tile in a colour: the white symbol on a rounded square shaded
+ *        from a lighter to a darker shade of `color`.
+ *
+ * @param glyph The symbol.
+ * @param color The tile's colour, e.g. accentColor().
+ * @return The icon; it renders sharply at any size.
+ */
+[[nodiscard]] QIcon tileIcon(Glyph glyph, const QColor& color);
+
+/**
  * @brief The accent colour for icons and highlights: the coral of the app icon, lighter in dark
  *        mode.
  *
