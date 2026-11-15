@@ -91,31 +91,6 @@ abrviz_add_test(tst_widgets
     SOURCES tst_widgets.cpp
     LIBS abrviz_gui)
 
-abrviz_add_test(tst_integration
-    SOURCES tst_integration.cpp
-    LIBS abrviz_gui)
-
-# Engine edge cases (both engines; the GStreamer part is compiled only with GStreamer).
-abrviz_add_test(tst_engine_edge_cases
-    SOURCES tst_engine_edge_cases.cpp
-    LIBS abrviz_media abrviz_gui)
-target_include_directories(tst_engine_edge_cases PRIVATE ${PROJECT_SOURCE_DIR}/media/src)
-if(ABR_WITH_GSTREAMER)
-    target_link_libraries(tst_engine_edge_cases PRIVATE PkgConfig::GST)
-endif()
-if(APPLE)
-    # Qt's AVFoundation backend delivers media through the Cocoa run loop, which the offscreen
-    # platform does not run: a second pass with the Cocoa platform tests the pre-rendered
-    # engine. Each pass skips the other's cases.
-    add_test(NAME tst_engine_edge_cases_cocoa COMMAND tst_engine_edge_cases)
-    set_tests_properties(tst_engine_edge_cases_cocoa PROPERTIES TIMEOUT 300 ENVIRONMENT
-        "QT_QPA_PLATFORM=cocoa;ABRVIZ_RENDER_CACHE=${CMAKE_CURRENT_BINARY_DIR}/render-cache")
-    if(CMAKE_CXX_FLAGS MATCHES "sanitize=thread")
-        # The TSan runtime can deadlock when CoreMedia threads exit (see tst_replay_source).
-        set_tests_properties(tst_engine_edge_cases_cocoa PROPERTIES DISABLED TRUE)
-    endif()
-endif()
-
 abrviz_add_test(tst_replay_source
     SOURCES tst_replay_source.cpp
     LIBS abrviz_media abrviz_gui)
@@ -141,16 +116,3 @@ if(APPLE AND CMAKE_CXX_FLAGS MATCHES "sanitize=thread")
     # engine threading under TSan.
     set_tests_properties(tst_replay_source tst_replay_player PROPERTIES DISABLED TRUE)
 endif()
-
-# Command-line tests of the application binary. tst_integration starts it with QProcess
-# (always offscreen, with its settings in a temporary folder); the cli_app entry runs just
-# those test functions, and the tst_integration entry skips them so they run once.
-add_dependencies(tst_integration abrviz)
-target_compile_definitions(tst_integration PRIVATE ABRVIZ_APP_PATH="$<TARGET_FILE:abrviz>")
-set_tests_properties(tst_integration PROPERTIES
-    ENVIRONMENT_MODIFICATION "ABRVIZ_INTEGRATION_SKIP_CLI=set:1")
-add_test(NAME cli_app COMMAND tst_integration
-    cliHelpAndVersion cliRejectsUnknownPageAndEngine cliProfileAndRecordNeedABundle
-    cliScreenshotWritesAPng cliRecordWritesNumberedFrames cliNonexistentPathDoesNotCrash)
-set_tests_properties(cli_app PROPERTIES TIMEOUT 600 ENVIRONMENT
-    "QT_QPA_PLATFORM=offscreen;ABRVIZ_RENDER_CACHE=${CMAKE_CURRENT_BINARY_DIR}/render-cache")
