@@ -10,6 +10,7 @@
 #include "main_window.h"
 #include "replay_player.h"
 #include "session.h"
+#include "theme.h"
 #include "time_cursor.h"
 
 #include "abrviz/core/version.h"
@@ -21,6 +22,7 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QList>
+#include <QSettings>
 #include <QTimer>
 
 #include <QVideoSink>
@@ -410,6 +412,13 @@ int main(int argc, char* argv[])
     QApplication::setOrganizationName(QStringLiteral("Stream Inspector"));
     QApplication::setOrganizationDomain(QStringLiteral("muhammadadeelzahid.github.io"));
     QApplication::setWindowIcon(abrviz::appIcon());
+    abrviz::theme::apply(app);
+    // ABRVIZ_SETTINGS_DIR keeps the settings in an INI file in that folder instead of the
+    // user's settings (the command-line tests use it).
+    if (const QString settingsDir = qEnvironmentVariable("ABRVIZ_SETTINGS_DIR"); !settingsDir.isEmpty()) {
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir);
+    }
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Stream Inspector: replays ns-3 adaptive bitrate run bundles"));

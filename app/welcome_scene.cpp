@@ -124,6 +124,12 @@ QSize WelcomeScene::minimumSizeHint() const
     return {260, 420};
 }
 
+void WelcomeScene::setTextSide(double fraction)
+{
+    textSide_ = std::isfinite(fraction) ? std::clamp(fraction, 0.0, 0.6) : 0.0;
+    update();
+}
+
 bool WelcomeScene::isAnimating() const
 {
     return animation_->isActive();
@@ -149,6 +155,9 @@ void WelcomeScene::paintEvent(QPaintEvent*)
     const double h = height();
     const QSizeF size(w, h);
     const double horizon = std::round(h * 0.68);
+    // Horizontal places of the drawing, from 0 to 1, within the part right of the text.
+    const double side = textSide_;
+    const auto across = [w, side](double x) { return w * (side + (1.0 - side) * x); };
 
     // Sky: deep blue overhead, paler towards the horizon, with a trace of pink at it.
     painter.setPen(Qt::NoPen);
@@ -160,7 +169,7 @@ void WelcomeScene::paintEvent(QPaintEvent*)
     painter.fillRect(QRectF(0, 0, w, horizon + 2.0), dusk);
 
     // A half moon and a few early stars.
-    const QPointF moon(w * 0.26, h * 0.13);
+    const QPointF moon(across(0.26), h * 0.13);
     painter.setBrush(QColor(0xf7, 0xf4, 0xe8));
     painter.drawPie(QRectF(moon.x() - 8.0, moon.y() - 8.0, 16.0, 16.0), 90 * 16, 180 * 16);
     painter.setBrush(QColor(255, 255, 255, 120));
@@ -170,8 +179,8 @@ void WelcomeScene::paintEvent(QPaintEvent*)
         painter.drawEllipse(QPointF(x * w, y * h), 1.3, 1.3);
 
     // The satellite's orbit, and the satellite on it, crossing from left to right.
-    const QPointF orbitCentre(w * 0.5, h * 0.30);
-    const double rx = w * 0.78;
+    const QPointF orbitCentre(across(0.5), h * 0.30);
+    const double rx = w * (1.0 - side) * 0.78;
     const double ry = h * 0.08;
     const double tilt = -9.0;
     const auto orbitPoint = [&](double degrees) {
@@ -218,12 +227,12 @@ void WelcomeScene::paintEvent(QPaintEvent*)
     painter.drawPath(drift);
 
     // Where the nodes stand.
-    const double dishSize = std::clamp(w * 0.24, 80.0, 140.0);
-    const QPointF dishBase(w * 0.76, horizon + h * 0.11);
+    const double dishSize = std::clamp(w * (1.0 - side) * 0.24, 80.0, 140.0);
+    const QPointF dishBase(across(0.76), horizon + h * 0.11);
     const double mastHeight = std::clamp(h * 0.15, 70.0, 130.0);
-    const QPointF mastBase(w * 0.42, horizon + h * 0.07);
+    const QPointF mastBase(across(0.42), horizon + h * 0.07);
     const QPointF mastTop = mastBase - QPointF(0, mastHeight);
-    const QPointF viewer(w * 0.14, horizon + h * 0.15);
+    const QPointF viewer(across(0.14), horizon + h * 0.15);
     // The dish faces up and to the left, towards the satellite's pass.
     const double dishTilt = -28.0;
     const QPointF dishCentre = dishBase - QPointF(0, dishSize * 0.55);
@@ -318,6 +327,24 @@ void WelcomeScene::paintEvent(QPaintEvent*)
     painter.drawLine(QPointF(-44, 0), QPointF(-30, 0));
     painter.drawLine(QPointF(30, 0), QPointF(44, 0));
     painter.restore();
+
+    // With text on the left: shade the left part dark, and fade the bottom into the window.
+    if (side > 0.0) {
+        const QColor ink(0x0b, 0x0d, 0x14);
+        QLinearGradient shade(0, 0, w * side + w * 0.18, 0);
+        shade.setColorAt(0.0, QColor(ink.red(), ink.green(), ink.blue(), 250));
+        shade.setColorAt(0.6, QColor(ink.red(), ink.green(), ink.blue(), 235));
+        shade.setColorAt(1.0, QColor(ink.red(), ink.green(), ink.blue(), 0));
+        painter.fillRect(QRectF(0, 0, w * side + w * 0.18, h), shade);
+        QLinearGradient fade(0, h - 90.0, 0, h);
+        fade.setColorAt(0.0, QColor(ink.red(), ink.green(), ink.blue(), 0));
+        fade.setColorAt(1.0, ink);
+        painter.fillRect(QRectF(0, h - 90.0, w, 90.0), fade);
+        QLinearGradient top(0, 0, 0, 60.0);
+        top.setColorAt(0.0, QColor(ink.red(), ink.green(), ink.blue(), 150));
+        top.setColorAt(1.0, QColor(ink.red(), ink.green(), ink.blue(), 0));
+        painter.fillRect(QRectF(0, 0, w, 60.0), top);
+    }
 
     // Names: white in the sky, navy on the snow.
     const QColor skyNote(0xdc, 0xe8, 0xf8);

@@ -1,6 +1,7 @@
 #include "time_cursor.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace abrviz {
 
@@ -18,6 +19,8 @@ void TimeCursor::setRange(double minimum, double maximum)
 
 void TimeCursor::setTime(double time, Source source)
 {
+    if (std::isnan(time))
+        return;  // clamping cannot place NaN in the range
     const double clamped = std::clamp(time, minimum_, maximum_);
     if (clamped == time_)
         return;

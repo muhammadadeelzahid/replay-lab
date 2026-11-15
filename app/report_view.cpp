@@ -54,8 +54,11 @@ ReportView::ReportView(Session* session, QWidget* parent)
     table_->setSelectionMode(QAbstractItemView::NoSelection);
     table_->setShowGrid(false);
     table_->setWordWrap(false);
-    table_->horizontalHeader()->setSectionResizeMode(Metric, QHeaderView::Stretch);
-    for (const int column : {Value, Exported, Check})
+    // The names always show in full; a long value is shortened instead.
+    table_->setTextElideMode(Qt::ElideRight);
+    table_->horizontalHeader()->setSectionResizeMode(Metric, QHeaderView::ResizeToContents);
+    table_->horizontalHeader()->setSectionResizeMode(Value, QHeaderView::Stretch);
+    for (const int column : {Exported, Check})
         table_->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
 
     auto* layout = new QVBoxLayout(this);
@@ -161,7 +164,9 @@ void ReportView::refresh()
                present ? formatCheck(check.name, *check.exported) : tr("not reported"),
                present ? std::optional<bool>(agrees) : std::nullopt);
     }
-    if (disagreeing == 0)
+    if (compared == 0)
+        verdict_->setText(tr("summary.json reports none of the numbers computed from the bundle."));
+    else if (disagreeing == 0)
         verdict_->setText(tr("All %1 numbers that summary.json reports agree with the values "
                              "computed from the bundle (within 1 %).").arg(compared));
     else

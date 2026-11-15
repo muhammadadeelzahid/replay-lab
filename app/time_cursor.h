@@ -69,6 +69,7 @@ public slots:
      * @brief Moves the cursor, clamped to the allowed range.
      *
      * Emits `timeChanged` only if the clamped time differs from the current one.
+     * NaN is ignored.
      *
      * @param time New simulation time in seconds.
      * @param source Who moves the cursor; panels pass their own value so they can ignore the

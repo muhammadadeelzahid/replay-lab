@@ -15,6 +15,7 @@
 #include <QDir>
 #include <QFont>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QKeyEvent>
@@ -217,57 +218,84 @@ LibraryView::LibraryView(QWidget* parent)
 {
     setObjectName(QStringLiteral("libraryView"));
 
-    // Welcome screen: the app and its actions on the left, and on the right the network every
-    // run was streamed over, drawn as a scene at dusk.
+    // Welcome screen: one full-width banner, as in a streaming app. The scene of the network
+    // every run was streamed over fills it; the app, its two actions and the recent folders sit
+    // over its shaded left side.
     {
-        auto* intro = new QWidget(welcome_);
-        auto* icon = new QLabel(intro);
-        icon->setPixmap(appIcon().pixmap(96, 96));
-        auto* name = makeLabel(tr("Welcome to %1").arg(appDisplayName()), 2.1, true, intro);
-        name->setWordWrap(true);
-        auto* version = new QLabel(tr("Version %1").arg(versionString()), intro);
+        auto* scene = new WelcomeScene(welcome_);
+        scene->setTextSide(0.42);
+        auto* icon = new QLabel(scene);
+        icon->setPixmap(appIcon().pixmap(72, 72));
+        auto* name = makeLabel(appDisplayName(), 3.0, true, scene);
+        auto* version = new QLabel(tr("Version %1").arg(versionString()), scene);
         version->setForegroundRole(QPalette::PlaceholderText);
         auto* tagline = new QLabel(tr("See what a viewer saw when adaptive video was streamed over a "
                                       "satellite 5G network with integrated access and backhaul (IAB)."),
-                                   intro);
+                                   scene);
+        QFont taglineFont = format::scaled(tagline->font(), 1.15);
+        tagline->setFont(taglineFont);
         tagline->setWordWrap(true);
 
-        auto* actions = new QVBoxLayout();
-        actions->setContentsMargins(-12, 0, 0, 0);  // line the icons up with the text above
-        actions->setSpacing(4);
-        actions->addWidget(actionRow(Glyph::OpenFolder, tr("Open a Folder of Runs..."),
-                                     tr("Lists every run bundle in the folder."),
-                                     [this] { emit openFolderRequested(); }, intro));
-        actions->addWidget(actionRow(Glyph::OpenBundle, tr("Open a Single Run..."),
-                                     tr("Opens one run bundle and replays it."),
-                                     [this] { emit openBundleRequested(); }, intro));
+        const QColor accent = accentColor(palette());
+        const auto pill = [this, scene, &accent](Glyph glyph, const QString& text, bool primary,
+                                                 std::function<void()> action) {
+            auto* button = new QPushButton(text, scene);
+            button->setObjectName(QStringLiteral("actionRow"));
+            button->setIcon(glyphIcon(glyph, Qt::white));
+            button->setIconSize({18, 18});
+            button->setCursor(Qt::PointingHandCursor);
+            button->setFocusPolicy(Qt::NoFocus);
+            button->setStyleSheet(primary
+                ? QStringLiteral("QPushButton#actionRow { color: white; background: %1; border: none; border-radius: 22px;"
+                                 " padding: 0 24px; font-weight: 600; min-height: 44px; }"
+                                 "QPushButton#actionRow:hover { background: %2; }"
+                                 "QPushButton#actionRow:pressed { background: %3; }")
+                      .arg(accent.name(), accent.lighter(115).name(), accent.darker(115).name())
+                : QStringLiteral("QPushButton#actionRow { color: white; background: rgba(255,255,255,40); border: none;"
+                                 " border-radius: 22px; padding: 0 22px; font-weight: 600; min-height: 44px; }"
+                                 "QPushButton#actionRow:hover { background: rgba(255,255,255,64); }"
+                                 "QPushButton#actionRow:pressed { background: rgba(255,255,255,28); }"));
+            connect(button, &QPushButton::clicked, this, std::move(action));
+            return button;
+        };
+        auto* actions = new QHBoxLayout();
+        actions->setSpacing(12);
+        actions->addWidget(pill(Glyph::OpenFolder, tr("Open a Folder of Runs..."), true,
+                                [this] { emit openFolderRequested(); }));
+        actions->addWidget(pill(Glyph::OpenBundle, tr("Open a Single Run..."), false,
+                                [this] { emit openBundleRequested(); }));
+        actions->addStretch(1);
 
-        recentBox_->setParent(intro);
+        recentBox_->setParent(scene);
         auto* recentLayout = new QVBoxLayout(recentBox_);
-        recentLayout->setContentsMargins(-12, 18, 0, 0);
-        recentLayout->setSpacing(2);
+        recentLayout->setContentsMargins(0, 30, 0, 0);
+        recentLayout->setSpacing(10);
 
-        auto* column = new QVBoxLayout(intro);
-        column->setContentsMargins(56, 40, 48, 40);
-        column->addStretch(2);
+        auto* column = new QVBoxLayout();
+        column->addStretch(3);
         column->addWidget(icon);
         column->addSpacing(18);
         column->addWidget(name);
         column->addWidget(version);
-        column->addSpacing(14);
+        column->addSpacing(16);
         column->addWidget(tagline);
-        column->addSpacing(26);
+        column->addSpacing(28);
         column->addLayout(actions);
         column->addWidget(recentBox_);
-        column->addStretch(3);
-        intro->setMaximumWidth(500);
-        intro->setMinimumWidth(380);
+        column->addStretch(2);
+        auto* text = new QWidget(scene);
+        text->setLayout(column);
+        text->setMaximumWidth(560);
+        text->setMinimumWidth(360);
+
+        auto* sceneLayout = new QHBoxLayout(scene);
+        sceneLayout->setContentsMargins(64, 24, 32, 40);
+        sceneLayout->addWidget(text, 1);
+        sceneLayout->addStretch(1);
 
         auto* row = new QHBoxLayout(welcome_);
         row->setContentsMargins(0, 0, 0, 0);
-        row->setSpacing(0);
-        row->addWidget(intro);
-        row->addWidget(new WelcomeScene(welcome_), 1);
+        row->addWidget(scene);
     }
 
     // Run browser.
@@ -432,16 +460,27 @@ void LibraryView::setRecentFolders(const QStringList& folders)
     auto* heading = new QLabel(tr("Recent"), recentBox_);
     QFont font = heading->font();
     font.setBold(true);
-    font = format::scaled(font, 0.85);
+    font = format::scaled(font, 1.1);
     heading->setFont(font);
-    heading->setForegroundRole(QPalette::PlaceholderText);
-    heading->setContentsMargins(10, 0, 0, 4);
     layout->addWidget(heading);
-    for (const QString& folder : folders) {
-        layout->addWidget(actionRow(Glyph::OpenFolder, QDir(folder).dirName(),
-                                    QDir::toNativeSeparators(QDir(folder).absolutePath()),
-                                    [this, folder] { emit recentFolderRequested(folder); }, recentBox_));
+    // The folders as glass cards, two to a row, newest first.
+    auto* strip = new QWidget(recentBox_);
+    auto* grid = new QGridLayout(strip);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setSpacing(10);
+    for (int i = 0; i < folders.size(); ++i) {
+        const QString& folder = folders[i];
+        QPushButton* card = actionRow(Glyph::OpenFolder, QDir(folder).dirName(),
+                                      QDir::toNativeSeparators(QDir(folder).absolutePath()),
+                                      [this, folder] { emit recentFolderRequested(folder); }, strip);
+        card->setStyleSheet(QStringLiteral(
+            "QPushButton#actionRow { border: 1px solid rgba(255,255,255,30); border-radius: 12px; text-align: left;"
+            " background: rgba(20,24,36,190); }"
+            "QPushButton#actionRow:hover { background: rgba(40,48,70,220); border: 1px solid rgba(255,255,255,70); }"
+            "QPushButton#actionRow:pressed { background: rgba(20,24,36,240); }"));
+        grid->addWidget(card, i / 2, i % 2);
     }
+    layout->addWidget(strip);
 }
 
 void LibraryView::setThumbnailSource(const QString& ffmpeg, const QString& folder)

@@ -58,6 +58,17 @@ public:
      */
     [[nodiscard]] double passProgress() const { return progress_; }
 
+    /**
+     * @brief Leaves room on the left for text laid over the scene.
+     *
+     * The nodes move into the part of the scene to the right of `fraction` of its width, and
+     * the left part is shaded dark so that white text over it reads well. The bottom edge fades
+     * into the window as well.
+     *
+     * @param fraction From 0 (the whole width, no shade) to 0.6.
+     */
+    void setTextSide(double fraction);
+
 protected:
     /**
      * @brief Paints the sky, the snow, the nodes, the links and their names.
@@ -84,6 +95,7 @@ private:
     QTimer* animation_;      ///< Moves the satellite and the dashes about 30 times a second.
     double progress_ = 0.35; ///< The satellite's place along its pass, in [0, 1).
     double phase_ = 0.0;     ///< Dash offset of the links, in pixels.
+    double textSide_ = 0.0;  ///< Fraction of the width kept for text on the left.
 };
 
 } // namespace abrviz

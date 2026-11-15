@@ -222,8 +222,11 @@ void SourceList::applyStyle()
             item->setSizeHint(0, QSize(0, 28));
         }
     }
-    const QColor background = dark ? QColor(0x26, 0x26, 0x28) : QColor(0xec, 0xec, 0xee);
-    const QColor selection = dark ? QColor(255, 255, 255, 30) : QColor(0, 0, 0, 22);
+    // Matches the sidebar column behind it: darker than the window in the dark theme.
+    const QColor background = dark ? palette().color(QPalette::Window).darker(150) : QColor(0xec, 0xec, 0xee);
+    QColor selection = dark ? accent : QColor(0, 0, 0, 22);
+    if (dark)
+        selection.setAlphaF(0.30F);
     setStyleSheet(QStringLiteral(R"(
         QTreeWidget#sidebar { background: %1; border: none; font-size: 13px; padding: 0 8px; }
         QTreeWidget#sidebar::item { border: none; border-radius: 6px; padding-left: 6px; color: %2; }

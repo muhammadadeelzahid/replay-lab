@@ -43,7 +43,9 @@ add_library(abrviz_gui STATIC
     thumbnail_cache.h
     thumbnail_cache.cpp
     home_widgets.h
-    home_widgets.cpp)
+    home_widgets.cpp
+    theme.h
+    theme.cpp)
 
 qt_add_resources(abrviz_gui "abrviz_resources"
     PREFIX "/abrviz"

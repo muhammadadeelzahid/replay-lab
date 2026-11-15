@@ -521,6 +521,7 @@ void MainWindow::createPages()
     d_->sidebarPane = new QWidget(this);
     auto* sidebarColumn = new QWidget(d_->sidebarPane);
     sidebarColumn->setObjectName(QStringLiteral("sidebarColumn"));
+    sidebarColumn->setAttribute(Qt::WA_StyledBackground);  // paint the style sheet's background
     sidebarColumn->setFixedWidth(230);
     auto* columnLayout = new QVBoxLayout(sidebarColumn);
     columnLayout->setContentsMargins(0, 0, 0, 0);
@@ -529,6 +530,7 @@ void MainWindow::createPages()
     // Says, under every list of runs, what network they were streamed over.
     auto* footer = new QWidget(sidebarColumn);
     footer->setObjectName(QStringLiteral("sidebarFooter"));
+    footer->setAttribute(Qt::WA_StyledBackground);
     auto* footerLayout = new QHBoxLayout(footer);
     footerLayout->setContentsMargins(16, 10, 12, 12);
     footerLayout->setSpacing(10);
@@ -860,6 +862,8 @@ void MainWindow::applyStyle()
     const QString line = dark ? QStringLiteral("#1affffff") : QStringLiteral("#1f000000");
     const QString grouped = dark ? QStringLiteral("#0dffffff") : QStringLiteral("#09000000");
     const QString noticeBg = dark ? QStringLiteral("#29ffd60a") : QStringLiteral("#38ffcc00");
+    // The sidebar and the toolbar: darker than the window in the dark theme.
+    const QColor sidebar = dark ? pal.color(QPalette::Window).darker(150) : QColor(0xec, 0xec, 0xee);
     setStyleSheet(QStringLiteral(R"(
         QFrame#divider { color: %1; background: %1; border: none; max-width: 1px; max-height: 1px; }
         QFrame#divider[frameShape="5"] { max-height: 16777215px; }
@@ -868,7 +872,8 @@ void MainWindow::applyStyle()
         QLabel#notice { background: %3; border-radius: 8px; padding: 6px 12px; }
         QWidget#sidebarColumn, QWidget#sidebarFooter { background: %4; }
         QSplitter::handle { background: %1; }
-    )").arg(line, grouped, noticeBg, dark ? QStringLiteral("#262628") : QStringLiteral("#ececee")));
+        QToolBar { background: %4; border: none; border-bottom: 1px solid %1; spacing: 6px; padding: 4px 8px; }
+    )").arg(line, grouped, noticeBg, sidebar.name()));
 }
 
 void MainWindow::changeEvent(QEvent* event)
@@ -1098,7 +1103,10 @@ void MainWindow::logIndexFinished()
     const auto run = std::exchange(d_->logIndexRun, nullptr);
     if (future.isCanceled() || future.resultCount() == 0 || !run)
         return;
-    // The session ignores an index for a run that is no longer open.
+    // An index for a run that is no longer open (the same bundle may have been opened again
+    // while it was built) is dropped, and nothing is announced: the open run's index follows.
+    if (run != d_->session->run())
+        return;
     d_->session->setLogIndex(future.result(), run.get());
     emit logIndexReady();
 }

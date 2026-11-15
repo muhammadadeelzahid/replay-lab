@@ -10,17 +10,6 @@ namespace abrviz {
 namespace {
 
 /**
- * @brief Whether a palette is a dark appearance.
- *
- * @param palette The palette to test.
- * @return True if the window colour's lightness is below 128.
- */
-bool isDark(const QPalette& palette)
-{
-    return palette.color(QPalette::Window).lightness() < 128;
-}
-
-/**
  * @brief A colour for a style sheet, as `#AARRGGBB`.
  *
  * @note Fractions in a style sheet's rgba() are not read as alpha, hence the hex form.
@@ -112,24 +101,24 @@ void SegmentedControl::changeEvent(QEvent* event)
 
 void SegmentedControl::applyStyle()
 {
-    // The colours of AppKit's segmented control, in both appearances.
-    const bool dark = isDark(palette());
-    const QColor track = dark ? QColor(255, 255, 255, 26) : QColor(0, 0, 0, 15);
-    const QColor selected = dark ? QColor(255, 255, 255, 56) : QColor(255, 255, 255);
-    const QColor border = dark ? QColor(255, 255, 255, 20) : QColor(0, 0, 0, 30);
+    // Text tabs, as in a streaming app's top bar: the others grey, the current one white and
+    // bold over an accent underline.
     const QColor text = palette().color(QPalette::WindowText);
-    QColor disabled = text;
-    disabled.setAlphaF(0.3F);
+    QColor muted = palette().color(QPalette::PlaceholderText);
+    QColor disabled = muted;
+    disabled.setAlphaF(0.35F);
+    const QColor accent = palette().color(QPalette::Highlight);
     setStyleSheet(QStringLiteral(R"(
-        QWidget#segmentedControl { background: %1; border-radius: 7px; }
+        QWidget#segmentedControl { background: transparent; }
         QWidget#segmentedControl QToolButton {
-            border: none; border-radius: 5px; padding: 3px 14px;
-            color: %4; background: transparent; font-size: 13px;
+            border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 4px 14px;
+            color: %1; background: transparent; font-size: 14px; font-weight: 500;
         }
-        QWidget#segmentedControl QToolButton:checked { background: %2; border: 0.5px solid %3; }
-        QWidget#segmentedControl QToolButton:disabled { color: %5; }
+        QWidget#segmentedControl QToolButton:hover { color: %2; }
+        QWidget#segmentedControl QToolButton:checked { color: %2; font-weight: 700; border-bottom: 2px solid %3; }
+        QWidget#segmentedControl QToolButton:disabled { color: %4; }
     )")
-                      .arg(rgba(track), rgba(selected), rgba(border), text.name(), rgba(disabled)));
+                      .arg(muted.name(), text.name(), accent.name(), rgba(disabled)));
 }
 
 } // namespace abrviz

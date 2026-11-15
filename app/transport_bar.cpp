@@ -13,6 +13,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace abrviz {
 
@@ -26,7 +27,8 @@ namespace {
  */
 QString clockText(double seconds)
 {
-    seconds = std::max(0.0, seconds);
+    // Rounded to tenths first, so 59.96 s shows as 1:00.0 rather than 0:60.0.
+    seconds = std::round(std::max(0.0, seconds) * 10.0) / 10.0;
     const int minutes = static_cast<int>(seconds / 60.0);
     return QStringLiteral("%1:%2").arg(minutes).arg(seconds - minutes * 60.0, 4, 'f', 1, QLatin1Char('0'));
 }
