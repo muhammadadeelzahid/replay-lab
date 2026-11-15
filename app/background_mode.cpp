@@ -4,4 +4,6 @@ namespace abrviz {
 
 void runInBackground() {}
 
+void showBundleIconInDock() {}
+
 } // namespace abrviz

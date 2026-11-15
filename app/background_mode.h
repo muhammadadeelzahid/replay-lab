@@ -18,4 +18,15 @@ namespace abrviz {
  */
 void runInBackground();
 
+/**
+ * @brief Shows the bundle's current icon in the Dock.
+ *
+ * The Dock can keep showing an icon it cached for the bundle path before the icon changed;
+ * this sets the running application's Dock icon from `AppIcon.icns` in the bundle, so it always
+ * matches the icon the app shows inside its windows.
+ *
+ * @note Does nothing outside macOS, or when the executable is not in a bundle.
+ */
+void showBundleIconInDock();
+
 } // namespace abrviz

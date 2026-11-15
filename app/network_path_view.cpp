@@ -265,15 +265,14 @@ void NetworkPathView::paintEvent(QPaintEvent*)
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const Node& node = nodes[i];
         const bool viewer = i == 3;
-        QColor fill = viewer && stalled_ ? red : (dark ? QColor(255, 255, 255) : QColor(0x1c, 0x2a, 0x48));
-        fill.setAlphaF(viewer && stalled_ ? 0.25F : (dark ? 0.08F : 0.85F));
-        QColor ring = viewer && stalled_ ? red : (run_ ? accent : idle);
-        painter.setPen(QPen(ring, 1.6));
-        painter.setBrush(fill);
-        painter.drawEllipse(node.centre, kNodeRadius, kNodeRadius);
-        // The node in full colour, a little larger than the disc's inside.
-        const QRectF iconRect(node.centre.x() - 15, node.centre.y() - 15, 30, 30);
+        // The node as a tile; the user's tile gets a red outline during a stall.
+        const QRectF iconRect(node.centre.x() - 18, node.centre.y() - 18, 36, 36);
         nodeIcon(node.glyph).paint(&painter, iconRect.toRect());
+        if (viewer && stalled_) {
+            painter.setPen(QPen(red, 2.4));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRoundedRect(iconRect.adjusted(-3, -3, 3, 3), 10, 10);
+        }
 
         painter.setFont(bold);
         painter.setPen(viewer && stalled_ ? red : text);

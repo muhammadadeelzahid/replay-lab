@@ -41,6 +41,8 @@ enum class Glyph {
     Server,
     Device,
     Laptop,
+    Download,
+    Chevron,
 };
 
 /**
@@ -58,8 +60,9 @@ enum class Glyph {
 [[nodiscard]] QIcon glyphIcon(Glyph glyph, const QColor& color, const QColor& selected = QColor());
 
 /**
- * @brief A node of the network path drawn in full colour: a server rack, a satellite, an IAB
- *        relay mast or a laptop.
+ * @brief A node of the network path as an app-style tile: its white line symbol on a rounded
+ *        square in the node's colour (graphite server, blue satellite, green IAB relay, indigo
+ *        laptop).
  *
  * @param glyph Glyph::Server, Glyph::Satellite, Glyph::Relay or Glyph::Laptop (Glyph::Device
  *              gives the laptop too); other glyphs fall back to glyphIcon() in white.
@@ -68,12 +71,13 @@ enum class Glyph {
 [[nodiscard]] QIcon nodeIcon(Glyph glyph);
 
 /**
- * @brief The accent colour for icons and highlights: Apple's system blue for the appearance.
+ * @brief The accent colour for icons and highlights: the coral of the app icon, lighter in dark
+ *        mode.
  *
  * @note Qt's Highlight on macOS is the darker selection colour, so it is not used here.
  *
- * @param palette The palette whose window colour decides between the light and dark blue.
- * @return #0A84FF for a dark window colour, #007AFF for a light one.
+ * @param palette The palette whose window colour decides between the light and dark shade.
+ * @return #FF6B4A for a dark window colour, #E9532F for a light one.
  */
 [[nodiscard]] QColor accentColor(const QPalette& palette);
 

@@ -2,42 +2,49 @@
 
 /**
  * @file
- * @brief The app's look: a dark, cinematic theme in every appearance.
+ * @brief The app's look: Apple's neutral greys in light and dark mode, with a coral accent
+ *        taken from the app icon.
  */
 
 #include <QColor>
 #include <QPalette>
+#include <QString>
 
 class QApplication;
 
 namespace abrviz::theme {
 
-/// The window's background: a deep navy black.
-inline const QColor kBackground(0x0b, 0x0d, 0x14);
-/// Raised surfaces: the sidebar, cards and panels.
-inline const QColor kSurface(0x13, 0x17, 0x22);
-/// Surfaces above those: fields, hovered rows, chips.
-inline const QColor kRaised(0x1c, 0x22, 0x31);
-/// The sidebar's background, darker than the window.
-inline const QColor kSidebar(0x07, 0x09, 0x0f);
-/// Main text.
-inline const QColor kText(0xf4, 0xf6, 0xfb);
-/// Secondary text.
-inline const QColor kMuted(0x8d, 0x96, 0xab);
-/// The accent: buttons, selection and highlights.
-inline const QColor kAccent(0x2f, 0x7b, 0xff);
-
 /**
- * @brief The palette of the theme.
+ * @brief The accent: buttons, the selected tab, selections and highlights.
  *
- * @return Dark colours for every role, with the accent as the highlight.
+ * @param dark Whether it is for the dark appearance (a little lighter there).
+ * @return The coral of the app icon's play symbol.
  */
-[[nodiscard]] QPalette palette();
+[[nodiscard]] QColor accent(bool dark);
 
 /**
- * @brief Applies the theme to the application: the dark colour scheme (so native controls and
- *        the title bar are dark too), the palette, and a style sheet for scroll bars, fields,
- *        tables and menus.
+ * @brief The palette for an appearance.
+ *
+ * @param dark True for dark mode, false for light mode.
+ * @return Neutral greys for every role, with the accent as the highlight.
+ */
+[[nodiscard]] QPalette palette(bool dark);
+
+/**
+ * @brief The application style sheet for an appearance: fields, tables, tooltips and scroll
+ *        bars in the palette's greys.
+ *
+ * @param dark True for dark mode, false for light mode.
+ * @return The style sheet.
+ */
+[[nodiscard]] QString styleSheet(bool dark);
+
+/**
+ * @brief Applies the theme to the application and keeps it in step with the system appearance.
+ *
+ * Follows the system's light or dark mode, and switches the palette and the style sheet when
+ * the user changes it. The environment variable `ABRVIZ_APPEARANCE` (`light` or `dark`) fixes
+ * one appearance instead.
  *
  * @param app The application.
  */

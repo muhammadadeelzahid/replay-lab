@@ -38,8 +38,6 @@ add_library(abrviz_gui STATIC
     settings_dialog.cpp
     network_path_view.h
     network_path_view.cpp
-    welcome_scene.h
-    welcome_scene.cpp
     thumbnail_cache.h
     thumbnail_cache.cpp
     home_widgets.h
@@ -91,6 +89,11 @@ if(APPLE)
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
         MACOSX_BUNDLE_COPYRIGHT "MIT licence")
+    # Touch the bundle after each build so Finder and the Dock pick up a changed icon instead of
+    # the one they cached for this path.
+    add_custom_command(TARGET abrviz POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E touch "$<TARGET_BUNDLE_DIR:abrviz>"
+        VERBATIM)
 else()
     set_target_properties(abrviz PROPERTIES OUTPUT_NAME "stream-inspector")
 endif()

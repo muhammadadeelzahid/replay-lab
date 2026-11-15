@@ -912,8 +912,14 @@ private slots:
             }
         }
         // The app kept its settings in the folder it was given.
-        QSettings saved(QDir(settings.path()).filePath(QStringLiteral("muhammadadeelzahid.github.io/Stream Inspector.ini")),
-                        QSettings::IniFormat);
+        // (The file's folder and name differ by platform: the organisation's domain on macOS, its
+        // name elsewhere.)
+        QString file;
+        QDirIterator it(settings.path(), {QStringLiteral("*.ini")}, QDir::Files, QDirIterator::Subdirectories);
+        if (it.hasNext())
+            file = it.next();
+        QVERIFY2(!file.isEmpty(), "no settings file");
+        QSettings saved(file, QSettings::IniFormat);
         QVERIFY2(saved.value(QStringLiteral("library/recentFolders")).toStringList().contains(folder)
                      || saved.value(QStringLiteral("library/recentFolders")).toStringList().contains(QDir(folder).absolutePath()),
                  qPrintable(saved.fileName()));

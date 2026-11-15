@@ -5,14 +5,15 @@
 #include "home_widgets.h"
 #include "icons.h"
 #include "thumbnail_cache.h"
-#include "welcome_scene.h"
 
 #include "abrviz/core/io/topology_reader.h"
 #include "abrviz/core/load/bundle_reader.h"
 
 #include "abrviz/core/version.h"
 
+#include <QDesktopServices>
 #include <QDir>
+#include <QUrl>
 #include <QFont>
 #include <QFrame>
 #include <QGridLayout>
@@ -218,84 +219,71 @@ LibraryView::LibraryView(QWidget* parent)
 {
     setObjectName(QStringLiteral("libraryView"));
 
-    // Welcome screen: one full-width banner, as in a streaming app. The scene of the network
-    // every run was streamed over fills it; the app, its two actions and the recent folders sit
-    // over its shaded left side.
+    // Welcome screen: a title, three cards for the ways to get runs, and the recent folders.
     {
-        auto* scene = new WelcomeScene(welcome_);
-        scene->setTextSide(0.42);
-        auto* icon = new QLabel(scene);
-        icon->setPixmap(appIcon().pixmap(72, 72));
-        auto* name = makeLabel(appDisplayName(), 3.0, true, scene);
-        auto* version = new QLabel(tr("Version %1").arg(versionString()), scene);
-        version->setForegroundRole(QPalette::PlaceholderText);
-        auto* tagline = new QLabel(tr("See what a viewer saw when adaptive video was streamed over a "
-                                      "satellite 5G network with integrated access and backhaul (IAB)."),
-                                   scene);
-        QFont taglineFont = format::scaled(tagline->font(), 1.15);
-        tagline->setFont(taglineFont);
-        tagline->setWordWrap(true);
+        auto* page = new GlowBackground(welcome_);
+        auto* title = makeLabel(tr("Open Simulation Runs"), 2.4, true, page);
+        title->setAlignment(Qt::AlignCenter);
+        auto* subtitle = new QLabel(tr("Replay what a viewer saw when video was streamed over a satellite 5G "
+                                       "network with an IAB relay."),
+                                    page);
+        subtitle->setFont(format::scaled(subtitle->font(), 1.15));
+        subtitle->setForegroundRole(QPalette::PlaceholderText);
+        subtitle->setAlignment(Qt::AlignCenter);
+        subtitle->setWordWrap(true);
 
-        const QColor accent = accentColor(palette());
-        const auto pill = [this, scene, &accent](Glyph glyph, const QString& text, bool primary,
-                                                 std::function<void()> action) {
-            auto* button = new QPushButton(text, scene);
-            button->setObjectName(QStringLiteral("actionRow"));
-            button->setIcon(glyphIcon(glyph, Qt::white));
-            button->setIconSize({18, 18});
-            button->setCursor(Qt::PointingHandCursor);
-            button->setFocusPolicy(Qt::NoFocus);
-            button->setStyleSheet(primary
-                ? QStringLiteral("QPushButton#actionRow { color: white; background: %1; border: none; border-radius: 22px;"
-                                 " padding: 0 24px; font-weight: 600; min-height: 44px; }"
-                                 "QPushButton#actionRow:hover { background: %2; }"
-                                 "QPushButton#actionRow:pressed { background: %3; }")
-                      .arg(accent.name(), accent.lighter(115).name(), accent.darker(115).name())
-                : QStringLiteral("QPushButton#actionRow { color: white; background: rgba(255,255,255,40); border: none;"
-                                 " border-radius: 22px; padding: 0 22px; font-weight: 600; min-height: 44px; }"
-                                 "QPushButton#actionRow:hover { background: rgba(255,255,255,64); }"
-                                 "QPushButton#actionRow:pressed { background: rgba(255,255,255,28); }"));
-            connect(button, &QPushButton::clicked, this, std::move(action));
-            return button;
-        };
-        auto* actions = new QHBoxLayout();
-        actions->setSpacing(12);
-        actions->addWidget(pill(Glyph::OpenFolder, tr("Open a Folder of Runs..."), true,
-                                [this] { emit openFolderRequested(); }));
-        actions->addWidget(pill(Glyph::OpenBundle, tr("Open a Single Run..."), false,
-                                [this] { emit openBundleRequested(); }));
-        actions->addStretch(1);
+        auto* folderCard = new SourceCard(Glyph::OpenFolder, tr("Open a Folder"),
+                                          tr("Browse every run bundle in a folder"), true, page);
+        auto* runCard = new SourceCard(Glyph::OpenBundle, tr("Open a Single Run"),
+                                       tr("Replay one run bundle on its own"), false, page);
+        auto* getCard = new SourceCard(Glyph::Download, tr("Get the Simulation Runs"),
+                                       tr("Download viewer_bundles.tar from the releases page"), false, page);
+        folderCard->setObjectName(QStringLiteral("actionRow"));
+        runCard->setObjectName(QStringLiteral("actionRow"));
+        getCard->setObjectName(QStringLiteral("downloadCard"));
+        connect(folderCard, &QPushButton::clicked, this, &LibraryView::openFolderRequested);
+        connect(runCard, &QPushButton::clicked, this, &LibraryView::openBundleRequested);
+        connect(getCard, &QPushButton::clicked, this, [] {
+            QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/abr-viz/releases")));
+        });
+        auto* cards = new QHBoxLayout();
+        cards->setSpacing(10);
+        for (SourceCard* card : {folderCard, runCard, getCard})
+            cards->addWidget(card);
 
-        recentBox_->setParent(scene);
+        recentBox_->setParent(page);
         auto* recentLayout = new QVBoxLayout(recentBox_);
-        recentLayout->setContentsMargins(0, 30, 0, 0);
-        recentLayout->setSpacing(10);
+        recentLayout->setContentsMargins(6, 0, 6, 0);
+        recentLayout->setSpacing(12);
 
-        auto* column = new QVBoxLayout();
-        column->addStretch(3);
-        column->addWidget(icon);
-        column->addSpacing(18);
-        column->addWidget(name);
-        column->addWidget(version);
-        column->addSpacing(16);
-        column->addWidget(tagline);
-        column->addSpacing(28);
-        column->addLayout(actions);
+        auto* content = new QWidget(page);
+        content->setMaximumWidth(1000);
+        auto* column = new QVBoxLayout(content);
+        column->setContentsMargins(0, 0, 0, 0);
+        column->setSpacing(0);
+        column->addWidget(title);
+        column->addSpacing(8);
+        column->addWidget(subtitle);
+        column->addSpacing(34);
+        column->addLayout(cards);
+        column->addSpacing(34);
         column->addWidget(recentBox_);
-        column->addStretch(2);
-        auto* text = new QWidget(scene);
-        text->setLayout(column);
-        text->setMaximumWidth(560);
-        text->setMinimumWidth(360);
 
-        auto* sceneLayout = new QHBoxLayout(scene);
-        sceneLayout->setContentsMargins(64, 24, 32, 40);
-        sceneLayout->addWidget(text, 1);
-        sceneLayout->addStretch(1);
+        auto* version = new QLabel(tr("%1 %2").arg(appDisplayName(), versionString()), page);
+        version->setForegroundRole(QPalette::PlaceholderText);
+        version->setAlignment(Qt::AlignCenter);
+
+        auto* outer = new QVBoxLayout(page);
+        outer->setContentsMargins(40, 40, 40, 24);
+        outer->addStretch(2);
+        outer->addWidget(content, 0, Qt::AlignHCenter);
+        outer->addStretch(3);
+        outer->addWidget(version);
+        content->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
         auto* row = new QHBoxLayout(welcome_);
         row->setContentsMargins(0, 0, 0, 0);
-        row->addWidget(scene);
+        row->addWidget(page);
     }
 
     // Run browser.
@@ -337,7 +325,7 @@ LibraryView::LibraryView(QWidget* parent)
 
         auto* card = new QFrame(browser_);
         card->setObjectName(QStringLiteral("card"));
-        card->setFixedWidth(300);
+        card->setFixedWidth(360);
         details_->setWordWrap(true);
         details_->setTextFormat(Qt::RichText);
         details_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
@@ -356,18 +344,15 @@ LibraryView::LibraryView(QWidget* parent)
 
         // The home: the featured run and a row of cards for each video, on a dark ground, then
         // the table of every run.
+        // The featured run is a dark card, like a poster, in both appearances; the rows below
+        // it follow the window's colours.
         home_->setObjectName(QStringLiteral("home"));
-        home_->setAutoFillBackground(true);
-        QPalette dark = home_->palette();
-        dark.setColor(QPalette::Window, QColor(0x0b, 0x0d, 0x14));
-        dark.setColor(QPalette::WindowText, Qt::white);
-        home_->setPalette(dark);
         auto* homeLayout = new QVBoxLayout(home_);
-        homeLayout->setContentsMargins(0, 0, 0, 28);
-        homeLayout->setSpacing(0);
+        homeLayout->setContentsMargins(20, 20, 20, 28);
+        homeLayout->setSpacing(18);
         homeLayout->addWidget(banner_);
         homeLayout->addLayout(rows_);
-        rows_->setContentsMargins(44, 4, 0, 0);
+        rows_->setContentsMargins(24, 4, 0, 0);
         rows_->setSpacing(22);
         connect(banner_, &FeaturedBanner::playRequested, this, [this] {
             if (banner_->bundle())
@@ -457,13 +442,13 @@ void LibraryView::setRecentFolders(const QStringList& folders)
     recentBox_->setVisible(!folders.isEmpty());
     if (folders.isEmpty())
         return;
-    auto* heading = new QLabel(tr("Recent"), recentBox_);
+    auto* heading = new QLabel(tr("Recently Opened"), recentBox_);
     QFont font = heading->font();
     font.setBold(true);
-    font = format::scaled(font, 1.1);
+    font = format::scaled(font, 1.25);
     heading->setFont(font);
     layout->addWidget(heading);
-    // The folders as glass cards, two to a row, newest first.
+    // The folders as wide rows, two to a line, newest first.
     auto* strip = new QWidget(recentBox_);
     auto* grid = new QGridLayout(strip);
     grid->setContentsMargins(0, 0, 0, 0);
@@ -473,13 +458,19 @@ void LibraryView::setRecentFolders(const QStringList& folders)
         QPushButton* card = actionRow(Glyph::OpenFolder, QDir(folder).dirName(),
                                       QDir::toNativeSeparators(QDir(folder).absolutePath()),
                                       [this, folder] { emit recentFolderRequested(folder); }, strip);
+        // A faint tint of the text colour, so the rows work in light and dark mode.
+        const QColor ink = palette().color(QPalette::WindowText);
+        const auto tint = [&ink](int alpha) {
+            return QStringLiteral("rgba(%1,%2,%3,%4)").arg(ink.red()).arg(ink.green()).arg(ink.blue()).arg(alpha);
+        };
         card->setStyleSheet(QStringLiteral(
-            "QPushButton#actionRow { border: 1px solid rgba(255,255,255,30); border-radius: 12px; text-align: left;"
-            " background: rgba(20,24,36,190); }"
-            "QPushButton#actionRow:hover { background: rgba(40,48,70,220); border: 1px solid rgba(255,255,255,70); }"
-            "QPushButton#actionRow:pressed { background: rgba(20,24,36,240); }"));
+            "QPushButton#actionRow { border: none; border-radius: 10px; text-align: left; background: %1; }"
+            "QPushButton#actionRow:hover { background: %2; }"
+            "QPushButton#actionRow:pressed { background: %3; }").arg(tint(14), tint(26), tint(8)));
         grid->addWidget(card, i / 2, i % 2);
     }
+    grid->setColumnStretch(0, 1);
+    grid->setColumnStretch(1, 1);
     layout->addWidget(strip);
 }
 

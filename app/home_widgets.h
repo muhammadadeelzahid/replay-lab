@@ -9,14 +9,86 @@
 #include "abrviz/core/load/bundle_library.h"
 
 #include <QAbstractButton>
+#include <QPushButton>
 #include <QImage>
 #include <QWidget>
+
+#include "icons.h"
 
 class QLabel;
 class QPushButton;
 class QTimer;
 
 namespace abrviz {
+
+/**
+ * @brief A large rounded button, as on the home page: blue for the main action, glass for the
+ *        others.
+ *
+ * @param text The label.
+ * @param glyph The icon, drawn in white.
+ * @param primary Whether it is the main action.
+ * @param parent The parent widget.
+ * @return The new button, owned by `parent`.
+ */
+QPushButton* pillButton(const QString& text, Glyph glyph, bool primary, QWidget* parent);
+
+/**
+ * @brief A large card on the welcome page for one way of opening runs: an icon in a glass tile,
+ *        a title, a short description and a chevron. The main card has a glowing blue outline.
+ */
+class SourceCard final : public QPushButton {
+    Q_OBJECT
+
+public:
+    /**
+     * @brief Creates the card.
+     *
+     * @param glyph The icon.
+     * @param title The title, e.g. "Open a Folder".
+     * @param detail One or two lines under the title.
+     * @param primary Whether this is the main card.
+     * @param parent The parent widget.
+     */
+    SourceCard(Glyph glyph, const QString& title, const QString& detail, bool primary, QWidget* parent);
+
+    /// @return 300 x 210 pixels.
+    QSize sizeHint() const override;
+
+    /// @return The title, for tests.
+    [[nodiscard]] const QString& title() const { return title_; }
+
+protected:
+    /// Paints the card.
+    void paintEvent(QPaintEvent* event) override;
+    /// Repaints with the hover look.
+    void enterEvent(QEnterEvent* event) override;
+    /// Repaints without the hover look.
+    void leaveEvent(QEvent* event) override;
+
+private:
+    Glyph glyph_;           ///< The icon.
+    QString title_;         ///< The title.
+    QString detail_;        ///< The description.
+    bool primary_;          ///< Whether this is the main card.
+    bool hovered_ = false;  ///< Whether the pointer is over it.
+};
+
+/**
+ * @brief The dark background of the welcome page: the window's ink with two faint glows of
+ *        blue and indigo light, as in a macOS wallpaper.
+ */
+class GlowBackground final : public QWidget {
+    Q_OBJECT
+
+public:
+    /// @param parent The parent widget.
+    explicit GlowBackground(QWidget* parent = nullptr);
+
+protected:
+    /// Paints the ink and the glows.
+    void paintEvent(QPaintEvent* event) override;
+};
 
 /**
  * @brief The network a run was streamed over, as a glass panel laid over the featured run.
@@ -45,8 +117,11 @@ public:
      */
     void setDetails(const QString& feeder, const QString& satellite, const QString& backhaul);
 
-    /// @return 520 x 124 pixels.
+    /// @return 520 x 124 pixels (104 without a heading).
     QSize sizeHint() const override;
+
+    /// @param heading The small heading in the top left corner; empty for none.
+    void setHeading(const QString& heading);
 
     /**
      * @brief The texts painted on the panel, for tests.
@@ -69,6 +144,7 @@ private:
     QString feeder_;      ///< Feeder link name.
     QString satellite_;   ///< Note under the satellite.
     QString backhaul_;    ///< Backhaul link name.
+    QString heading_;     ///< Heading in the top left corner; empty for none.
 };
 
 /**

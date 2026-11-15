@@ -13,13 +13,14 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <array>
 
 namespace abrviz {
 
 namespace {
 
-const QColor kInk(0x0b, 0x0d, 0x14);  ///< The banner's dark background.
+const QColor kInk(0x14, 0x14, 0x16);  ///< The banner's dark background, a neutral near-black.
 
 /**
  * @brief Draws an image so that it covers a rectangle, cropping what does not fit.
@@ -95,9 +96,136 @@ void bannerText(QLabel* label, double scale, bool bold, int alpha)
 
 // ---------------------------------------------------------------------------------------------
 
+QPushButton* pillButton(const QString& text, Glyph glyph, bool primary, QWidget* parent)
+{
+    auto* button = new QPushButton(text, parent);
+    button->setIcon(glyphIcon(glyph, Qt::white));
+    button->setIconSize({18, 18});
+    button->setCursor(Qt::PointingHandCursor);
+    button->setFocusPolicy(Qt::NoFocus);
+    const QColor accent = accentColor(parent->palette());
+    button->setStyleSheet(primary
+        ? QStringLiteral("QPushButton { color: white; background: %1; border: none; border-radius: 22px;"
+                         " padding: 0 24px; font-weight: 600; min-height: 44px; }"
+                         "QPushButton:hover { background: %2; } QPushButton:pressed { background: %3; }")
+              .arg(accent.name(), accent.lighter(115).name(), accent.darker(115).name())
+        : QStringLiteral("QPushButton { color: white; background: rgba(255,255,255,40); border: none;"
+                         " border-radius: 22px; padding: 0 22px; font-weight: 600; min-height: 44px; }"
+                         "QPushButton:hover { background: rgba(255,255,255,64); }"
+                         "QPushButton:pressed { background: rgba(255,255,255,28); }"));
+    return button;
+}
+
+SourceCard::SourceCard(Glyph glyph, const QString& title, const QString& detail, bool primary, QWidget* parent)
+    : QPushButton(parent)
+    , glyph_(glyph)
+    , title_(title)
+    , detail_(detail)
+    , primary_(primary)
+{
+    setCursor(Qt::PointingHandCursor);
+    setFocusPolicy(Qt::NoFocus);
+    setAccessibleName(title);
+    setAccessibleDescription(detail);
+    setMinimumSize(220, 190);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+}
+
+QSize SourceCard::sizeHint() const
+{
+    return {300, 210};
+}
+
+void SourceCard::enterEvent(QEnterEvent* event)
+{
+    hovered_ = true;
+    update();
+    QPushButton::enterEvent(event);
+}
+
+void SourceCard::leaveEvent(QEvent* event)
+{
+    hovered_ = false;
+    update();
+    QPushButton::leaveEvent(event);
+}
+
+void SourceCard::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QColor accent = accentColor(palette());
+    const QRectF frame = QRectF(rect()).adjusted(6, 6, -6, -6);
+    // The main card glows: a few soft outlines of the accent around it.
+    if (primary_) {
+        for (int i = 4; i >= 1; --i) {
+            QColor glow = accent;
+            glow.setAlphaF(0.05F * static_cast<float>(5 - i));
+            painter.setPen(QPen(glow, 1.5 * i));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRoundedRect(frame.adjusted(-i, -i, i, i), 16 + i, 16 + i);
+        }
+    }
+    // Tints of the text colour, so the card works in light and dark mode.
+    const QColor ink = palette().color(QPalette::WindowText);
+    const auto tint = [&ink](int alpha) { return QColor(ink.red(), ink.green(), ink.blue(), alpha); };
+    QLinearGradient fill(frame.topLeft(), frame.bottomLeft());
+    const int lift = isDown() ? 6 : (hovered_ ? 20 : 12);
+    fill.setColorAt(0, tint(lift + 4));
+    fill.setColorAt(1, tint(lift));
+    QColor border = primary_ ? accent : tint(hovered_ ? 60 : 28);
+    painter.setPen(QPen(border, primary_ ? 1.6 : 1.0));
+    painter.setBrush(fill);
+    painter.drawRoundedRect(frame, 16, 16);
+
+    // The icon in a glass tile, the title and the description, centred; a chevron on the right.
+    const QRectF tile(frame.center().x() - 30, frame.top() + 26, 60, 60);
+    painter.setPen(QPen(tint(32), 1.0));
+    painter.setBrush(tint(14));
+    painter.drawRoundedRect(tile, 16, 16);
+    glyphIcon(glyph_, accent).paint(&painter, tile.adjusted(15, 15, -15, -15).toRect());
+
+    QFont titleFont = format::scaled(font(), 1.4);
+    titleFont.setBold(true);
+    painter.setFont(titleFont);
+    painter.setPen(palette().color(QPalette::WindowText));
+    const QRectF titleRect(frame.left() + 20, tile.bottom() + 18, frame.width() - 40, 28);
+    painter.drawText(titleRect, Qt::AlignCenter, title_);
+    painter.setFont(format::scaled(font(), 1.05));
+    painter.setPen(palette().color(QPalette::PlaceholderText));
+    painter.drawText(QRectF(frame.left() + 24, titleRect.bottom() + 4, frame.width() - 48, frame.bottom() - titleRect.bottom() - 12),
+                     Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, detail_);
+    glyphIcon(Glyph::Chevron, palette().color(QPalette::PlaceholderText))
+        .paint(&painter, QRectF(frame.right() - 30, frame.center().y() - 9, 18, 18).toRect());
+}
+
+GlowBackground::GlowBackground(QWidget* parent)
+    : QWidget(parent)
+{
+    setObjectName(QStringLiteral("glowBackground"));
+}
+
+void GlowBackground::paintEvent(QPaintEvent*)
+{
+    QPainter painter(this);
+    const QRectF all(rect());
+    painter.fillRect(all, palette().color(QPalette::Window));
+    // A faint glow of the accent in the top right corner.
+    QColor glow = accentColor(palette());
+    QRadialGradient light(all.width() * 0.85, -all.height() * 0.1, std::max(all.width(), all.height()) * 0.7);
+    glow.setAlphaF(0.08F);
+    light.setColorAt(0, glow);
+    glow.setAlphaF(0.0F);
+    light.setColorAt(1, glow);
+    painter.fillRect(all, light);
+}
+
+// ---------------------------------------------------------------------------------------------
+
 PathPanel::PathPanel(QWidget* parent)
     : QWidget(parent)
     , animation_(new QTimer(this))
+    , heading_(tr("How this run was streamed"))
 {
     setObjectName(QStringLiteral("pathPanel"));
     setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -118,12 +246,19 @@ void PathPanel::setDetails(const QString& feeder, const QString& satellite, cons
 
 QSize PathPanel::sizeHint() const
 {
-    return {520, 124};
+    return {520, heading_.isEmpty() ? 104 : 124};
+}
+
+void PathPanel::setHeading(const QString& heading)
+{
+    heading_ = heading;
+    updateGeometry();
+    update();
 }
 
 QStringList PathPanel::texts() const
 {
-    return {tr("How this run was streamed"), tr("Video server"), tr("LEO satellite gNB"), tr("IAB relay"),
+    return {heading_, tr("Video server"), tr("LEO satellite gNB"), tr("IAB relay"),
             tr("User"), feeder_.isEmpty() ? tr("Feeder link") : feeder_,
             backhaul_.isEmpty() ? tr("Satellite backhaul") : backhaul_, tr("5G access")};
 }
@@ -159,7 +294,7 @@ void PathPanel::paintEvent(QPaintEvent*)
     painter.drawText(QRectF(16, 10, width() - 32, 16), Qt::AlignLeft | Qt::AlignVCenter, text[0]);
 
     // Four nodes across; the satellite a little higher than the others.
-    const double y = height() * 0.55;
+    const double y = heading_.isEmpty() ? height() * 0.5 : height() * 0.55;
     const double left = 48.0;
     const double step = (width() - 2.0 * left) / 3.0;
     const std::array<QPointF, 4> centre{QPointF(left, y + 4), QPointF(left + step, y - 8),
@@ -184,10 +319,7 @@ void PathPanel::paintEvent(QPaintEvent*)
     QFont name = format::scaled(font(), 0.85);
     name.setBold(true);
     for (std::size_t i = 0; i < centre.size(); ++i) {
-        painter.setPen(QPen(QColor(255, 255, 255, 200), 1.4));
-        painter.setBrush(QColor(255, 255, 255, 18));
-        painter.drawEllipse(centre[i], radius, radius);
-        nodeIcon(glyphs[i]).paint(&painter, QRectF(centre[i].x() - 13, centre[i].y() - 13, 26, 26).toRect());
+        nodeIcon(glyphs[i]).paint(&painter, QRectF(centre[i].x() - 16, centre[i].y() - 16, 32, 32).toRect());
         painter.setFont(name);
         painter.setPen(Qt::white);
         const QRectF below(centre[i].x() - 80, centre[i].y() + radius + 3, 160, 16);
@@ -460,7 +592,12 @@ void FeaturedBanner::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.setRenderHint(QPainter::Antialiasing);
     const QRectF all(rect());
+    // A dark card with rounded corners, in light and dark mode alike.
+    QPainterPath card;
+    card.addRoundedRect(all, 16, 16);
+    painter.setClipPath(card);
     painter.fillRect(all, kInk);
     if (!image_.isNull()) {
         // The still on the right two thirds, fading into the dark on the left.

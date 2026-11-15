@@ -467,6 +467,8 @@ int main(int argc, char* argv[])
         || parser.isSet(recordOption);
     if (background)
         abrviz::runInBackground();
+    else
+        abrviz::showBundleIconInDock();
 
     abrviz::MainWindow window;
     if (parser.isSet(engineOption)) {
@@ -519,12 +521,18 @@ int main(int argc, char* argv[])
     if (parser.isSet(timeOption))
         time = parser.value(timeOption).toDouble();
     if (parser.isSet(profileOption)) {
-        if (bundle.isEmpty())
-            parser.showHelp(1);
+        if (bundle.isEmpty()) {
+            // Print the usage and return, rather than exit() with the window still alive.
+            std::fputs(qPrintable(parser.helpText()), stderr);
+            return 1;
+        }
         scheduleProfile(window, parser.value(profileOption).toDouble(), time);
     } else if (parser.isSet(recordOption)) {
-        if (bundle.isEmpty())
-            parser.showHelp(1);
+        if (bundle.isEmpty()) {
+            // Print the usage and return, rather than exit() with the window still alive.
+            std::fputs(qPrintable(parser.helpText()), stderr);
+            return 1;
+        }
         scheduleRecord(window, parser.value(recordOption), parser.value(durationOption).toDouble(), time);
     } else if (parser.isSet(screenshotOption)) {
         scheduleScreenshot(window, parser.value(screenshotOption), !bundle.isEmpty(), !path.isEmpty(), time);
