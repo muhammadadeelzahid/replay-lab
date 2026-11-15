@@ -1,11 +1,11 @@
 # Architecture
 
-abr-viz is a desktop application in C++20 and Qt 6. It opens one simulation run bundle (see
+SatReplay is a desktop application in C++20 and Qt 6. It opens one simulation run bundle (see
 [simulation-data.md](simulation-data.md)) and shows the session of one UE: the rung played for
 each segment, the video as the user saw it, the buffer, throughput, RTT and loss over time,
 the logs, and a QoE report.
 
-Names: repository `abr-viz`, executable `abrviz`, C++ namespace `abrviz`.
+Names: repository `sat-replay`; application SatReplay (`SatReplay.app` on macOS, `satreplay` elsewhere); CMake target `abrviz`, C++ namespace `abrviz`.
 
 Class and thread diagrams are in [diagrams.md](diagrams.md); the build order is in
 [development-plan.md](development-plan.md).
@@ -220,8 +220,8 @@ with `static_assert`.
   hold the engine, the overlay and the render cache. Every command is a `QAction` shared by
   the menu, its shortcut and its button. Recent folders, the window geometry, the panes, the
   overlay and the engine are kept with `QSettings`.
-- The application is called Stream Inspector (`app/branding.h`); the project, its libraries
-  and its targets keep the name abr-viz. The macOS bundle is `Stream Inspector.app`.
+- The application is called SatReplay (`app/branding.h`); the project, its libraries
+  and its targets keep the name abrviz. The macOS bundle is `SatReplay.app`.
 - The toolbar is not unified with the title bar: Qt's unified title and toolbar drew the
   window black around custom widgets.
 - `Session`: the open run (`shared_ptr<const RunData>`), its `LogIndex`, and the `TimeCursor`.

@@ -760,7 +760,7 @@ void MainWindow::createMenus()
     });
     auto* helpAction = helpMenu->addAction(tr("%1 Help").arg(appDisplayName()));
     connect(helpAction, &QAction::triggered, this, [] {
-        QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/abr-viz#readme")));
+        QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/sat-replay#readme")));
     });
 }
 

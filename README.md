@@ -1,4 +1,4 @@
-# Stream Inspector
+# SatReplay
 
 <img src="app/resources/app-icon.svg" width="96" align="right" alt="">
 
@@ -17,13 +17,13 @@ Built with C++20, Qt 6 and GStreamer.
 ## Download
 
 Packages for macOS (Apple silicon), Windows and Linux are on the
-[Releases](https://github.com/muhammadadeelzahid/abr-viz/releases) page, with the simulation
+[Releases](https://github.com/muhammadadeelzahid/sat-replay/releases) page, with the simulation
 runs (`viewer_bundles.tar`). Extract the runs, open the app and choose the `viewer_bundles`
 folder.
 
 - macOS: unzip and move the app to Applications. The first time, right-click it and choose
   Open (the app is not notarised).
-- Windows: unzip and run `stream-inspector.exe`.
+- Windows: unzip and run `satreplay.exe`.
 - Linux: `chmod +x` the AppImage and run it.
 
 The packages include ffmpeg and use the pre-rendered engine: the first time a run is played,
@@ -78,17 +78,17 @@ three and drafts a release).
 ## Run
 
 ```sh
-open "build/release/app/Stream Inspector.app"
+open "build/release/app/SatReplay.app"
 ```
 
 From the command line:
 
 ```sh
-APP="build/release/app/Stream Inspector.app/Contents/MacOS/Stream Inspector"
+APP="build/release/app/SatReplay.app/Contents/MacOS/SatReplay"
 "$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57
 ```
 
-On Linux the executable is `build/release/app/stream-inspector`.
+On Linux the executable is `build/release/app/satreplay`.
 
 | Option | Effect |
 | --- | --- |

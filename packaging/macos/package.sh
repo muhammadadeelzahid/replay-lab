@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds the macOS release package: "Stream Inspector.app" with Qt and ffmpeg inside, zipped.
+# Builds the macOS release package: "SatReplay.app" with Qt and ffmpeg inside, zipped.
 #
 #   packaging/macos/package.sh [build-dir]
 #
@@ -7,17 +7,17 @@
 # against an official Qt build (the Qt installer or aqtinstall; Homebrew's Qt cannot be
 # deployed into a bundle). Uses the macdeployqt of that Qt (MACDEPLOYQT, or the one on the
 # PATH) and the ffmpeg on the PATH (FFMPEG), whose libraries are copied into the bundle too.
-# Writes dist/Stream-Inspector-<version>-macOS-<arch>.zip.
+# Writes dist/SatReplay-<version>-macOS-<arch>.zip.
 set -eu
 
 cd "$(dirname "$0")/../.."
 BUILD="${1:-build/dist}"
-APP="$BUILD/app/Stream Inspector.app"
+APP="$BUILD/app/SatReplay.app"
 MACDEPLOYQT="${MACDEPLOYQT:-macdeployqt}"
 FFMPEG="${FFMPEG:-$(command -v ffmpeg)}"
 VERSION=$(sed -n 's/^ *VERSION \([0-9.]*\)$/\1/p' CMakeLists.txt | head -1)
 ARCH=$(uname -m)
-OUT="dist/Stream-Inspector-${VERSION}-macOS-${ARCH}.zip"
+OUT="dist/SatReplay-${VERSION}-macOS-${ARCH}.zip"
 
 test -d "$APP" || { echo "build the dist preset first" >&2; exit 1; }
 test -x "$FFMPEG" || { echo "ffmpeg not found" >&2; exit 1; }

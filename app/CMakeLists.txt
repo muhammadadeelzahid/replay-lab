@@ -74,17 +74,17 @@ abrviz_set_warnings(abrviz_gui)
 qt_add_executable(abrviz main.cpp)
 target_link_libraries(abrviz PRIVATE abrviz_gui)
 
-# The application is called Stream Inspector: "Stream Inspector.app" on macOS (with its icon),
-# stream-inspector elsewhere.
+# The application is called SatReplay: "SatReplay.app" on macOS (with its icon),
+# satreplay elsewhere.
 if(APPLE)
     set(ABRVIZ_ICNS ${CMAKE_CURRENT_SOURCE_DIR}/resources/AppIcon.icns)
     target_sources(abrviz PRIVATE ${ABRVIZ_ICNS})
     set_source_files_properties(${ABRVIZ_ICNS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     set_target_properties(abrviz PROPERTIES
-        OUTPUT_NAME "Stream Inspector"
+        OUTPUT_NAME "SatReplay"
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_BUNDLE_NAME "Stream Inspector"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.muhammadadeelzahid.streaminspector"
+        MACOSX_BUNDLE_BUNDLE_NAME "SatReplay"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.muhammadadeelzahid.satreplay"
         MACOSX_BUNDLE_ICON_FILE AppIcon.icns
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
@@ -95,7 +95,7 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E touch "$<TARGET_BUNDLE_DIR:abrviz>"
         VERBATIM)
 else()
-    set_target_properties(abrviz PROPERTIES OUTPUT_NAME "stream-inspector")
+    set_target_properties(abrviz PROPERTIES OUTPUT_NAME "satreplay")
 endif()
 
 if(WIN32)
@@ -111,8 +111,8 @@ install(TARGETS abrviz
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(UNIX AND NOT APPLE)
-    install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/stream-inspector.desktop
+    install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/satreplay.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-    install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/stream-inspector.png
+    install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/satreplay.png
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
 endif()

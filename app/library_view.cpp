@@ -244,7 +244,7 @@ LibraryView::LibraryView(QWidget* parent)
         connect(folderCard, &QPushButton::clicked, this, &LibraryView::openFolderRequested);
         connect(runCard, &QPushButton::clicked, this, &LibraryView::openBundleRequested);
         connect(getCard, &QPushButton::clicked, this, [] {
-            QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/abr-viz/releases")));
+            QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/sat-replay/releases")));
         });
         auto* cards = new QHBoxLayout();
         cards->setSpacing(10);

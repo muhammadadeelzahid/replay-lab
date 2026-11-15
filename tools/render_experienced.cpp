@@ -56,8 +56,10 @@ extern "C" void onInterrupt(int)
 int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
-    QCoreApplication::setApplicationName(QStringLiteral("abr-viz"));
-    QCoreApplication::setOrganizationName(QStringLiteral("abr-viz"));
+    // The app's names, so that the tool and the app share the render cache.
+    QCoreApplication::setApplicationName(QStringLiteral("SatReplay"));
+    QCoreApplication::setOrganizationName(QStringLiteral("SatReplay"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("muhammadadeelzahid.github.io"));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Render the experienced video of a run"));

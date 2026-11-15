@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(abrviz
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "Viewer for ns-3 adaptive video streaming simulations"
     LANGUAGES CXX)
 
@@ -52,7 +52,7 @@ enable_testing()
 # build/<preset>/docs/html (needs Doxygen; Graphviz adds class and call graphs).
 find_package(Doxygen OPTIONAL_COMPONENTS dot)
 if(DOXYGEN_FOUND)
-    set(DOXYGEN_PROJECT_NAME "Stream Inspector")
+    set(DOXYGEN_PROJECT_NAME "SatReplay")
     set(DOXYGEN_PROJECT_NUMBER ${PROJECT_VERSION})
     set(DOXYGEN_PROJECT_BRIEF "Replays ns-3 adaptive streaming runs over satellite 5G with IAB")
     set(DOXYGEN_PROJECT_LOGO ${CMAKE_SOURCE_DIR}/app/resources/app-icon.svg)

@@ -2,7 +2,7 @@
 
 /**
  * @file
- * @brief Version string of abr-viz.
+ * @brief Version string of SatReplay.
  */
 
 #include <QString>
@@ -10,7 +10,7 @@
 namespace abrviz {
 
 /**
- * @brief Returns the version of abr-viz.
+ * @brief Returns the version of SatReplay.
  *
  * Taken from the CMake project version.
  *

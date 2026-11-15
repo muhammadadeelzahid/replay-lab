@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Stream Inspector
+Name=SatReplay
 Comment=Replays ns-3 adaptive streaming runs over satellite 5G with IAB
-Exec=stream-inspector
-Icon=stream-inspector
+Exec=satreplay
+Icon=satreplay
 Categories=Science;Video;
 Terminal=false

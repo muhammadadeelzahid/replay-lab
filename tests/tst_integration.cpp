@@ -830,7 +830,7 @@ private slots:
         AppRun version = runApp({QStringLiteral("--version"), QStringLiteral("--screenshot"), shot}, settings.path());
         QVERIFY2(version.finished && version.status == QProcess::NormalExit && version.exitCode == 0,
                  qPrintable(describe(version)));
-        QVERIFY(version.out.contains(QStringLiteral("Stream Inspector")));
+        QVERIFY(version.out.contains(QStringLiteral("SatReplay")));
         QVERIFY(!QFileInfo::exists(shot));
     }
 

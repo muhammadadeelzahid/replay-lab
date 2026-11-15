@@ -78,8 +78,8 @@ cmake --preset asan  && cmake --build --preset asan  && ctest --preset asan
 cmake --preset tsan  && cmake --build --preset tsan  && ctest --preset tsan
 cmake --preset nogst && cmake --build --preset nogst && ctest --preset nogst
 ./build/debug/tools/validate_bundle viewer_bundles/*
-"./build/debug/app/Stream Inspector.app/Contents/MacOS/Stream Inspector" --engine=gstreamer viewer_bundles  # macOS
-./build/debug/app/stream-inspector --engine=gstreamer viewer_bundles                                       # Linux
+"./build/debug/app/SatReplay.app/Contents/MacOS/SatReplay" --engine=gstreamer viewer_bundles  # macOS
+./build/debug/app/satreplay --engine=gstreamer viewer_bundles                                       # Linux
 ```
 
 
@@ -89,7 +89,7 @@ Measure with the release build. The numbers in the README come from:
 
 ```sh
 B=build/release
-APP="$B/app/Stream Inspector.app/Contents/MacOS/Stream Inspector"   # $B/app/stream-inspector on Linux
+APP="$B/app/SatReplay.app/Contents/MacOS/SatReplay"   # $B/app/satreplay on Linux
 time $B/tools/print_report viewer_bundles > /dev/null
 $B/tools/render_experienced --cache /tmp/abrviz-cold viewer_bundles/big_buck_bunny_llm_36Mbps_run_2
 "$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --engine gstreamer --time 50 --profile 10

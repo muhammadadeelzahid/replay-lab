@@ -387,6 +387,31 @@ void scheduleRecord(abrviz::MainWindow& window, const QString& directory, double
     });
 }
 
+/**
+ * @brief Copies the settings kept under the app's earlier name, Stream Inspector, the first time
+ *        SatReplay starts, so the recent folders, the window and the engine carry over.
+ *
+ * Does nothing once SatReplay has settings of its own.
+ */
+void carryOverSettings()
+{
+    QSettings settings;
+    // Only this app's own keys: on macOS the fallbacks include the system's global settings.
+    settings.setFallbacksEnabled(false);
+    if (!settings.allKeys().isEmpty())
+        return;
+#ifdef Q_OS_MACOS
+    // On macOS the settings file is named after the organisation's domain and the app.
+    QSettings earlier(QCoreApplication::organizationDomain(), QStringLiteral("Stream Inspector"));
+#else
+    QSettings earlier(QStringLiteral("Stream Inspector"), QStringLiteral("Stream Inspector"));
+#endif
+    earlier.setFallbacksEnabled(false);
+    const QStringList keys = earlier.allKeys();
+    for (const QString& key : keys)
+        settings.setValue(key, earlier.value(key));
+}
+
 } // namespace
 
 /**
@@ -406,10 +431,10 @@ void scheduleRecord(abrviz::MainWindow& window, const QString& directory, double
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("Stream Inspector"));
+    QApplication::setApplicationName(QStringLiteral("SatReplay"));
     QApplication::setApplicationDisplayName(abrviz::appDisplayName());
     QApplication::setApplicationVersion(abrviz::versionString());
-    QApplication::setOrganizationName(QStringLiteral("Stream Inspector"));
+    QApplication::setOrganizationName(QStringLiteral("SatReplay"));
     QApplication::setOrganizationDomain(QStringLiteral("muhammadadeelzahid.github.io"));
     QApplication::setWindowIcon(abrviz::appIcon());
     abrviz::theme::apply(app);
@@ -418,10 +443,12 @@ int main(int argc, char* argv[])
     if (const QString settingsDir = qEnvironmentVariable("ABRVIZ_SETTINGS_DIR"); !settingsDir.isEmpty()) {
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir);
+    } else {
+        carryOverSettings();
     }
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Stream Inspector: replays ns-3 adaptive bitrate run bundles"));
+    parser.setApplicationDescription(QStringLiteral("SatReplay: replays ns-3 adaptive bitrate run bundles"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("path"),
