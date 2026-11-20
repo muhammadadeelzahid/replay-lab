@@ -13,7 +13,7 @@ All times are simulation times in seconds, unless a field says otherwise. Segmen
 ## Layout
 
 ```
-<video>_<rate>_<conditions>_seed<N>/        e.g. chef_cooking_18Mbps_trace_seed1
+<experiment_id>/                             e.g. chef_cooking_18Mbps_seed1
   experiment.json
   media/<video>/
     video.json
@@ -25,8 +25,7 @@ All times are simulation times in seconds, unless a field says otherwise. Segmen
     player_events.jsonl
     samples.jsonl
     summary.json
-    logs/sim.log                             optional
-    logs/decisions.jsonl                     the client's own decision log
+    logs/                                    optional: sim.log and any other logs
 ```
 
 The encoded ladder is stored once per experiment in `media/`, not once per run. Runs never
@@ -38,14 +37,13 @@ contain media.
 ```json
 {
   "schema": 2,
-  "experiment_id": "chef_cooking_18Mbps_trace_seed1",
+  "experiment_id": "chef_cooking_18Mbps_seed1",
   "created_utc": "2026-12-01T10:00:00Z",
   "source_commit": "<ns-3 git commit>",
   "exporter_commit": "<exporter git commit>",
   "video": "chef_cooking",
-  "conditions": "trace",
+  "conditions": "same",
   "seed": 1,
-  "trace": { "source_run": "llm", "file": "throughput_trace.jsonl" },
   "network": {
     "scenario": "ntn-iab-quic-dash",
     "kind": "ntn-iab",
@@ -70,8 +68,7 @@ contain media.
 
 | Field | Meaning |
 | --- | --- |
-| `conditions` | `"trace"`: every run saw the same recorded capacity (fair picture comparison). `"live"`: each run is its own simulation with the same seed; the competing traffic and so the network differ between runs |
-| `trace` | Only for `"trace"`: which run's capacity was recorded and replayed |
+| `conditions` | `"same"`: every run saw the same capacity over time. `"independent"`: separate simulations with the same settings, so the network may differ between runs. The viewer shows which |
 | `network.kind` | `"ntn-iab"` draws the satellite path (server, LEO gNB, IAB relay, user). Any other value draws a generic server, network, user path |
 | `network.*` | Shown in the app's network panel; any field may be missing |
 | `runs[].algorithm` | Short, stable key used for colours and file names (`llm`, `fdash`, `svaa`, `sftm`, `raahs`, `aaash`, `osmp`, `bola`) |
@@ -144,17 +141,14 @@ at. This removes the version 1 shift, where record `n` held the rung chosen for 
 **summary.json**: version 1 fields, plus `mean_vmaf_shown` and `min_vmaf_shown` (computed over
 the segments that were played, weighted by their duration).
 
-**logs/decisions.jsonl**: the client's decision log as written by ns-3 (see
-[ns3-export-request.md](ns3-export-request.md)). `logs/policy.log` from version 1 is not used
-in version 2.
+**logs/**: optional. Any logs the ns-3 side wants to include (for example `sim.log` and a
+decision log); the viewer indexes `sim.log` for its Logs page when present. What the viewer
+needs is listed in [ns3-data-requirements.md](ns3-data-requirements.md).
 
 
-## Rules the exporter follows
+## Rules
 
 - Segment `k` of a run is played from `media/<video>/r<rung>/seg_<k>.mp4`, with the rung from
   that run's `segments.jsonl`.
-- In new runs the simulated player uses the media's real segment duration, so a played
-  segment lasts as long as its file (version 1 runs played every segment for 3.3 s).
-- Every run in an experiment streams the same video at the same feeder rate and seed. In a
-  `"trace"` experiment, every run sees the same capacity over time.
+- Every run in an experiment streams the same video at the same feeder rate and seed.
 - The experiment folder is self-contained; the viewer reads nothing outside it.
