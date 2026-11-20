@@ -19,7 +19,7 @@ All times are simulation times in seconds, unless a field says otherwise. Segmen
     video.json
     segments.jsonl
     r0 .. r5/seg_NNNN.mp4
-  runs/<algorithm>/                          e.g. runs/llm, runs/svaa, runs/bola
+  runs/<algorithm>/                          e.g. runs/llm, runs/robustmpc, runs/mpc, runs/bola
     run.json
     segments.jsonl
     player_events.jsonl
@@ -58,7 +58,8 @@ contain media.
   },
   "runs": [
     { "algorithm": "llm",  "client": "ns3::AiDashClient", "family": "learned", "dir": "runs/llm" },
-    { "algorithm": "svaa", "client": "ns3::SvaaClient",   "family": "rate",    "dir": "runs/svaa" },
+    { "algorithm": "robustmpc", "client": "<ns-3 client>", "family": "mpc",  "dir": "runs/robustmpc" },
+    { "algorithm": "mpc",  "client": "<ns-3 client>",     "family": "mpc",     "dir": "runs/mpc" },
     { "algorithm": "bola", "client": "ns3::BolaClient",   "family": "buffer",
       "params": { "BufferTargetSeconds": 30, "Gp": 5 }, "dir": "runs/bola" }
   ],
@@ -71,8 +72,8 @@ contain media.
 | `conditions` | `"same"`: every run saw the same capacity over time. `"independent"`: separate simulations with the same settings, so the network may differ between runs. The viewer shows which |
 | `network.kind` | `"ntn-iab"` draws the satellite path (server, LEO gNB, IAB relay, user). Any other value draws a generic server, network, user path |
 | `network.*` | Shown in the app's network panel; any field may be missing |
-| `runs[].algorithm` | Short, stable key used for colours and file names (`llm`, `fdash`, `svaa`, `sftm`, `raahs`, `aaash`, `osmp`, `bola`) |
-| `runs[].family` | `learned`, `rate`, `buffer` or `hybrid` |
+| `runs[].algorithm` | Short, stable key used for colours and file names (`llm`, `robustmpc`, `mpc`, `bola`) |
+| `runs[].family` | `learned`, `mpc`, `buffer`, `rate` or `hybrid` |
 | `runs[].params` | Optional algorithm parameters, shown as given |
 
 
@@ -106,7 +107,7 @@ fields, with these changes:
 **run.json**
 
 ```json
-"policy": { "name": "svaa", "client": "ns3::SvaaClient", "family": "rate",
+"policy": { "name": "robustmpc", "client": "<ns-3 client>", "family": "mpc",
             "model": null, "params": {} }
 ```
 

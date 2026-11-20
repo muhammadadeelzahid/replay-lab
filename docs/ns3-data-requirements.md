@@ -64,11 +64,11 @@ are 2.0 s; there is no picture-quality score.
 **The same version 1 bundle, once per algorithm.** Nothing about the layout or the files
 has to change. For every algorithm, write the bundle exactly as for the LLM runs today, and:
 
-1. **Name the algorithm** in `run.json`: `policy.name` (`llm`, `fdash`, `svaa`, `sftm`,
-   `raahs`, `aaash`, `osmp`, `bola`) and `policy.client` (`ns3::SvaaClient`, …). Use
+1. **Name the algorithm** in `run.json`: `policy.name` (`llm`, `robustmpc`, `mpc`,
+   `bola`) and `policy.client` (the ns-3 client's type name). Use
    `policy.model` only for learned policies.
 2. **Keep the folder name pattern** with the algorithm in place of `llm`, for example
-   `chef_cooking_svaa_18Mbps_run_3/`, and the same `run_N` for runs that belong together.
+   `chef_cooking_robustmpc_18Mbps_run_3/`, and the same `run_N` for runs that belong together.
 3. **Leave LLM-only fields out or null** where an algorithm has none: `decision.fallback`,
    `decision.decision_delay_s`, `decision.rtt_ms`, and `logs/policy.log`. The viewer treats
    them as optional.
@@ -101,8 +101,8 @@ with the media stored once per experiment instead of once per run. The viewer wi
   - `"same"`: every run saw the same capacity over time;
   - `"independent"`: the runs are separate simulations with the same settings, so the network
     may differ between them.
-- Each run says which ABR algorithm it used: a short key (`llm`, `fdash`, `svaa`, …), the
-  ns-3 client name, the family (learned, rate, buffer or hybrid) and any parameters.
+- Each run says which ABR algorithm it used: a short key (`llm`, `robustmpc`, `mpc`, `bola`), the
+  ns-3 client name, the family (learned, mpc, buffer, rate or hybrid) and any parameters.
 
 
 ## 2. Per run: what was downloaded
@@ -161,8 +161,7 @@ What the viewer shows about the network, where known:
 
 ## 7. What to compare
 
-- **Algorithms:** the LLM policy and the classic clients (FDASH, SVAA, SFTM, RAAHS, AAASH,
-  OSMP, BOLA), or whichever of them are available.
+- **Algorithms:** the LLM policy, RobustMPC, MPC and BOLA.
 - **Videos:** the five in the current bundles.
 - **Rates:** 9, 18 and 36 Mbps.
 

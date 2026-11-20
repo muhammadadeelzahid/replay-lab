@@ -60,7 +60,7 @@ experiment in `tests/data/` that follows the format.
 | 20 | Charts with every run overlaid; scoreboard of QoE per algorithm | numbers match each run's summary |
 | 21 | Library grouped by experiment, Play and Compare on every run, home page and welcome updated | selection and grouping work in both appearances |
 | 22 | Rename to ReplayLab, new icon, network text taken from the data, settings carried over | old settings carry over; Dock icon correct |
-| 23 | First experiments from the ns-3 side loaded; README with a comparison GIF and screenshots | an LLM run and a classic run compared side by side |
+| 23 | First experiments from the ns-3 side loaded; README with a comparison GIF and screenshots | the LLM run compared with RobustMPC, MPC and BOLA side by side |
 
 
 ## Testing
