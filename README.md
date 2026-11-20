@@ -165,6 +165,8 @@ open build/release/docs/html/index.html
 - [Diagrams](docs/diagrams.md)
 - [Development plan](docs/development-plan.md)
 - [Simulation data](docs/simulation-data.md)
+- [Bundle format, version 2 (experiments)](docs/bundle-format-v2.md)
+- [Exporting ABR comparison experiments from ns-3](docs/ns3-export-request.md)
 
 ## Credits
 

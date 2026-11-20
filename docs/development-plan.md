@@ -38,6 +38,26 @@ video path. Qt Multimedia is less complete on WebAssembly (seeking may be less p
 full 680 MB of bundles is too large for a web page, so the web build ships a few sample runs.
 
 
+## Comparing ABR algorithms (ReplayLab)
+
+Play one ABR run on its own, or several side by side, on the same video and network. The data
+comes from new ns-3 exports ([ns3-export-request.md](ns3-export-request.md)) in the
+[version 2 format](bundle-format-v2.md). Steps 16 to 22 work on synthetic experiments, so they
+do not wait for the exports; step 23 needs them.
+
+| Step | Work | Done when |
+| --- | --- | --- |
+| 15 | Version 2 format and the ns-3 export request | both documents reviewed |
+| 16 | Read version 2 experiments as well as version 1 bundles (a version 1 bundle is an experiment with one run); optional LLM fields; VMAF, SSIM and PSNR in the ladder; a tool that writes synthetic experiments (rate-based and buffer-based ABR driven by a recorded run's throughput) | a synthetic 3-run experiment loads; version 1 bundles still load |
+| 17 | Comparison clock: one master time mapped to each run, by session time or by media time; QoE per run with VMAF of what was shown | fast unit tests on synthetic and real runs |
+| 18 | Replay page layouts: Single (as now), Side by side (2), Grid (3 or 4); one transport; alignment toggle (same moment, same frame) | panes stay within one frame of each other over 60 s |
+| 19 | Wipe view: two runs in one frame with a divider and a zoom loupe | works at 4K in light and dark |
+| 20 | Charts with every run overlaid; scoreboard of QoE per algorithm | numbers match each run's summary |
+| 21 | Library grouped by experiment, Play and Compare on every run, home page and welcome updated | selection and grouping work in both appearances |
+| 22 | Rename to ReplayLab, new icon, network text taken from the data, settings carried over | old settings carry over; Dock icon correct |
+| 23 | First real exports loaded; README with a comparison GIF and screenshots | an LLM and a classic algorithm compared on real runs |
+
+
 ## Testing
 
 - Unit tests for every parser, `applySegmentShift`, `PlaybackClock` at its boundaries (before
