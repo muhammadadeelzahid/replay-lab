@@ -40,22 +40,39 @@ full 680 MB of bundles is too large for a web page, so the web build ships a few
 
 ## Comparing ABR algorithms (ReplayLab)
 
-Play one ABR run on its own, or several side by side, on the same video and network. The data
-comes from new ns-3 exports ([ns3-export-request.md](ns3-export-request.md)) in the
-[version 2 format](bundle-format-v2.md). Steps 16 to 22 work on synthetic experiments, so they
-do not wait for the exports; step 23 needs them.
+Play one ABR run on its own, or several side by side, on the same video and network, without
+new ns-3 simulations. Each existing LLM run records, for every segment, its size and when its
+download started and finished, which gives the capacity the user had over time (bytes divided
+by download time, the method of the ns-3 benchmark's `decisions_to_throughput.py`). The app
+replays that capacity through ports of the ns-3 ABR clients (FDASH, SVAA, SFTM, RAAHS, AAASH,
+OSMP, BOLA; `src/dash/model/algorithms/`, 100 to 220 lines each) and one player model, and
+plays the result with the encoded rungs already in the bundle. The LLM's own rung sequence goes
+through the same player model, so every run is replayed the same way; the run as simulated
+stays available as before.
+
+Limits, shown in the app: capacity is known only while a segment was downloading (between
+downloads the last value is kept); a replayed algorithm cannot change the network (no
+competing-traffic feedback); and the LLM cannot be asked new questions, only replayed.
+
+Picture quality (VMAF, SSIM, PSNR per segment and rung) is measured once per video with the
+bundled ffmpeg against the top rung (2160p), because the source video is not in the bundle,
+and cached. Copying the benchmark's metadata CSVs from Grex (VMAF against the source) would
+replace these; no simulation is needed for that either.
+
+[bundle-format-v2.md](bundle-format-v2.md) and [ns3-export-request.md](ns3-export-request.md)
+describe exports from new simulations; they are optional and not needed for these steps.
 
 | Step | Work | Done when |
 | --- | --- | --- |
-| 15 | Version 2 format and the ns-3 export request | both documents reviewed |
-| 16 | Read version 2 experiments as well as version 1 bundles (a version 1 bundle is an experiment with one run); optional LLM fields; VMAF, SSIM and PSNR in the ladder; a tool that writes synthetic experiments (rate-based and buffer-based ABR driven by a recorded run's throughput) | a synthetic 3-run experiment loads; version 1 bundles still load |
+| 15 | Capacity trace from a run; player model; the seven classic clients ported from ns-3; an experiment (one video, one rate) built from an LLM run with one replayed run per algorithm | each port's decisions match its ns-3 source on hand-worked cases; replayed LLM run stalls where the simulated one did |
+| 16 | Picture quality per segment and rung with ffmpeg (VMAF, SSIM, PSNR against the top rung), computed in the background and cached; optional import of the benchmark's metadata CSVs | scores for all five videos cached; a run's mean VMAF shown |
 | 17 | Comparison clock: one master time mapped to each run, by session time or by media time; QoE per run with VMAF of what was shown | fast unit tests on synthetic and real runs |
 | 18 | Replay page layouts: Single (as now), Side by side (2), Grid (3 or 4); one transport; alignment toggle (same moment, same frame) | panes stay within one frame of each other over 60 s |
 | 19 | Wipe view: two runs in one frame with a divider and a zoom loupe | works at 4K in light and dark |
 | 20 | Charts with every run overlaid; scoreboard of QoE per algorithm | numbers match each run's summary |
 | 21 | Library grouped by experiment, Play and Compare on every run, home page and welcome updated | selection and grouping work in both appearances |
 | 22 | Rename to ReplayLab, new icon, network text taken from the data, settings carried over | old settings carry over; Dock icon correct |
-| 23 | First real exports loaded; README with a comparison GIF and screenshots | an LLM and a classic algorithm compared on real runs |
+| 23 | README with a comparison GIF and screenshots | LLM and classic algorithms compared on the 14 runs |
 
 
 ## Testing

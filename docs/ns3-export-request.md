@@ -1,5 +1,11 @@
 # Exporting ABR comparison experiments from ns-3
 
+**Optional.** ReplayLab compares ABR algorithms without new simulations, by replaying each
+existing run's capacity through ports of the ns-3 clients (see
+[development-plan.md](development-plan.md), "Comparing ABR algorithms"). The exports described
+here would add what replay cannot: algorithms that change the network through their own
+traffic, and VMAF measured against the source video.
+
 What the `ns3-ntn-iab-ai` repository on Grex needs, so that the viewer can compare ABR
 algorithms. The result is a set of experiments in the format of
 [bundle-format-v2.md](bundle-format-v2.md).
