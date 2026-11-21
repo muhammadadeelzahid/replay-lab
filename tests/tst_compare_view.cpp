@@ -10,6 +10,7 @@
 #include "replay_player.h"
 #include "run_pane.h"
 #include "session.h"
+#include "wipe_view.h"
 
 #include "abrviz/core/load/bundle_library.h"
 #include "abrviz/core/load/bundle_reader.h"
@@ -135,6 +136,55 @@ private slots:
         QCOMPARE(rig.view.layoutMode(), CompareView::Layout::SideBySide);
         QTRY_VERIFY_WITH_TIMEOUT(rig.view.isReady(), kTimeoutMs);
         QCOMPARE(rig.view.pane(1)->session()->run()->info.policyName, QStringLiteral("llm"));
+    }
+
+    void wipeShowsTwoRunsInOneView()
+    {
+        Rig rig;
+        rig.view.setLibrary(library_);
+        rig.open(dir_.filePath(QStringLiteral("chef_cooking_llm_18Mbps_run_3")));
+        rig.view.resize(900, 500);
+        rig.view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&rig.view));
+        rig.view.setLayoutMode(CompareView::Layout::Wipe);
+        QCOMPARE(rig.view.paneCount(), 2);
+        QTRY_VERIFY_WITH_TIMEOUT(rig.view.isReady(), kTimeoutMs);
+        QVERIFY(rig.view.wipeView()->isVisible());
+        QVERIFY(!rig.view.pane(0)->isVisible());
+        QVERIFY(!rig.view.pane(1)->isVisible());
+        // Back to side by side: the panes return and the Wipe view goes.
+        rig.view.setLayoutMode(CompareView::Layout::SideBySide);
+        QVERIFY(!rig.view.wipeView()->isVisible());
+        QVERIFY(rig.view.pane(1)->isVisible());
+    }
+
+    void wipeDividerKeysAndLoupe()
+    {
+        WipeView wipe;
+        wipe.resize(800, 450);
+        wipe.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&wipe));
+        QCOMPARE(wipe.divider(), 0.5);
+        wipe.setDivider(2.0);
+        QCOMPARE(wipe.divider(), 1.0);
+        wipe.setDivider(std::numeric_limits<double>::quiet_NaN());
+        QCOMPARE(wipe.divider(), 0.5);
+        // A click puts the divider where it was clicked.
+        QTest::mouseClick(wipe.viewport(), Qt::LeftButton, {}, QPoint(200, 200));
+        QVERIFY(qAbs(wipe.divider() - 200.0 / wipe.viewport()->width()) < 0.01);
+        // Arrow keys move it by 2 %, Shift by 10 %.
+        const double before = wipe.divider();
+        QTest::keyClick(&wipe, Qt::Key_Right);
+        QVERIFY(qAbs(wipe.divider() - (before + 0.02)) < 1e-9);
+        QTest::keyClick(&wipe, Qt::Key_Left, Qt::ShiftModifier);
+        QVERIFY(qAbs(wipe.divider() - (before + 0.02 - 0.1)) < 1e-9);
+        // Moving the pointer shows the loupe; leaving hides it.
+        QVERIFY(!wipe.isLoupeVisible());
+        QTest::mouseMove(wipe.viewport(), QPoint(400, 200));
+        QTRY_VERIFY(wipe.isLoupeVisible());
+        QEvent leave(QEvent::Leave);
+        QApplication::sendEvent(&wipe, &leave);
+        QVERIFY(!wipe.isLoupeVisible());
     }
 
     void alignmentAndDestructionAreClean()

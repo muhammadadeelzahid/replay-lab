@@ -26,12 +26,14 @@ class ReplayPlayer;
 class RunPane;
 class SegmentedControl;
 class Session;
+class WipeView;
 
 /**
  * @brief Shows the open run alone, as before, or with the other ABR algorithms of its
  *        experiment (same video, feeder rate and run number) side by side.
  *
- * Layouts: Single (the open run), Side by side (2 panes) and Grid (up to 4). The open run is
+ * Layouts: Single (the open run), Side by side (2 panes), Grid (up to 4) and Wipe (2 runs in
+ * one frame, see `WipeView`). The open run is
  * always the first pane; the window's transport, timeline, charts and inspector follow it. The
  * other panes each load their run, have their own engine, and follow the first pane through a
  * `ComparisonClock`, by session time (the same moment) or media time (the same frame).
@@ -50,7 +52,7 @@ class CompareView final : public QWidget {
 
 public:
     /** @brief How many runs are shown. */
-    enum class Layout { Single, SideBySide, Grid };
+    enum class Layout { Single, SideBySide, Grid, Wipe };
 
     /**
      * @brief Creates the view around the window's own player.
@@ -138,6 +140,9 @@ public:
      */
     [[nodiscard]] bool bothPlaying(int index) const;
 
+    /// @return The Wipe view (shown in the Wipe layout).
+    [[nodiscard]] WipeView* wipeView() const { return wipe_; }
+
     /// @return Whether every other pane has loaded its run and its engine shows a picture.
     [[nodiscard]] bool isReady() const;
 
@@ -189,8 +194,16 @@ private:
      */
     double steer(int index, double master, bool running, bool& held);
 
-    /// Places the panes in the grid.
+    /// Places the panes in the grid, or the Wipe view.
     void placePanes();
+
+    /// Sends the first two runs' frames to the Wipe view while it is shown, to their own
+    /// players otherwise.
+    void routeVideo();
+
+    /// Updates the Wipe view's labels from the panes.
+    void updateWipeLabels();
+
 
     /// Shows the bar and its state.
     void updateBar();
@@ -207,6 +220,8 @@ private:
     SegmentedControl* layoutSwitch_;     ///< Single, Side by side, Grid.
     SegmentedControl* alignmentSwitch_;  ///< Same moment, Same frame.
     QGridLayout* grid_;             ///< Holds the panes.
+    WipeView* wipe_;                ///< Shown instead of the panes in the Wipe layout.
+    bool routedToWipe_ = false;     ///< The engines send their frames to wipe_.
     QTimer* syncTimer_;             ///< Calls sync() every 100 ms.
     QList<BundleSummaryPtr> library_;    ///< Every run of the library.
     QList<BundleSummaryPtr> peers_;      ///< The open run's experiment, LLM first.

@@ -107,6 +107,8 @@ void RunPane::refresh()
         name_->setText(tr("No run"));
         status_->clear();
         stall_->hide();
+        summary_.clear();
+        emit summaryChanged();
         return;
     }
     const QString key = run->info.policyName;
@@ -134,6 +136,12 @@ void RunPane::refresh()
     if (!points.empty())
         parts << tr("buffer %1 s").arg(points.back().level, 0, 'f', 1);
     status_->setText(parts.join(QStringLiteral(" &nbsp;·&nbsp; ")));
+    QStringList plain{algorithmDisplayName(key)};
+    if (position.stalled)
+        plain << tr("stalled");
+    plain << parts;
+    summary_ = plain.join(QStringLiteral(" · "));
+    emit summaryChanged();
 }
 
 } // namespace abrviz

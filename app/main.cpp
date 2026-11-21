@@ -518,7 +518,7 @@ int main(int argc, char* argv[])
         QStringLiteral("folder"));
     const QCommandLineOption layoutOption(
         QStringLiteral("layout"),
-        QStringLiteral("Replay layout: single, side (side by side) or grid; needs other algorithms of the run's experiment."),
+        QStringLiteral("Replay layout: single, side (side by side), grid or wipe; needs other algorithms of the run's experiment."),
         QStringLiteral("name"));
     const QCommandLineOption alignOption(
         QStringLiteral("align"),
@@ -557,6 +557,7 @@ int main(int argc, char* argv[])
         const std::optional<Layout> layout = name == QLatin1String("single") ? std::optional(Layout::Single)
             : name == QLatin1String("side")                                 ? std::optional(Layout::SideBySide)
             : name == QLatin1String("grid")                                 ? std::optional(Layout::Grid)
+            : name == QLatin1String("wipe")                                 ? std::optional(Layout::Wipe)
                                                                             : std::nullopt;
         if (!layout) {
             std::fprintf(stderr, "unknown layout '%s'\n", qPrintable(name));

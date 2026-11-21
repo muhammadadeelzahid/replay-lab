@@ -5,6 +5,8 @@
 #include "segmented_control.h"
 #include "session.h"
 #include "time_cursor.h"
+#include "wipe_view.h"
+#include "algorithm_colors.h"
 
 #include "abrviz/core/load/bundle_loader.h"
 #include "abrviz/media/replay_source.h"
@@ -37,6 +39,7 @@ int panesFor(CompareView::Layout layout, int available)
     case CompareView::Layout::Single: return 1;
     case CompareView::Layout::SideBySide: return std::min(2, available);
     case CompareView::Layout::Grid: return std::min(4, available);
+    case CompareView::Layout::Wipe: return std::min(2, available);
     }
     return 1;
 }
@@ -59,12 +62,21 @@ CompareView::CompareView(Session* session, ReplayPlayer* player, RenderQueue* qu
     , layoutSwitch_(new SegmentedControl(bar_))
     , alignmentSwitch_(new SegmentedControl(bar_))
     , grid_(new QGridLayout())
+    , wipe_(new WipeView(this))
     , syncTimer_(new QTimer(this))
 {
     setObjectName(QStringLiteral("compareView"));
     layoutSwitch_->addSegment(tr("Single"), tr("The open run alone"));
     layoutSwitch_->addSegment(tr("Side by side"), tr("The open run and one other algorithm"));
     layoutSwitch_->addSegment(tr("Grid"), tr("Up to four algorithms"));
+    layoutSwitch_->addSegment(tr("Wipe"), tr("Two algorithms in one frame, divided by a line you can drag; "
+                                             "a loupe follows the pointer"));
+    wipe_->hide();
+    connect(player_, &ReplayPlayer::engineChanged, this, [this] {
+        routedToWipe_ = false;
+        routeVideo();
+    });
+    connect(main_, &RunPane::summaryChanged, this, &CompareView::updateWipeLabels);
     layoutSwitch_->setCurrentIndex(0);
     alignmentSwitch_->addSegment(tr("Same moment"), tr("Each pane shows what its user saw at the same time "
                                                      "since the stream started; stalls show as freezes"));
@@ -272,6 +284,13 @@ void CompareView::rebuildPanes()
     const QStringList choices = defaultFollowers(wanted);
 
     // Keep the panes that already show a run of this experiment; drop the rest.
+    if (routedToWipe_) {
+        // Give every engine back its own player's picture before panes go.
+        const Layout keep = layout_;
+        layout_ = Layout::Single;
+        routeVideo();
+        layout_ = keep;
+    }
     while (static_cast<int>(followers_.size()) > wanted) {
         auto& follower = followers_.back();
         follower->pane->player()->pause();
@@ -288,6 +307,11 @@ void CompareView::rebuildPanes()
                 player->setEngine(*kind);
             player->setOverlayVisible(false);
             follower->pane = new RunPane(follower->session, player, this);
+            connect(player, &ReplayPlayer::engineChanged, this, [this] {
+                routedToWipe_ = false;
+                routeVideo();
+            });
+            connect(follower->pane, &RunPane::summaryChanged, this, &CompareView::updateWipeLabels);
             Follower* raw = follower.get();
             connect(follower->pane, &RunPane::runChosen, this, [this, raw](const QString& directory) {
                 loadInto(*raw, directory);
@@ -441,14 +465,60 @@ void CompareView::placePanes()
 {
     while (QLayoutItem* item = grid_->takeAt(0))
         delete item;
+    const bool wipe = layout_ == Layout::Wipe && !followers_.empty();
     const int count = paneCount();
-    const int columns = count <= 1 ? 1 : 2;
     for (int i = 0; i < count; ++i)
-        grid_->addWidget(pane(i), i / columns, i % columns);
-    for (int c = 0; c < 2; ++c)
-        grid_->setColumnStretch(c, c < columns ? 1 : 0);
-    for (int r = 0; r < 2; ++r)
-        grid_->setRowStretch(r, r < (count + columns - 1) / columns ? 1 : 0);
+        pane(i)->setVisible(!wipe);
+    wipe_->setVisible(wipe);
+    if (wipe) {
+        grid_->addWidget(wipe_, 0, 0);
+        grid_->setColumnStretch(0, 1);
+        grid_->setColumnStretch(1, 0);
+        grid_->setRowStretch(0, 1);
+        grid_->setRowStretch(1, 0);
+    } else {
+        const int columns = count <= 1 ? 1 : 2;
+        for (int i = 0; i < count; ++i)
+            grid_->addWidget(pane(i), i / columns, i % columns);
+        for (int c = 0; c < 2; ++c)
+            grid_->setColumnStretch(c, c < columns ? 1 : 0);
+        for (int r = 0; r < 2; ++r)
+            grid_->setRowStretch(r, r < (count + columns - 1) / columns ? 1 : 0);
+    }
+    routeVideo();
+    updateWipeLabels();
+}
+
+void CompareView::routeVideo()
+{
+    const bool wipe = layout_ == Layout::Wipe && !followers_.empty();
+    if (wipe == routedToWipe_)
+        return;
+    ReplayPlayer* players[2] = {player_, followers_.empty() ? nullptr : followers_.front()->pane->player()};
+    QVideoSink* wipeSinks[2] = {wipe_->leftSink(), wipe_->rightSink()};
+    for (int i = 0; i < 2; ++i) {
+        ReplayPlayer* player = players[i];
+        ReplaySource* engine = player ? player->engine() : nullptr;
+        if (!engine)
+            continue;
+        engine->setVideoSink(wipe ? wipeSinks[i] : player->videoSink());
+        // Show the current frame in its new place at once.
+        if (engine->isReady() && !player->isRunning())
+            engine->seek(engine->position());
+    }
+    routedToWipe_ = wipe;
+}
+
+void CompareView::updateWipeLabels()
+{
+    if (layout_ != Layout::Wipe || followers_.empty())
+        return;
+    const RunPane* right = followers_.front()->pane;
+    const auto key = [](const RunPane* pane) {
+        return pane->session()->run() ? pane->session()->run()->info.policyName : QString();
+    };
+    wipe_->setLabels(main_->summary(), right->summary(), algorithmColor(key(main_), palette()),
+                     algorithmColor(key(right), palette()));
 }
 
 void CompareView::updateBar()

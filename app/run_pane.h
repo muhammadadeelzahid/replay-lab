@@ -66,10 +66,16 @@ public:
      */
     void setHeaderVisible(bool visible);
 
+    /// @return The algorithm and what is on screen, as plain text, e.g. "LLM · 2160p · VMAF 92".
+    [[nodiscard]] QString summary() const { return summary_; }
+
     /// @return The header's text, for tests: name, quality, buffer and stall state.
     [[nodiscard]] QString headerText() const;
 
 signals:
+    /// The header's text changed (run or cursor).
+    void summaryChanged();
+
     /**
      * @brief The user chose another run in the header.
      *
@@ -88,6 +94,7 @@ private:
     QLabel* status_;             ///< Quality, VMAF and buffer on screen.
     QLabel* stall_;              ///< Red badge during a stall.
     QWidget* header_;            ///< Holds the name, menu, badge and status.
+    QString summary_;            ///< See summary().
 };
 
 } // namespace abrviz
