@@ -12,6 +12,7 @@
 #include "network_path_view.h"
 #include "replay_player.h"
 #include "report_view.h"
+#include "scrubber.h"
 #include "segment_timeline.h"
 #include "segmented_control.h"
 #include "session.h"
@@ -239,7 +240,8 @@ struct MainWindow::Impl {
     LibraryView* library = nullptr;       ///< Library page.
     SummaryPanel* summary = nullptr;      ///< Run summary, beside the report on the Report page.
     ReportView* report = nullptr;         ///< QoE report on the Report page.
-    SegmentTimeline* timeline = nullptr;  ///< Segment timeline, shown in the transport bar.
+    SegmentTimeline* timeline = nullptr;  ///< Downloads, playback and decisions, on the Analysis page.
+    Scrubber* scrubber = nullptr;         ///< The playback bar, in the transport bar.
     ChartsPanel* charts = nullptr;        ///< Charts of the Analysis page.
     LogConsole* logs = nullptr;           ///< Log console of the Logs page.
     ReplayPlayer* player = nullptr;       ///< Video replay of the Replay page.
@@ -430,6 +432,7 @@ LogConsole* MainWindow::logs() const { return d_->logs; }
 SummaryPanel* MainWindow::summary() const { return d_->summary; }
 ReportView* MainWindow::report() const { return d_->report; }
 TransportBar* MainWindow::transport() const { return d_->transport; }
+Scrubber* MainWindow::scrubber() const { return d_->scrubber; }
 MomentPanel* MainWindow::moment() const { return d_->moment; }
 SourceList* MainWindow::sidebar() const { return d_->sidebar; }
 
@@ -557,7 +560,15 @@ void MainWindow::createPages()
     });
     replayLayout->addWidget(d_->compare, 1);
     d_->pages->addWidget(replay);
-    d_->pages->addWidget(scrollable(padded(d_->charts, this), this));
+    // Analysis: the segment timeline (downloads, what was on screen, decisions) above the charts.
+    auto* analysis = new QWidget(this);
+    auto* analysisLayout = new QVBoxLayout(analysis);
+    analysisLayout->setContentsMargins(0, 0, 0, 0);
+    analysisLayout->setSpacing(0);
+    analysisLayout->addWidget(padded(d_->timeline, analysis));
+    analysisLayout->addWidget(divider(Qt::Horizontal, analysis));
+    analysisLayout->addWidget(scrollable(padded(d_->charts, analysis), analysis), 1);
+    d_->pages->addWidget(analysis);
     d_->pages->addWidget(padded(d_->logs, this));
     auto* reportSplit = new QSplitter(Qt::Horizontal, this);
     reportSplit->addWidget(d_->report);
@@ -624,7 +635,8 @@ void MainWindow::createPages()
     inspectorLayout->addWidget(divider(Qt::Vertical, d_->inspectorPane));
     inspectorLayout->addWidget(scrollable(d_->moment, d_->inspectorPane));
 
-    d_->transport = new TransportBar(d_->session, d_->player, d_->timeline,
+    d_->scrubber = new Scrubber(d_->session, this);
+    d_->transport = new TransportBar(d_->session, d_->player, d_->scrubber,
                                      {d_->previousSegmentAction, d_->stepBackAction, d_->playAction,
                                       d_->stepForwardAction, d_->nextSegmentAction},
                                      this);

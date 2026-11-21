@@ -16,14 +16,13 @@ class QToolButton;
 namespace abrviz {
 
 class ReplayPlayer;
-class SegmentTimeline;
 class Session;
 
 /**
  * @brief The strip under every view while a run is open, styled after QuickTime Player.
  *
  * It shows the elapsed replay time, borderless playback buttons, the state and remaining time,
- * and the segment timeline, which doubles as the scrubber.
+ * and the playback bar (a Scrubber), between the time played and the time left.
  *
  * The buttons show the window's actions (so the menu, the shortcuts and the buttons are the
  * same commands). The labels have fixed widths: they change many times a second while the
@@ -52,11 +51,11 @@ public:
      *
      * @param session The session whose run and cursor are shown; not owned.
      * @param player The player whose engine state is shown; not owned.
-     * @param timeline The segment timeline, added to the bar's layout (and so reparented).
+     * @param scrubber The playback bar, added to the bar's layout (and so reparented).
      * @param actions The actions the playback buttons show.
      * @param parent The parent widget.
      */
-    TransportBar(Session* session, ReplayPlayer* player, SegmentTimeline* timeline,
+    TransportBar(Session* session, ReplayPlayer* player, QWidget* scrubber,
                  const Actions& actions, QWidget* parent = nullptr);
 
     /**

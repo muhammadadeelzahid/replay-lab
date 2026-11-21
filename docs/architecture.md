@@ -249,8 +249,11 @@ Runs with the same video, feeder rate and run number form an experiment
   the bundles in a folder (video, link rate, stalls, cut-off) with a search filter and the
   details of the selected run.
 - `SummaryPanel`: run information, ladder, warnings.
-- `SegmentTimeline`: painted strip of played rungs, stalls, guard overrides and buffer-full
-  waits; clicking moves the cursor.
+- `SegmentTimeline`: on the Analysis page, above the charts: lanes of downloads, the rungs on
+  screen and the decisions, with stalls, guard overrides and buffer-full waits; clicking moves
+  the cursor.
+- `Scrubber`: the playback bar in the `TransportBar`, in replay time: the part played, the
+  stalls in red and a knob at the cursor; clicking or dragging seeks.
 - `ChartsPanel`: buffer (33 ms), throughput and estimate, bitrate, RTT and loss, decision
   delay; one x-axis and a cursor line.
 - `LogConsole`: table over `LogIndex` with text, UE and level filters; follows the cursor.

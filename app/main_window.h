@@ -30,6 +30,7 @@ class Session;
 class SegmentTimeline;
 class SourceList;
 class SummaryPanel;
+class Scrubber;
 class TransportBar;
 
 /**
@@ -258,6 +259,9 @@ public:
      * @return Owned by the window.
      */
     [[nodiscard]] TransportBar* transport() const;
+
+    /// @return The playback bar under the video.
+    [[nodiscard]] Scrubber* scrubber() const;
 
     /**
      * @brief The inspector on the right.

@@ -6,6 +6,7 @@
 #include "branding.h"
 #include "main_window.h"
 #include "replay_player.h"
+#include "scrubber.h"
 #include "moment_panel.h"
 #include "source_list.h"
 #include "report_view.h"
@@ -339,6 +340,9 @@ private slots:
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
         QVERIFY(open(window, chef()));
+        // The segment timeline is on the Analysis page.
+        window.showPage(MainWindow::Page::Analysis);
+        QVERIFY(window.timeline()->isVisible());
 
         SegmentTimeline* timeline = window.timeline();
         TimeCursor* cursor = window.session()->cursor();
@@ -350,6 +354,30 @@ private slots:
         QCOMPARE(changed.first().at(1).value<TimeCursor::Source>(), TimeCursor::Source::Timeline);
         const double perPixel = window.session()->endTime() / timeline->width();
         QVERIFY(std::abs(cursor->time() - target) <= perPixel);
+    }
+
+    void scrubberSeeksAndShowsStalls()
+    {
+        MainWindow window;
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QVERIFY(open(window, bbb()));
+        Scrubber* bar = window.scrubber();
+        QVERIFY(bar->isVisible());
+        const PlaybackClock& clock = window.session()->clock();
+        // A click goes to that replay time, as the transport bar counts it.
+        const double target = clock.replayDuration() * 0.6;
+        QTest::mouseClick(bar, Qt::LeftButton, {}, QPoint(static_cast<int>(std::lround(bar->xAt(target))), bar->height() / 2));
+        const double perPixel = clock.replayDuration() / bar->width();
+        QVERIFY(std::abs(clock.simToReplay(window.session()->cursor()->time()) - target) <= 2 * perPixel);
+        // One red span per replayed stall, in the replay's time.
+        const auto spans = bar->stallSpans();
+        QCOMPARE(spans.size(), static_cast<qsizetype>(std::ranges::count_if(window.session()->run()->stalls, [&](const Stall& s) {
+                     return clock.simToReplay(s.end) > clock.simToReplay(s.start);
+                 })));
+        QVERIFY(!spans.isEmpty());
+        for (const auto& [start, end] : spans)
+            QVERIFY(start >= 0.0 && end > start && end <= clock.replayDuration() + 1e-9);
     }
 
     void failedLoadShowsErrors()

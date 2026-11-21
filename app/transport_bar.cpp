@@ -2,7 +2,6 @@
 
 #include "format.h"
 #include "replay_player.h"
-#include "segment_timeline.h"
 #include "session.h"
 #include "time_cursor.h"
 
@@ -55,7 +54,7 @@ QString stateName(ReplaySource::State state)
 
 } // namespace
 
-TransportBar::TransportBar(Session* session, ReplayPlayer* player, SegmentTimeline* timeline,
+TransportBar::TransportBar(Session* session, ReplayPlayer* player, QWidget* scrubber,
                            const Actions& actions, QWidget* parent)
     : QWidget(parent)
     , session_(session)
@@ -92,9 +91,11 @@ TransportBar::TransportBar(Session* session, ReplayPlayer* player, SegmentTimeli
     state_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     state_->setFixedWidth(QFontMetrics(font()).horizontalAdvance(QStringLiteral("Preparing · sim 000.00 s")) + 8);
 
+    // The buttons centred, the player's state on the right; under them the bar, between the
+    // time played and the time left, as in Apple's players.
     auto* controls = new QHBoxLayout();
     controls->setSpacing(6);
-    controls->addWidget(time_);
+    controls->addSpacing(state_->width());
     controls->addStretch(1);
     controls->addWidget(button(actions.previousSegment, 16));
     controls->addWidget(button(actions.stepBack, 18));
@@ -105,13 +106,18 @@ TransportBar::TransportBar(Session* session, ReplayPlayer* player, SegmentTimeli
     controls->addWidget(button(actions.nextSegment, 16));
     controls->addStretch(1);
     controls->addWidget(state_);
-    controls->addWidget(remaining_);
+
+    auto* bar = new QHBoxLayout();
+    bar->setSpacing(10);
+    bar->addWidget(time_);
+    bar->addWidget(scrubber, 1);
+    bar->addWidget(remaining_);
 
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(14, 6, 14, 8);
+    layout->setContentsMargins(14, 4, 14, 10);
     layout->setSpacing(2);
     layout->addLayout(controls);
-    layout->addWidget(timeline);
+    layout->addLayout(bar);
 
     setStyleSheet(QStringLiteral(R"(
         QToolButton#transportButton, QToolButton#playButton {
