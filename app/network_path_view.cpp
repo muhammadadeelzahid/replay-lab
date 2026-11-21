@@ -115,19 +115,19 @@ void NetworkPathView::refresh()
         }
         downloading_ = active != nullptr;
         if (active) {
-            activity_ = tr("Downloading segment %1 at %2 over the satellite")
+            activity_ = tr("Downloading segment %1 · %2")
                             .arg(active->index)
                             .arg(format::rungLabel(run_->video, active->playedRung));
         } else if (position.beforeStart) {
-            activity_ = tr("Starting the stream");
+            activity_ = tr("Start-up");
         } else if (position.afterEnd) {
-            activity_ = run_->playbackCutOff() ? tr("The simulation stopped during playback")
-                                               : tr("Playback finished");
+            activity_ = run_->playbackCutOff() ? tr("Simulation ended during playback")
+                                               : tr("Playback complete");
         } else {
-            activity_ = tr("Playing from the buffer; nothing in flight");
+            activity_ = tr("Playing from buffer");
         }
         if (stalled_)
-            activity_ = tr("Stalled: the buffer ran dry waiting for the satellite link");
+            activity_ = tr("Stalled · buffer empty");
     }
     updateAnimation();
     update();
@@ -157,27 +157,26 @@ QStringList NetworkPathView::labels() const
 {
     const NetworkTopology* topology = run_ ? &run_->topology : nullptr;
     QStringList list;
-    list << tr("Video server");
-    QString feeder = tr("Feeder link");
+    // Short, in 3GPP terms; the inspector has the details (e.g. how many UEs share the feeder).
+    list << tr("Content server");
+    QString feeder = tr("Feeder");
     if (run_ && run_->info.feederLinkRate)
-        feeder += QStringLiteral(" · %1, shared by %2 users")
-                      .arg(format::bitrate(static_cast<double>(*run_->info.feederLinkRate)))
-                      .arg(run_->info.simulatedUes);
+        feeder += QStringLiteral(" · %1").arg(format::bitrate(static_cast<double>(*run_->info.feederLinkRate)));
     list << feeder;
-    QString satellite = tr("LEO satellite gNB");
+    QString satellite = tr("LEO gNB");
     if (topology && topology->satelliteAltitude)
         satellite += QStringLiteral(" · %1").arg(kilometres(*topology->satelliteAltitude));
     list << satellite;
-    QString backhaul = tr("Satellite backhaul");
+    QString backhaul = tr("Backhaul");
     if (topology && topology->carrierFrequencyGHz)
         backhaul += QStringLiteral(" · %1 GHz").arg(*topology->carrierFrequencyGHz, 0, 'g', 3);
     list << backhaul;
-    list << tr("IAB relay");
-    QString access = tr("5G access");
+    list << tr("IAB node");
+    QString access = tr("Access");
     if (topology && topology->accessDistance)
         access += QStringLiteral(" · %1 m").arg(*topology->accessDistance, 0, 'f', 0);
     list << access;
-    list << tr("User");
+    list << tr("UE");
     return list;
 }
 
@@ -245,15 +244,30 @@ void NetworkPathView::paintEvent(QPaintEvent*)
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
 
-        // The link's name at its middle: under the two satellite links (inside the arc, where
-        // there is room), over the access link.
-        const QPointF middle = path.pointAtPercent(0.5);
+        // The link's name: under the two satellite links, inside the arc and clear of it;
+        // over the access link.
         painter.setFont(small);
         const QFontMetricsF metrics(small);
         const double textWidth = metrics.horizontalAdvance(links[i].label) + 12.0;
-        QRectF box(middle.x() - textWidth / 2.0, middle.y() + 8.0, textWidth, metrics.height() + 4.0);
-        if (i == 2)
-            box.moveTop(middle.y() - metrics.height() - 12.0);
+        const double textHeight = metrics.height() + 4.0;
+        QRectF box;
+        if (i == 2) {
+            const QPointF middle = path.pointAtPercent(0.5);
+            box = QRectF(middle.x() - textWidth / 2.0, middle.y() - textHeight - 10.0, textWidth, textHeight);
+        } else {
+            // Halfway along, moved a little towards the satellite where the arc is higher, then lowered
+            // until the arc passes above the whole box.
+            const QPointF middle = path.pointAtPercent(0.5);
+            const double centre = middle.x() + (nodes[1].centre.x() - middle.x()) * 0.2;
+            box = QRectF(centre - textWidth / 2.0, 0.0, textWidth, textHeight);
+            double lowest = middle.y();
+            for (int step = 0; step <= 100; ++step) {
+                const QPointF p = path.pointAtPercent(step / 100.0);
+                if (p.x() >= box.left() - 4.0 && p.x() <= box.right() + 4.0)
+                    lowest = std::max(lowest, p.y());
+            }
+            box.moveTop(lowest + 8.0);
+        }
         painter.setPen(Qt::NoPen);
         painter.setBrush(pal.color(QPalette::Window));
         painter.drawRoundedRect(box, 5, 5);
@@ -280,7 +294,7 @@ void NetworkPathView::paintEvent(QPaintEvent*)
                                        : node.centre.y() + kNodeRadius + 4.0;
         const QRectF labelRect(node.centre.x() - 150.0, labelTop, 300.0, kLabelHeight);
         painter.drawText(labelRect, Qt::AlignHCenter | Qt::AlignVCenter,
-                         viewer && stalled_ ? tr("User · stalled") : node.title);
+                         viewer && stalled_ ? tr("UE · stalled") : node.title);
     }
 
     // What is happening at the cursor, top right.

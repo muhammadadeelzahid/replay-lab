@@ -241,7 +241,7 @@ void checkConsistent(const Rig& rig)
         QVERIFY(rig.path->activityText().isEmpty());
         QVERIFY(!rig.path->isDownloading());
         QCOMPARE(rig.path->labels().size(), 7);
-        QCOMPARE(rig.path->labels().last(), QStringLiteral("User"));
+        QCOMPARE(rig.path->labels().last(), QStringLiteral("UE"));
         for (const QString& field : {QStringLiteral("Segment"), QStringLiteral("Buffer"), QStringLiteral("Player"),
                                      QStringLiteral("Engine"), QStringLiteral("Satellite")})
             QCOMPARE(rig.moment->value(field), QStringLiteral("–"));
@@ -480,11 +480,11 @@ private slots:
         rig.session.setRun(test::syntheticRun());
         const QStringList labels = rig.path->labels();
         QCOMPARE(labels.mid(0, 6),
-                 (QStringList{QStringLiteral("Video server"), QStringLiteral("Feeder link"),
-                              QStringLiteral("LEO satellite gNB"), QStringLiteral("Satellite backhaul"),
-                              QStringLiteral("IAB relay"), QStringLiteral("5G access")}));
+                 (QStringList{QStringLiteral("Content server"), QStringLiteral("Feeder"),
+                              QStringLiteral("LEO gNB"), QStringLiteral("Backhaul"),
+                              QStringLiteral("IAB node"), QStringLiteral("Access")}));
         // The synthetic run has no node id (-1); the viewer is still named.
-        QVERIFY(labels[6].startsWith(QStringLiteral("User")));
+        QVERIFY(labels[6].startsWith(QStringLiteral("UE")));
         for (const QString& field : {QStringLiteral("Feeder"), QStringLiteral("Satellite"), QStringLiteral("Carrier"),
                                      QStringLiteral("Relay"), QStringLiteral("Estimate"), QStringLiteral("RTT")})
             QCOMPARE(rig.moment->value(field), QStringLiteral("–"));
@@ -496,7 +496,7 @@ private slots:
         QVERIFY(rig.moment->value(QStringLiteral("Satellite")).startsWith(QStringLiteral("LEO gNB at ")));
         rig.session.setRun(test::syntheticRun());
         QCOMPARE(rig.moment->value(QStringLiteral("Satellite")), QStringLiteral("–"));
-        QCOMPARE(rig.path->labels()[2], QStringLiteral("LEO satellite gNB"));
+        QCOMPARE(rig.path->labels()[2], QStringLiteral("LEO gNB"));
     }
 
     void stallStateAgreesAcrossWidgets()
@@ -1355,7 +1355,7 @@ private slots:
         QVERIFY(!animating(view.get()));
         QVERIFY(!view->isDownloading());
         QVERIFY(view->activityText().isEmpty());
-        QCOMPARE(view->labels().last(), QStringLiteral("User"));
+        QCOMPARE(view->labels().last(), QStringLiteral("UE"));
         QTest::qWait(100);
         QVERIFY(!animating(view.get()));
         view.reset();

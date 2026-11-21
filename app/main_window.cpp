@@ -602,8 +602,8 @@ void MainWindow::createPages()
     auto* footerIcon = new QLabel(footer);
     footerIcon->setObjectName(QStringLiteral("networkIcon"));
     // Drawn in the accent colour by applyStyle().
-    auto* footerText = new QLabel(tr("<b>Satellite 5G with IAB</b><br>Every run was streamed from a "
-                                     "LEO satellite gNB through an IAB relay to the user."),
+    auto* footerText = new QLabel(tr("<b>5G Non-Terrestrial Network</b><br>ns-3 simulation: a LEO "
+                                     "satellite gNB backhauls an IAB node serving three UEs."),
                                   footer);
     footerText->setWordWrap(true);
     footerText->setFont(format::scaled(footerText->font(), 0.9));
