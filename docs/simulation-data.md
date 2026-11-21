@@ -1,6 +1,6 @@
 # Simulation data
 
-SatReplay reads run bundles exported from the `ns3-ntn-iab-ai` simulations (satellite 5G with
+ReplayLab reads run bundles exported from the `ns3-ntn-iab-ai` simulations (satellite 5G with
 IAB relays, DASH over QUIC). The set-up lines of every `sim.log` describe the same network: a
 satellite gNB (cell 1, node 3) at 550 km, 28 GHz with 100 MHz; one IAB relay (node 4) 10 m
 above the ground, attached to the satellite at 549,990 m; three UEs within 100 m of the relay,

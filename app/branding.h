@@ -14,11 +14,11 @@ namespace abrviz {
  *
  * The C++ namespace, the libraries and the build targets keep the name abrviz.
  *
- * @return The display name, "SatReplay".
+ * @return The display name, "ReplayLab".
  */
 inline QString appDisplayName()
 {
-    return QStringLiteral("SatReplay");
+    return QStringLiteral("ReplayLab");
 }
 
 } // namespace abrviz

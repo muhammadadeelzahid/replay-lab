@@ -2,7 +2,7 @@
 
 /**
  * @file
- * @brief Version string of SatReplay.
+ * @brief Version string of ReplayLab.
  */
 
 #include <QString>
@@ -10,7 +10,7 @@
 namespace abrviz {
 
 /**
- * @brief Returns the version of SatReplay.
+ * @brief Returns the version of ReplayLab.
  *
  * Taken from the CMake project version.
  *

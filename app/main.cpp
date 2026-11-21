@@ -420,10 +420,11 @@ void scheduleRecord(abrviz::MainWindow& window, const QString& directory, double
 }
 
 /**
- * @brief Copies the settings kept under the app's earlier name, Stream Inspector, the first time
- *        SatReplay starts, so the recent folders, the window and the engine carry over.
+ * @brief Copies the settings kept under the app's earlier names, SatReplay and before it
+ *        Stream Inspector, the first time ReplayLab starts, so the recent folders, the window
+ *        and the engine carry over.
  *
- * Does nothing once SatReplay has settings of its own.
+ * Does nothing once ReplayLab has settings of its own.
  */
 void carryOverSettings()
 {
@@ -432,16 +433,21 @@ void carryOverSettings()
     settings.setFallbacksEnabled(false);
     if (!settings.allKeys().isEmpty())
         return;
+    for (const QString& name : {QStringLiteral("SatReplay"), QStringLiteral("Stream Inspector")}) {
 #ifdef Q_OS_MACOS
-    // On macOS the settings file is named after the organisation's domain and the app.
-    QSettings earlier(QCoreApplication::organizationDomain(), QStringLiteral("Stream Inspector"));
+        // On macOS the settings file is named after the organisation's domain and the app.
+        QSettings earlier(QCoreApplication::organizationDomain(), name);
 #else
-    QSettings earlier(QStringLiteral("Stream Inspector"), QStringLiteral("Stream Inspector"));
+        QSettings earlier(name, name);
 #endif
-    earlier.setFallbacksEnabled(false);
-    const QStringList keys = earlier.allKeys();
-    for (const QString& key : keys)
-        settings.setValue(key, earlier.value(key));
+        earlier.setFallbacksEnabled(false);
+        const QStringList keys = earlier.allKeys();
+        if (keys.isEmpty())
+            continue;
+        for (const QString& key : keys)
+            settings.setValue(key, earlier.value(key));
+        return;
+    }
 }
 
 } // namespace
@@ -463,10 +469,10 @@ void carryOverSettings()
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("SatReplay"));
+    QApplication::setApplicationName(QStringLiteral("ReplayLab"));
     QApplication::setApplicationDisplayName(abrviz::appDisplayName());
     QApplication::setApplicationVersion(abrviz::versionString());
-    QApplication::setOrganizationName(QStringLiteral("SatReplay"));
+    QApplication::setOrganizationName(QStringLiteral("ReplayLab"));
     QApplication::setOrganizationDomain(QStringLiteral("muhammadadeelzahid.github.io"));
     QApplication::setWindowIcon(abrviz::appIcon());
     abrviz::theme::apply(app);
@@ -480,7 +486,7 @@ int main(int argc, char* argv[])
     }
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("SatReplay: replays ns-3 adaptive bitrate run bundles"));
+    parser.setApplicationDescription(QStringLiteral("ReplayLab: replays ns-3 adaptive bitrate run bundles"));
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("path"),

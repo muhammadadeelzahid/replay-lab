@@ -88,7 +88,7 @@ private slots:
         QCOMPARE(menuTexts(menus[0]->menu()),
                  (QStringList{QStringLiteral("Open Folder..."), QStringLiteral("Open Run..."),
                               QStringLiteral("Open Recent"), QStringLiteral("Close Window"),
-                              QStringLiteral("Settings..."), QStringLiteral("Quit SatReplay")}));
+                              QStringLiteral("Settings..."), QStringLiteral("Quit ReplayLab")}));
         QCOMPARE(menus[1]->text(), QStringLiteral("View"));
         QCOMPARE(menuTexts(menus[1]->menu()),
                  (QStringList{QStringLiteral("Show Sidebar"), QStringLiteral("Show Inspector"),

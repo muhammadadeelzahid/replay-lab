@@ -1,4 +1,4 @@
-# SatReplay
+# ReplayLab
 
 <img src="app/resources/app-icon.svg" width="96" align="right" alt="">
 
@@ -19,13 +19,13 @@ Built with C++20, Qt 6 and GStreamer.
 ## Download
 
 Packages for macOS (Apple silicon), Windows and Linux are on the
-[Releases](https://github.com/muhammadadeelzahid/sat-replay/releases) page, with the simulation
+[Releases](https://github.com/muhammadadeelzahid/replay-lab/releases) page, with the simulation
 runs (`viewer_bundles.tar`). Extract the runs, open the app and choose the `viewer_bundles`
 folder.
 
 - macOS: unzip and move the app to Applications. The first time, right-click it and choose
   Open (the app is not notarised).
-- Windows: unzip and run `satreplay.exe`.
+- Windows: unzip and run `replaylab.exe`.
 - Linux: `chmod +x` the AppImage and run it.
 
 The packages include ffmpeg and use the pre-rendered engine: the first time a run is played,
@@ -98,17 +98,17 @@ three and drafts a release).
 ## Run
 
 ```sh
-open "build/release/app/SatReplay.app"
+open "build/release/app/ReplayLab.app"
 ```
 
 From the command line:
 
 ```sh
-APP="build/release/app/SatReplay.app/Contents/MacOS/SatReplay"
+APP="build/release/app/ReplayLab.app/Contents/MacOS/ReplayLab"
 "$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57
 ```
 
-On Linux the executable is `build/release/app/satreplay`.
+On Linux the executable is `build/release/app/replaylab`.
 
 | Option | Effect |
 | --- | --- |

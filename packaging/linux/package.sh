@@ -5,7 +5,7 @@
 #
 # Run after `cmake --preset dist && cmake --build --preset dist`, with the Qt to deploy on the
 # PATH (qmake), ffmpeg on the PATH (FFMPEG), and linuxdeploy and linuxdeploy-plugin-qt on the
-# PATH. Writes dist/SatReplay-<version>-Linux-x86_64.AppImage.
+# PATH. Writes dist/ReplayLab-<version>-Linux-x86_64.AppImage.
 set -eu
 
 cd "$(dirname "$0")/../.."
@@ -21,12 +21,12 @@ cp "$FFMPEG" "$APPDIR/usr/bin/ffmpeg"
 
 export QMAKE="${QMAKE:-$(command -v qmake6 || command -v qmake)}"
 export EXTRA_PLATFORM_PLUGINS="libqxcb.so;libqwayland-generic.so"
-export LDAI_OUTPUT="SatReplay-${VERSION}-Linux-x86_64.AppImage"
+export LDAI_OUTPUT="ReplayLab-${VERSION}-Linux-x86_64.AppImage"
 linuxdeploy --appdir "$APPDIR" \
-    --executable "$APPDIR/usr/bin/satreplay" \
+    --executable "$APPDIR/usr/bin/replaylab" \
     --executable "$APPDIR/usr/bin/ffmpeg" \
-    --desktop-file "$APPDIR/usr/share/applications/satreplay.desktop" \
-    --icon-file "$APPDIR/usr/share/icons/hicolor/256x256/apps/satreplay.png" \
+    --desktop-file "$APPDIR/usr/share/applications/replaylab.desktop" \
+    --icon-file "$APPDIR/usr/share/icons/hicolor/256x256/apps/replaylab.png" \
     --plugin qt --output appimage
 
 mkdir -p dist

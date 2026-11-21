@@ -57,8 +57,8 @@ int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
     // The app's names, so that the tool and the app share the render cache.
-    QCoreApplication::setApplicationName(QStringLiteral("SatReplay"));
-    QCoreApplication::setOrganizationName(QStringLiteral("SatReplay"));
+    QCoreApplication::setApplicationName(QStringLiteral("ReplayLab"));
+    QCoreApplication::setOrganizationName(QStringLiteral("ReplayLab"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("muhammadadeelzahid.github.io"));
 
     QCommandLineParser parser;

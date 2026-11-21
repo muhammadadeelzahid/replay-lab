@@ -227,8 +227,8 @@ LibraryView::LibraryView(QWidget* parent)
         auto* page = new GlowBackground(welcome_);
         auto* title = makeLabel(tr("Open Simulation Runs"), 2.4, true, page);
         title->setAlignment(Qt::AlignCenter);
-        auto* subtitle = new QLabel(tr("Replay what a viewer saw when video was streamed over a satellite 5G "
-                                       "network with an IAB relay."),
+        auto* subtitle = new QLabel(tr("Compare how ABR algorithms streamed video over a satellite 5G network, "
+                                       "and replay what each viewer saw."),
                                     page);
         subtitle->setFont(format::scaled(subtitle->font(), 1.15));
         subtitle->setForegroundRole(QPalette::PlaceholderText);
@@ -247,7 +247,7 @@ LibraryView::LibraryView(QWidget* parent)
         connect(folderCard, &QPushButton::clicked, this, &LibraryView::openFolderRequested);
         connect(runCard, &QPushButton::clicked, this, &LibraryView::openBundleRequested);
         connect(getCard, &QPushButton::clicked, this, [] {
-            QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/sat-replay/releases")));
+            QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/replay-lab/releases")));
         });
         auto* cards = new QHBoxLayout();
         cards->setSpacing(10);

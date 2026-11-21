@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=SatReplay
+Name=ReplayLab
 Comment=Replays ns-3 adaptive streaming runs over satellite 5G with IAB
-Exec=satreplay
-Icon=satreplay
+Exec=replaylab
+Icon=replaylab
 Categories=Science;Video;
 Terminal=false
