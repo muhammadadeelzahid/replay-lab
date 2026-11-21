@@ -10,6 +10,9 @@
 #include "replay_player.h"
 #include "run_pane.h"
 #include "session.h"
+
+#include <QAbstractItemView>
+#include <QComboBox>
 #include "charts_panel.h"
 #include "scoreboard.h"
 #include "wipe_view.h"
@@ -172,6 +175,12 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(rig.view.isReady(), kTimeoutMs);
         QCOMPARE(rig.view.otherRuns().size(), std::size_t{1});
         QCOMPARE(rig.view.otherRuns().front()->info.policyName, QStringLiteral("mpc"));
+        // The run picker's list fits its longest name (it used to be as narrow as the box).
+        auto* picker = rig.view.pane(1)->findChild<QComboBox*>();
+        QVERIFY(picker && picker->count() >= 2);
+        const QFontMetrics metrics(picker->view()->font());
+        for (int i = 0; i < picker->count(); ++i)
+            QVERIFY(picker->view()->minimumWidth() >= metrics.horizontalAdvance(picker->itemText(i)) + 40);
     }
 
     void wipeDividerKeysAndLoupe()

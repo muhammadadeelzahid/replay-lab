@@ -137,7 +137,7 @@ void ReportView::refresh()
     addSection(tr("What the user saw"));
     QString shown = QString::number(r.segmentsShown) + tr(" of %1").arg(r.segmentsTotal);
     if (r.cutOff)
-        shown += tr(" (cut off in segment %1 after %2 frames)").arg(r.lastSegmentShown).arg(r.lastSegmentFrames);
+        shown += tr(" (cut off)");  // where exactly is in the Notes
     addRow(tr("Segments shown"), shown);
     addRow(tr("Average bitrate played"), format::bitrate(r.averagePlayedBitrate));
     addRow(tr("Quality switches played"), QString::number(r.playedSwitches));

@@ -75,7 +75,7 @@ void RungStrip::paintEvent(QPaintEvent*)
         painter.fillRect(QRectF(left, track.top(), std::max(1.0, right - left), track.height()),
                          rungColor(it->playedRung, rungs));
     }
-    const QColor stall(0xff, 0x45, 0x3a);
+    const QColor stall = stallColor();
     for (const Stall& s : run->stalls) {
         const double left = xAt(s.start);
         painter.fillRect(QRectF(left, track.top(), std::max(1.5, xAt(s.end) - left), track.height()), stall);

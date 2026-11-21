@@ -57,7 +57,7 @@ The app follows the system's light or dark appearance.
 
 ![The welcome screen in light and dark mode](docs/images/welcome.jpg)
 
-**All Runs.** The experiments where the LLM looks better come first. The featured one shows how
+**All Runs.** Featured Comparisons come first: the experiments where the LLM looks clearly better. The featured one shows how
 each algorithm did on the same video and link; Compare opens the LLM run next to the algorithm
 it beats most, lined up by frame, at the moment its picture is furthest ahead.
 
@@ -95,7 +95,7 @@ algorithm.
 - **Same moment and same frame.** A simulated segment takes 3.3 s of session time but holds
   2 s of video, so in Same moment a pane that is playing moves ahead of one that is stalled.
   Same frame keeps the video in step instead.
-- **Where the LLM looks better.** An experiment is listed when the LLM's mean VMAF is at
+- **Featured Comparisons.** An experiment is listed when the LLM's mean VMAF is at
   least 2 points above every other algorithm's and it stalled no longer than the others. It is
   computed from the bundles when a folder is opened; with this data, 5 of the 15 experiments.
 - **The grid is best effort at 4K.** Four 2160p videos decoded at once can be more than the

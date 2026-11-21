@@ -1,5 +1,6 @@
 #include "run_pane.h"
 
+#include "combo_fit.h"
 #include "rung_strip.h"
 
 #include "algorithm_colors.h"
@@ -94,6 +95,7 @@ void RunPane::setChoices(const QList<BundleSummaryPtr>& runs, const QString& cur
     choice_->clear();
     for (const BundleSummaryPtr& run : runs)
         choice_->addItem(algorithmDisplayName(run->algorithm), run->directory);
+    fitComboPopup(choice_);
     choice_->setCurrentIndex(std::max(0, choice_->findData(current)));
     choice_->setVisible(runs.size() > 1);
     refresh();

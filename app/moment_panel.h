@@ -55,6 +55,15 @@ private:
      */
     void refresh();
 
+    /// Lists the open run's rungs with their colours, and the other marks.
+    void updateGuide();
+
+public:
+    /// @return The colour guide's text, for tests.
+    [[nodiscard]] QString guideText() const;
+
+private:
+
     /**
      * @brief Appends a bold section heading spanning both grid columns.
      *
@@ -92,6 +101,8 @@ private:
     QLabel* simTime_;       ///< Cursor time in simulation seconds.
     QLabel* replayTime_;    ///< Cursor time on the replay timeline, and its length.
     QList<QPair<QString, QLabel*>> fields_;  ///< Row title and value label, in display order.
+    QLabel* guideHeading_ = nullptr;  ///< "Colours" heading; hidden without a run.
+    QLabel* guide_ = nullptr;         ///< What the timeline and rung strip colours mean.
     QGridLayout* grid_ = nullptr;            ///< One grid for all sections, so values line up.
 };
 

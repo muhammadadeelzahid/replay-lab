@@ -34,6 +34,18 @@ inline QColor rungColor(int rung, int rungCount)
     return QColor::fromRgb(palette[index]);
 }
 
+/// @return The colour of stalls, the same in the timeline, the rung strips and the colour guide.
+inline QColor stallColor()
+{
+    return {0xd6, 0x27, 0x28};
+}
+
+/// @return The colour of buffer-guard overrides of the LLM's choice in the timeline.
+inline QColor overrideColor()
+{
+    return {0xe6, 0x55, 0x0d};
+}
+
 /**
  * @brief A colour for text drawn on a background.
  *

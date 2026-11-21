@@ -565,7 +565,7 @@ void LibraryView::rebuildHome()
         }
     }
     if (!highlighted.isEmpty()) {
-        addRow(tr("Where the LLM looks better"), highlighted, [this](RunCard* card, const BundleSummaryPtr& bundle) {
+        addRow(tr("Featured Comparisons"), highlighted, [this](RunCard* card, const BundleSummaryPtr& bundle) {
             const Highlight* h = highlightOf(bundle->directory);
             const QString rate = bundle->linkRate ? format::bitrate(static_cast<double>(*bundle->linkRate)) : tr("uncongested");
             card->setCaption(bundle->videoTitle.isEmpty() ? bundle->videoName : bundle->videoTitle,
@@ -636,7 +636,7 @@ void LibraryView::feature(const BundleSummaryPtr& bundle)
         if (topology.satelliteAltitude)
             satellite = tr("%1 km up").arg(*topology.satelliteAltitude / 1000.0, 0, 'f', 0);
         if (topology.carrierFrequencyGHz)
-            backhaul = tr("%1 GHz backhaul").arg(*topology.carrierFrequencyGHz, 0, 'g', 3);
+            backhaul = tr("Backhaul · %1 GHz").arg(*topology.carrierFrequencyGHz, 0, 'g', 3);
     }
     banner_->setBundle(bundle, satellite, backhaul);
     // The other algorithms of the same video, rate and run number.

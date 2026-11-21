@@ -36,8 +36,8 @@ constexpr double kMinStallWidth = 4.0;  // a short stall stays visible at any zo
 constexpr std::array kLanes = {SegmentTimeline::Lane::Downloads, SegmentTimeline::Lane::Playback,
                                SegmentTimeline::Lane::Decisions};
 
-const QColor kStallColor{0xd6, 0x27, 0x28};     ///< Stalls (red).
-const QColor kOverrideColor{0xe6, 0x55, 0x0d};  ///< Guard overrides of the LLM's choice (orange).
+const QColor kStallColor = stallColor();        ///< Stalls (red).
+const QColor kOverrideColor = overrideColor();  ///< Guard overrides of the LLM's choice (orange).
 
 /**
  * @brief Whether a kind of mark is drawn as a point rather than a bar.

@@ -8,6 +8,7 @@
 
 #include <QGridLayout>
 #include <QLabel>
+#include <QTextDocumentFragment>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -80,6 +81,17 @@ MomentPanel::MomentPanel(Session* session, ReplayPlayer* player, QWidget* parent
     simTime_ = addRow(tr("Simulation"));
     replayTime_ = addRow(tr("Replay"));
 
+    // What the colours of the timeline and the rung strips mean, for the open run's ladder.
+    guideHeading_ = heading(tr("Colours"), this);
+    grid_->addWidget(guideHeading_, grid_->rowCount(), 0, 1, 2);
+    guide_ = new QLabel(this);
+    guide_->setObjectName(QStringLiteral("colourGuide"));
+    guide_->setTextFormat(Qt::RichText);
+    guide_->setFont(format::scaled(guide_->font(), 0.92));
+    grid_->addWidget(guide_, grid_->rowCount(), 0, 1, 2);
+    connect(session_, &Session::runChanged, this, &MomentPanel::updateGuide);
+    updateGuide();
+
     connect(session_->cursor(), &TimeCursor::timeChanged, this, &MomentPanel::refresh);
     connect(session_, &Session::runChanged, this, &MomentPanel::refresh);
     connect(player_, &ReplayPlayer::stateChanged, this, &MomentPanel::refresh);
@@ -106,6 +118,50 @@ QLabel* MomentPanel::addRow(const QString& name)
     grid_->addWidget(label, row, 1);
     fields_.append({name, label});
     return label;
+}
+
+void MomentPanel::updateGuide()
+{
+    const auto& run = session_->run();
+    guideHeading_->setVisible(run != nullptr);
+    guide_->setVisible(run != nullptr);
+    if (!run)
+        return;
+    // Two columns, so the guide stays short enough for a laptop screen.
+    const auto cell = [](const QString& mark, const QString& label) {
+        return QStringLiteral("<td style='padding-right:5px'>%1</td><td style='padding-right:14px'>%2</td>")
+            .arg(mark, label.toHtmlEscaped());
+    };
+    const auto swatch = [&cell](const QColor& color, const QString& label) {
+        return cell(QStringLiteral("<span style='color:%1'>&#9632;</span>").arg(color.name()), label);
+    };
+    QStringList cells;
+    const int count = static_cast<int>(run->video.ladder.size());
+    // Highest quality first, as the brightest colour.
+    for (auto it = run->video.ladder.rbegin(); it != run->video.ladder.rend(); ++it) {
+        cells << swatch(rungColor(it->index, count),
+                        tr("%1p · %2").arg(it->height).arg(format::bitrate(static_cast<double>(it->bitrate))));
+    }
+    // Rungs fill the first column top to bottom, then the second.
+    const int half = (static_cast<int>(cells.size()) + 1) / 2;
+    QString rows;
+    for (int r = 0; r < half; ++r) {
+        rows += QStringLiteral("<tr>") + cells[r];
+        if (r + half < cells.size())
+            rows += cells[r + half];
+        rows += QStringLiteral("</tr>");
+    }
+    QStringList marks{swatch(stallColor(), tr("Stall")), cell(QStringLiteral("&#9474;"), tr("Position"))};
+    if (std::ranges::any_of(run->decisions, [](const Decision& d) { return d.guardOverride; }))
+        marks.insert(1, swatch(overrideColor(), tr("Guard override")));
+    for (int i = 0; i < marks.size(); i += 2)
+        rows += QStringLiteral("<tr>") + marks[i] + (i + 1 < marks.size() ? marks[i + 1] : QString()) + QStringLiteral("</tr>");
+    guide_->setText(QStringLiteral("<table cellspacing='0' cellpadding='1'>%1</table>").arg(rows));
+}
+
+QString MomentPanel::guideText() const
+{
+    return !guide_->isHidden() ? QTextDocumentFragment::fromHtml(guide_->text()).toPlainText() : QString();
 }
 
 QString MomentPanel::value(const QString& field) const
@@ -186,7 +242,7 @@ void MomentPanel::refresh()
         estimate_->setText(format::bitrate(*estimate));
     const NetworkTopology& net = run->topology;
     if (run->info.feederLinkRate)
-        feeder_->setText(tr("%1, shared by %2 users")
+        feeder_->setText(tr("%1, shared by %2 UEs")
                              .arg(format::bitrate(static_cast<double>(*run->info.feederLinkRate)))
                              .arg(run->info.simulatedUes));
     if (net.satelliteAltitude)
@@ -198,7 +254,7 @@ void MomentPanel::refresh()
         carrier_->setText(carrier);
     }
     if (net.viaRelay && net.accessDistance)
-        relay_->setText(tr("IAB, %1 m from the user").arg(*net.accessDistance, 0, 'f', 0));
+        relay_->setText(tr("IAB node, %1 m from the UE").arg(*net.accessDistance, 0, 'f', 0));
     else if (net.relayCount > 0)
         relay_->setText(tr("IAB (%n relay(s))", nullptr, net.relayCount));
     if (rtt)

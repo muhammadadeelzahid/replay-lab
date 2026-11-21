@@ -189,7 +189,7 @@ void SourceList::setHighlights(const std::vector<Highlight>& highlights, const Q
     if (highlights.empty())
         return;
     // Above the videos, right under All Runs.
-    highlights_ = new QTreeWidgetItem({tr("Where the LLM looks better")});
+    highlights_ = new QTreeWidgetItem({tr("Featured Comparisons")});
     highlights_->setData(0, KindRole, Section);
     highlights_->setFlags(Qt::ItemIsEnabled);
     QFont font = highlights_->font(0);
@@ -203,7 +203,9 @@ void SourceList::setHighlights(const std::vector<Highlight>& highlights, const Q
             continue;
         const BundleSummary& run = **it;
         const QString rate = run.linkRate ? format::bitrate(static_cast<double>(*run.linkRate)) : tr("uncongested");
-        auto* item = new QTreeWidgetItem(highlights_, {tr("%1 · %2").arg(run.videoTitle, rate)});
+        // The rate first: long video titles are cut at the end, and it tells two runs of the
+        // same video apart.
+        auto* item = new QTreeWidgetItem(highlights_, {tr("%1 · %2").arg(rate, run.videoTitle)});
         item->setData(0, KindRole, HighlightRun);
         item->setData(0, DirectoryRole, h.directory);
         item->setData(0, RivalRole, h.rivalDirectory);

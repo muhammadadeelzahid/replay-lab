@@ -261,9 +261,10 @@ void PathPanel::setHeading(const QString& heading)
 
 QStringList PathPanel::texts() const
 {
-    return {heading_, tr("Video server"), tr("LEO satellite gNB"), tr("IAB relay"),
-            tr("User"), feeder_.isEmpty() ? tr("Feeder link") : feeder_,
-            backhaul_.isEmpty() ? tr("Satellite backhaul") : backhaul_, tr("5G access")};
+    // The same terms as the network path on the Replay page.
+    return {heading_, tr("Content server"), tr("LEO gNB"), tr("IAB node"),
+            tr("UE"), feeder_.isEmpty() ? tr("Feeder") : feeder_,
+            backhaul_.isEmpty() ? tr("Backhaul") : backhaul_, tr("Access")};
 }
 
 void PathPanel::showEvent(QShowEvent* event)
@@ -610,11 +611,11 @@ void FeaturedBanner::setBundle(BundleSummaryPtr bundle, const QString& satellite
         highlight_->setText(tr("The simulation stopped during playback"));
     else
         highlight_->setText(tr("Played without a stall"));
-    description_->setText(tr("Streamed to one of the users of a LEO satellite 5G network, through an IAB "
-                             "relay. %1 chose the quality of every segment as the buffer rose and fell.")
+    description_->setText(tr("Streamed to one of three UEs over a LEO satellite 5G network, through an IAB "
+                             "node. %1 chose the quality of every segment as the buffer rose and fell.")
                               .arg(run.algorithm.compare(QLatin1String("llm"), Qt::CaseInsensitive) == 0
                                        ? tr("An LLM") : algorithm));
-    path_->setDetails(rate.isEmpty() ? QString() : tr("%1 feeder").arg(rate), satellite, backhaul);
+    path_->setDetails(rate.isEmpty() ? QString() : tr("Feeder · %1").arg(rate), satellite, backhaul);
     update();
 }
 

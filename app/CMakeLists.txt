@@ -54,7 +54,8 @@ add_library(abrviz_gui STATIC
     scoreboard.h
     scoreboard.cpp
     rung_strip.h
-    rung_strip.cpp)
+    rung_strip.cpp
+    combo_fit.h)
 
 qt_add_resources(abrviz_gui "abrviz_resources"
     PREFIX "/abrviz"

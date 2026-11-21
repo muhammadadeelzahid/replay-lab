@@ -1,5 +1,7 @@
 #include "log_console.h"
 
+#include "combo_fit.h"
+
 #include "session.h"
 #include "time_cursor.h"
 
@@ -149,6 +151,7 @@ LogConsole::LogConsole(Session* session, QWidget* parent)
     level_->addItem(tr("Warnings"), QVariant::fromValue(static_cast<int>(LogLevel::Warning)));
     level_->addItem(tr("Info"), QVariant::fromValue(static_cast<int>(LogLevel::Info)));
     level_->addItem(tr("All, with frames"), QVariant::fromValue(static_cast<int>(LogLevel::Debug)));
+    fitComboPopup(level_);
     level_->setCurrentIndex(1);
     ue_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     follow_->setChecked(true);
@@ -169,7 +172,11 @@ LogConsole::LogConsole(Session* session, QWidget* parent)
     table_->horizontalHeader()->setStretchLastSection(true);
     const int digit = QFontMetrics(mono).horizontalAdvance(QLatin1Char('0'));
     table_->setColumnWidth(LogModel::Time, digit * 10);
-    table_->setColumnWidth(LogModel::Ue, digit * 4);
+    // Wide enough for its header too, which is in the (larger) header font.
+    const int ueHeader = table_->horizontalHeader()->fontMetrics().horizontalAdvance(
+                             model_->headerData(LogModel::Ue, Qt::Horizontal, Qt::DisplayRole).toString())
+                         + 24;
+    table_->setColumnWidth(LogModel::Ue, std::max(digit * 4, ueHeader));
     table_->setColumnWidth(LogModel::Source, digit * 12);
 
     auto* controls = new QHBoxLayout();
@@ -257,6 +264,7 @@ void LogConsole::indexChanged()
                                                 : tr("UE %1").arg(ue),
                          ue);
         }
+        fitComboPopup(ue_);
         ue_->setCurrentIndex(std::max(0, ue_->findData(index_->nodeId())));
         requestFilter();
     }
