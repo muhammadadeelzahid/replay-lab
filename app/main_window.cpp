@@ -332,6 +332,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(d_->logWatcher, &QFutureWatcherBase::finished, this, &MainWindow::logIndexFinished);
 
     connect(d_->library, &LibraryView::openRequested, this, &MainWindow::openBundle);
+    connect(d_->library, &LibraryView::compareRequested, this, &MainWindow::compareBundle);
     connect(d_->library, &LibraryView::infoRequested, this, [this](const QString& directory) {
         d_->pageAfterOpen = Page::Report;
         openBundle(directory);
@@ -347,6 +348,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(d_->library, &LibraryView::recentFolderRequested, this, &MainWindow::openFolder);
     connect(d_->sidebar, &SourceList::allRunsSelected, this, [this] { showPage(Page::Library); });
     connect(d_->sidebar, &SourceList::runSelected, this, &MainWindow::openBundle);
+    connect(d_->sidebar, &SourceList::compareRequested, this, &MainWindow::compareBundle);
     connect(d_->session, &Session::runChanged, this, [this] {
         updateTitle();
         updateActions();
@@ -1059,6 +1061,15 @@ void MainWindow::openFolder(const QString& folder)
     d_->scan.reset(future);
     d_->scanWatcher->setFuture(future);
     updateStatus();
+}
+
+void MainWindow::compareBundle(const QString& directory)
+{
+    // Side by side unless more panes are shown already; the layout applies once it is open.
+    if (d_->compare->layoutMode() == CompareView::Layout::Single)
+        d_->compare->setLayoutMode(CompareView::Layout::SideBySide);
+    d_->pageAfterOpen = Page::Replay;
+    openBundle(directory);
 }
 
 void MainWindow::openBundle(const QString& directory)

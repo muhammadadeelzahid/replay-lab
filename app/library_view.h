@@ -236,6 +236,13 @@ signals:
      */
     void infoRequested(const QString& directory);
 
+    /**
+     * @brief Compare was chosen for a run: open it side by side with another algorithm.
+     *
+     * @param directory The bundle's folder.
+     */
+    void compareRequested(const QString& directory);
+
 protected:
     /**
      * @brief Opens the selected run when Return or Enter is pressed in the table.

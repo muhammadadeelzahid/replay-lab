@@ -181,8 +181,10 @@ public:
     QSize sizeHint() const override;
 
 signals:
-    /// The card was double-clicked: open the run.
+    /// The card was double-clicked, or Play chosen from its menu: open the run.
     void opened();
+    /// Compare Side by Side was chosen from the card's menu.
+    void compareRequested();
 
 protected:
     /// Paints the still, the shade, the names and the badge.
@@ -191,6 +193,8 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     /// Repaints with the hover outline.
     void enterEvent(QEnterEvent* event) override;
+    /// Offers Play and Compare.
+    void contextMenuEvent(QContextMenuEvent* event) override;
     /// Repaints without the hover outline.
     void leaveEvent(QEvent* event) override;
 
@@ -231,6 +235,14 @@ public:
     /// @param image The still from the run's video; null for the plain background.
     void setImage(const QImage& image);
 
+    /**
+     * @brief Shows the other algorithms of the featured run's experiment as chips, and the
+     *        Compare button when there are any.
+     *
+     * @param runs The experiment's runs (the featured one included); fewer than two hides both.
+     */
+    void setExperiment(const QList<BundleSummaryPtr>& runs);
+
     /// @return The title label, for tests.
     [[nodiscard]] QLabel* titleLabel() const { return title_; }
 
@@ -240,6 +252,8 @@ public:
 signals:
     /// Play was clicked: open the run and replay it.
     void playRequested();
+    /// Compare was clicked: open the run side by side with another algorithm.
+    void compareRequested();
     /// More Info was clicked: open the run and show its report.
     void infoRequested();
 
@@ -257,6 +271,8 @@ private:
     QLabel* policy_ = nullptr; ///< The run's ABR algorithm, outlined.
     QLabel* highlight_;        ///< How playback went.
     QLabel* description_;      ///< What happened in the run.
+    QPushButton* compare_;     ///< Opens the run side by side with another algorithm.
+    QLabel* chips_;            ///< The experiment's algorithms and how each went.
     QPushButton* play_;        ///< Opens the run.
     QPushButton* info_;        ///< Opens the run's report.
     PathPanel* path_;          ///< The network, bottom right.

@@ -160,6 +160,20 @@ private slots:
         QVERIFY(rig.view.pane(1)->isVisible());
     }
 
+    void compareWithPutsTheRunInTheSecondPane()
+    {
+        Rig rig;
+        rig.view.setLibrary(library_);
+        rig.open(dir_.filePath(QStringLiteral("chef_cooking_llm_18Mbps_run_3")));
+        QCOMPARE(rig.view.paneCount(), 1);
+        rig.view.compareWith(dir_.filePath(QStringLiteral("chef_cooking_mpc_18Mbps_run_3")));
+        QCOMPARE(rig.view.layoutMode(), CompareView::Layout::SideBySide);
+        QCOMPARE(rig.view.paneCount(), 2);
+        QTRY_VERIFY_WITH_TIMEOUT(rig.view.isReady(), kTimeoutMs);
+        QCOMPARE(rig.view.otherRuns().size(), std::size_t{1});
+        QCOMPARE(rig.view.otherRuns().front()->info.policyName, QStringLiteral("mpc"));
+    }
+
     void wipeDividerKeysAndLoupe()
     {
         WipeView wipe;

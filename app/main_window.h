@@ -101,6 +101,13 @@ public:
     void openFolder(const QString& folder);
 
     /**
+     * @brief Opens a run side by side with another algorithm of its experiment.
+     *
+     * @param directory The bundle's directory.
+     */
+    void compareBundle(const QString& directory);
+
+    /**
      * @brief Loads the bundle in a directory and makes it the open run when the load finishes.
      *
      * Opening another bundle first cancels this one. When the load succeeds, log indexing

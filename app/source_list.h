@@ -80,6 +80,13 @@ signals:
      */
     void runSelected(const QString& directory);
 
+    /**
+     * @brief Compare Side by Side was chosen from a run's menu.
+     *
+     * @param directory The bundle's directory.
+     */
+    void compareRequested(const QString& directory);
+
 protected:
     /**
      * @brief Restyles the list when the palette changes (light/dark switch).
@@ -87,6 +94,13 @@ protected:
      * @param event The change event.
      */
     void changeEvent(QEvent* event) override;
+
+    /**
+     * @brief Offers Play and Compare Side by Side for the run under the pointer.
+     *
+     * @param event The context-menu event.
+     */
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     /** @brief Item data roles. */

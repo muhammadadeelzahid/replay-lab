@@ -2,10 +2,13 @@
 
 #include "branding.h"
 #include "format.h"
+#include "algorithm_colors.h"
 #include "icons.h"
 
 #include <QHBoxLayout>
+#include <QContextMenuEvent>
 #include <QLabel>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -343,7 +346,7 @@ RunCard::RunCard(BundleSummaryPtr bundle, QWidget* parent)
     setFocusPolicy(Qt::NoFocus);
     setFixedSize(sizeHint());
     const QString rate = feederRate(*bundle_);
-    setToolTip(tr("%1 · %2 feeder · %3\nClick to feature it, double-click to open it.")
+    setToolTip(tr("%1 · %2 feeder · %3\nClick to feature it, double-click to play it, right-click to compare it.")
                    .arg(bundle_->videoTitle.isEmpty() ? bundle_->videoName : bundle_->videoTitle,
                         rate.isEmpty() ? tr("uncongested") : rate, outcome(*bundle_)));
 }
@@ -369,6 +372,14 @@ void RunCard::mouseDoubleClickEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton)
         emit opened();
+}
+
+void RunCard::contextMenuEvent(QContextMenuEvent* event)
+{
+    QMenu menu(this);
+    menu.addAction(tr("Play"), this, &RunCard::opened);
+    menu.addAction(tr("Compare Side by Side"), this, &RunCard::compareRequested);
+    menu.exec(event->globalPos());
 }
 
 void RunCard::enterEvent(QEnterEvent* event)
@@ -456,6 +467,8 @@ FeaturedBanner::FeaturedBanner(QWidget* parent)
     , meta_(new QLabel(this))
     , highlight_(new QLabel(this))
     , description_(new QLabel(this))
+    , compare_(nullptr)
+    , chips_(new QLabel(this))
     , play_(new QPushButton(tr("Play"), this))
     , info_(new QPushButton(tr("More Info"), this))
     , path_(new PathPanel(this))
@@ -510,9 +523,17 @@ FeaturedBanner::FeaturedBanner(QWidget* parent)
         "QPushButton:hover { background: rgba(255,255,255,70); } QPushButton:pressed { background: rgba(255,255,255,30); }"));
     connect(play_, &QPushButton::clicked, this, &FeaturedBanner::playRequested);
     connect(info_, &QPushButton::clicked, this, &FeaturedBanner::infoRequested);
+    // Compare comes first when the run has other algorithms; Play is then the glass button.
+    compare_ = pillButton(tr("Compare"), Glyph::Analysis, true, this);
+    connect(compare_, &QPushButton::clicked, this, &FeaturedBanner::compareRequested);
+    compare_->hide();
+    bannerText(chips_, 0.95, false, 235);
+    chips_->setTextFormat(Qt::RichText);
+    chips_->hide();
 
     auto* buttons = new QHBoxLayout();
     buttons->setSpacing(12);
+    buttons->addWidget(compare_);
     buttons->addWidget(play_);
     buttons->addWidget(info_);
     buttons->addStretch(1);
@@ -527,6 +548,8 @@ FeaturedBanner::FeaturedBanner(QWidget* parent)
     column->addLayout(metaRow);
     column->addSpacing(18);
     column->addWidget(highlight_);
+    column->addSpacing(6);
+    column->addWidget(chips_);
     column->addSpacing(12);
     column->addWidget(description_);
     column->addSpacing(24);
@@ -583,6 +606,36 @@ void FeaturedBanner::setBundle(BundleSummaryPtr bundle, const QString& satellite
                                        ? tr("An LLM") : algorithm));
     path_->setDetails(rate.isEmpty() ? QString() : tr("%1 feeder").arg(rate), satellite, backhaul);
     update();
+}
+
+void FeaturedBanner::setExperiment(const QList<BundleSummaryPtr>& runs)
+{
+    const bool compare = runs.size() >= 2 && bundle_;
+    compare_->setVisible(compare);
+    chips_->setVisible(compare);
+    // Play becomes the glass button next to Compare, the main one otherwise.
+    const QColor accent = accentColor(palette());
+    play_->setStyleSheet(compare
+        ? QStringLiteral("QPushButton { color: white; background: rgba(255,255,255,46); border: none; border-radius: 22px;"
+                         " padding: 0 22px; font-weight: 600; min-height: 44px; }"
+                         "QPushButton:hover { background: rgba(255,255,255,70); } QPushButton:pressed { background: rgba(255,255,255,30); }")
+        : QStringLiteral("QPushButton { color: white; background: %1; border: none; border-radius: 22px; padding: 0 26px;"
+                         " font-weight: 600; min-height: 44px; }"
+                         "QPushButton:hover { background: %2; } QPushButton:pressed { background: %3; }")
+              .arg(accent.name(), accent.lighter(115).name(), accent.darker(115).name()));
+    if (!compare)
+        return;
+    QStringList chips;
+    for (const BundleSummaryPtr& run : runs) {
+        const QColor color = algorithmColor(run->algorithm, palette());
+        const QString name = algorithmDisplayName(run->algorithm);
+        const QString state = outcome(*run) + (run->stallEpisodes > 0 ? tr(", %1 s").arg(run->stalledTime, 0, 'f', 1) : QString());
+        const bool featured = bundle_ && run->directory == bundle_->directory;
+        chips << QStringLiteral("<span style='color:%1'>&#9679;</span>&nbsp;%2%3&nbsp;<span style='color:rgba(255,255,255,160)'>%4</span>")
+                     .arg(color.name(), featured ? QStringLiteral("<b>") : QString(),
+                          name + (featured ? QStringLiteral("</b>") : QString()), state.toHtmlEscaped());
+    }
+    chips_->setText(chips.join(QStringLiteral(" &nbsp;&nbsp;&nbsp; ")));
 }
 
 void FeaturedBanner::setImage(const QImage& image)

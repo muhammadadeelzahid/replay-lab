@@ -3,7 +3,9 @@
 #include "format.h"
 #include "icons.h"
 
+#include <QContextMenuEvent>
 #include <QEvent>
+#include <QMenu>
 #include <QHeaderView>
 #include <QPainter>
 #include <QStyledItemDelegate>
@@ -123,6 +125,18 @@ bool hasSeveralAlgorithms(const QList<BundleSummaryPtr>& runs)
 }
 
 } // namespace
+
+void SourceList::contextMenuEvent(QContextMenuEvent* event)
+{
+    QTreeWidgetItem* item = itemAt(viewport()->mapFrom(this, event->pos()));
+    if (!item || item->data(0, KindRole).toInt() != Run || item->isDisabled())
+        return;
+    const QString directory = item->data(0, DirectoryRole).toString();
+    QMenu menu(this);
+    menu.addAction(tr("Play"), this, [this, directory] { emit runSelected(directory); });
+    menu.addAction(tr("Compare Side by Side"), this, [this, directory] { emit compareRequested(directory); });
+    menu.exec(event->globalPos());
+}
 
 void SourceList::setRuns(const QList<BundleSummaryPtr>& runs)
 {

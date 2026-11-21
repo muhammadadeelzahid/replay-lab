@@ -361,6 +361,10 @@ LibraryView::LibraryView(QWidget* parent)
             if (banner_->bundle())
                 emit openRequested(banner_->bundle()->directory);
         });
+        connect(banner_, &FeaturedBanner::compareRequested, this, [this] {
+            if (banner_->bundle())
+                emit compareRequested(banner_->bundle()->directory);
+        });
         connect(banner_, &FeaturedBanner::infoRequested, this, [this] {
             if (banner_->bundle())
                 emit infoRequested(banner_->bundle()->directory);
@@ -533,6 +537,7 @@ void LibraryView::rebuildHome()
             auto* card = new RunCard(bundle, strip);
             connect(card, &RunCard::clicked, this, [this, bundle] { feature(bundle); });
             connect(card, &RunCard::opened, this, [this, bundle] { emit openRequested(bundle->directory); });
+            connect(card, &RunCard::compareRequested, this, [this, bundle] { emit compareRequested(bundle->directory); });
             stripLayout->addWidget(card);
             cards_ << card;
             if (thumbnails_) {
@@ -593,6 +598,15 @@ void LibraryView::feature(const BundleSummaryPtr& bundle)
             backhaul = tr("%1 GHz backhaul").arg(*topology.carrierFrequencyGHz, 0, 'g', 3);
     }
     banner_->setBundle(bundle, satellite, backhaul);
+    // The other algorithms of the same video, rate and run number.
+    QList<BundleSummaryPtr> experiment;
+    if (bundle) {
+        for (const Experiment& e : groupExperiments(bundles_)) {
+            if (std::ranges::any_of(e.runs, [&](const BundleSummaryPtr& r) { return r->directory == bundle->directory; }))
+                experiment = e.runs;
+        }
+    }
+    banner_->setExperiment(experiment);
     if (bundle && thumbnails_)
         banner_->setImage(thumbnails_->image(bundle->directory));
     for (RunCard* card : std::as_const(cards_))
