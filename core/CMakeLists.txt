@@ -18,6 +18,7 @@ add_library(abrviz_core STATIC
     include/abrviz/core/util/parallel_map.h
     include/abrviz/core/load/bundle_library.h
     include/abrviz/core/playback/playback_clock.h
+    include/abrviz/core/playback/comparison_clock.h
     include/abrviz/core/metrics/qoe_metrics.h
     include/abrviz/core/logs/log_index.h
     include/abrviz/core/logs/log_filter.h
@@ -40,6 +41,7 @@ add_library(abrviz_core STATIC
     src/load/bundle_loader.cpp
     src/load/bundle_library.cpp
     src/playback/playback_clock.cpp
+    src/playback/comparison_clock.cpp
     src/metrics/qoe_metrics.cpp
     src/logs/log_index.cpp
     src/logs/log_filter.cpp

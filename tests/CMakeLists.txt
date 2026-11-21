@@ -88,6 +88,10 @@ abrviz_add_test(tst_comparison_data
     SOURCES tst_comparison_data.cpp
     LIBS abrviz_core)
 
+abrviz_add_test(tst_comparison_clock
+    SOURCES tst_comparison_clock.cpp
+    LIBS abrviz_core)
+
 abrviz_add_test(tst_playback_edge_cases
     SOURCES tst_playback_edge_cases.cpp
     LIBS abrviz_core)
