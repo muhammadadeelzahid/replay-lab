@@ -25,6 +25,7 @@
 #include "abrviz/core/load/bundle_loader.h"
 #include "abrviz/core/load/bundle_reader.h"
 #include "abrviz/core/logs/log_index.h"
+#include "abrviz/core/metrics/highlights.h"
 #include "abrviz/core/render/render_queue.h"
 #include "abrviz/core/util/future_guard.h"
 #include "abrviz/core/version.h"
@@ -39,6 +40,8 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QFutureWatcher>
+#include <QPromise>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenuBar>
@@ -78,6 +81,7 @@ const QString kOverlaySetting = QStringLiteral("replay/overlay");
 const QString kSidebarSetting = QStringLiteral("window/sidebar");
 /** @brief Settings key of whether the inspector is shown. */
 const QString kInspectorSetting = QStringLiteral("window/inspector");
+const QString kNetworkSetting = QStringLiteral("window/networkPath");
 constexpr int kRecentCount = 6;         ///< Most recent folders kept.
 constexpr double kStepSeconds = 5.0;    ///< Replay seconds moved by the step actions.
 
@@ -264,6 +268,8 @@ struct MainWindow::Impl {
     QAction* fullScreenAction = nullptr;       ///< Toggles full screen.
     QAction* sidebarAction = nullptr;          ///< Checkable; shows the sidebar pane.
     QAction* inspectorAction = nullptr;        ///< Checkable; shows the inspector pane.
+    QAction* networkAction = nullptr;          ///< Checkable; shows the network path over the replay.
+    QWidget* networkPath = nullptr;            ///< The network path and its divider, on the Replay page.
     QAction* settingsAction = nullptr;         ///< Opens the settings dialog.
     /** @brief Checkable page actions in an exclusive group, indexed by Page. */
     std::array<QAction*, kPageCount> pageActions{};
@@ -277,6 +283,11 @@ struct MainWindow::Impl {
     FutureGuard<QList<BundleSummaryPtr>> scan;   ///< Folder scan; empty if none is pending.
     FutureGuard<LoadResult> load;                ///< Bundle load; empty if none is pending.
     FutureGuard<LogIndexPtr> logIndex;           ///< Log index build; empty if none is pending.
+    FutureGuard<std::vector<Highlight>> highlights;  ///< Highlight search; empty if none is pending.
+    QFutureWatcher<std::vector<Highlight>>* highlightWatcher = nullptr;  ///< Watches it.
+    /// The run to put next to the one being opened, and where to start (compareAt()).
+    std::optional<std::pair<QString, double>> compareAfterOpen;
+    std::vector<Highlight> highlightList;  ///< The scanned folder's highlights, best first.
     std::shared_ptr<const RunData> logIndexRun;  ///< The run the pending index is for.
     QString scanningFolder;  ///< Absolute path of the folder last scanned.
     QString loadingBundle;   ///< Absolute path of the bundle last loaded.
@@ -324,6 +335,17 @@ MainWindow::MainWindow(QWidget* parent)
     createToolBar();
     session.release()->setParent(this);
 
+    d_->highlightWatcher = new QFutureWatcher<std::vector<Highlight>>(this);
+    connect(d_->highlightWatcher, &QFutureWatcherBase::finished, this, [this] {
+        const auto future = d_->highlightWatcher->future();
+        std::ignore = d_->highlights.release();
+        if (future.isCanceled() || future.resultCount() == 0)
+            return;
+        d_->highlightList = future.result();
+        d_->library->setHighlights(d_->highlightList);
+        updateSidebar();
+        emit highlightsFound();
+    });
     d_->scanWatcher = new QFutureWatcher<QList<BundleSummaryPtr>>(this);
     connect(d_->scanWatcher, &QFutureWatcherBase::finished, this, &MainWindow::scanFinished);
     d_->loadWatcher = new QFutureWatcher<LoadResult>(this);
@@ -333,6 +355,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(d_->library, &LibraryView::openRequested, this, &MainWindow::openBundle);
     connect(d_->library, &LibraryView::compareRequested, this, &MainWindow::compareBundle);
+    connect(d_->library, &LibraryView::compareAtRequested, this, &MainWindow::compareAt);
     connect(d_->library, &LibraryView::infoRequested, this, [this](const QString& directory) {
         d_->pageAfterOpen = Page::Report;
         openBundle(directory);
@@ -349,6 +372,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(d_->sidebar, &SourceList::allRunsSelected, this, [this] { showPage(Page::Library); });
     connect(d_->sidebar, &SourceList::runSelected, this, &MainWindow::openBundle);
     connect(d_->sidebar, &SourceList::compareRequested, this, &MainWindow::compareBundle);
+    connect(d_->sidebar, &SourceList::compareAtRequested, this, &MainWindow::compareAt);
     connect(d_->session, &Session::runChanged, this, [this] {
         updateTitle();
         updateActions();
@@ -383,9 +407,11 @@ void MainWindow::shutdown()
     d_->shutDown = true;
     // No result may arrive once shutdown has started.
     d_->scanWatcher->disconnect(this);
+    d_->highlightWatcher->disconnect(this);
     d_->loadWatcher->disconnect(this);
     d_->logWatcher->disconnect(this);
     d_->scan.reset();
+    d_->highlights.reset();
     d_->load.reset();
     d_->logIndex.reset();
     // The engine may run a job on the render queue, which `d_` destroys next.
@@ -510,8 +536,15 @@ void MainWindow::createPages()
     auto* replayLayout = new QVBoxLayout(replay);
     replayLayout->setContentsMargins(0, 0, 0, 0);
     replayLayout->setSpacing(0);
-    replayLayout->addWidget(new NetworkPathView(d_->session, d_->player, replay));
-    replayLayout->addWidget(divider(Qt::Horizontal, replay));
+    // The path is shown on request (toolbar or View menu), leaving the room to the videos.
+    d_->networkPath = new QWidget(replay);
+    auto* pathLayout = new QVBoxLayout(d_->networkPath);
+    pathLayout->setContentsMargins(0, 0, 0, 0);
+    pathLayout->setSpacing(0);
+    pathLayout->addWidget(new NetworkPathView(d_->session, d_->player, d_->networkPath));
+    pathLayout->addWidget(divider(Qt::Horizontal, d_->networkPath));
+    d_->networkPath->hide();
+    replayLayout->addWidget(d_->networkPath);
     // The open run alone, or with the other algorithms of its experiment side by side.
     d_->compare = new CompareView(d_->session, d_->player, d_->renderQueue.get(), replay);
     // The charts draw the compared runs over the open one.
@@ -690,6 +723,14 @@ void MainWindow::createActions()
         settings.setValue(kInspectorSetting, on);
         updatePanes();
     });
+    d_->networkAction = make(tr("Show Network Path"), QKeySequence(Qt::ALT | Qt::CTRL | Qt::Key_N));
+    d_->networkAction->setCheckable(true);
+    d_->networkAction->setToolTip(tr("Show or hide the network path: server, satellite, IAB relay, user"));
+    connect(d_->networkAction, &QAction::toggled, this, [this](bool on) {
+        d_->networkPath->setVisible(on);
+        QSettings settings;
+        settings.setValue(kNetworkSetting, on);
+    });
     d_->fullScreenAction = make(tr("Enter Full Screen"), QKeySequence::FullScreen);
     connect(d_->fullScreenAction, &QAction::triggered, this, [this] {
         setWindowState(windowState() ^ Qt::WindowFullScreen);
@@ -743,6 +784,7 @@ void MainWindow::createMenus()
     auto* viewMenu = menuBar()->addMenu(tr("View"));
     viewMenu->addAction(d_->sidebarAction);
     viewMenu->addAction(d_->inspectorAction);
+    viewMenu->addAction(d_->networkAction);
     viewMenu->addSeparator();
     for (QAction* action : d_->pageActions)
         viewMenu->addAction(action);
@@ -827,6 +869,13 @@ void MainWindow::createToolBar()
             [this](int index) { showPage(static_cast<Page>(index + 1)); });
     d_->toolBar->addWidget(d_->views);
     d_->toolBar->addWidget(spacer());
+    // Checkable like the menu item, so the button shows whether the path is open.
+    auto* networkButton = new QAction(d_->networkAction->toolTip(), this);
+    networkButton->setObjectName(QStringLiteral("networkButton"));
+    networkButton->setCheckable(true);
+    connect(networkButton, &QAction::toggled, d_->networkAction, &QAction::setChecked);
+    connect(d_->networkAction, &QAction::toggled, networkButton, &QAction::setChecked);
+    d_->toolBar->addAction(networkButton);
     auto* inspectorButton = new QAction(d_->inspectorAction->icon(), d_->inspectorAction->toolTip(), this);
     inspectorButton->setObjectName(QStringLiteral("inspectorButton"));
     connect(inspectorButton, &QAction::triggered, d_->inspectorAction, &QAction::toggle);
@@ -885,6 +934,8 @@ void MainWindow::applyStyle()
             action->setIcon(glyphIcon(Glyph::Sidebar, text));
         else if (action->objectName() == QLatin1String("inspectorButton"))
             action->setIcon(glyphIcon(Glyph::Inspector, text));
+        else if (action->objectName() == QLatin1String("networkButton"))
+            action->setIcon(glyphIcon(Glyph::Satellite, text));
     }
     d_->playAction->setIcon(glyphIcon(d_->player->isRunning() ? Glyph::Pause : Glyph::Play, text));
     if (auto* icon = findChild<QLabel*>(QStringLiteral("networkIcon")))
@@ -952,6 +1003,7 @@ void MainWindow::restoreSettings()
     d_->player->setOverlayVisible(d_->overlayAction->isChecked());
     d_->sidebarAction->setChecked(settings.value(kSidebarSetting, true).toBool());
     d_->inspectorAction->setChecked(settings.value(kInspectorSetting, true).toBool());
+    d_->networkAction->setChecked(settings.value(kNetworkSetting, false).toBool());
     const QStringList recent = settings.value(kRecentSetting).toStringList();
     d_->library->setRecentFolders(recent);
     d_->recentMenu->clear();
@@ -991,6 +1043,7 @@ void MainWindow::updateSidebar()
     for (int row = 0; row < model->rowCount(); ++row)
         runs.append(model->bundleAt(row));
     d_->sidebar->setRuns(runs);
+    d_->sidebar->setHighlights(d_->highlightList, runs);
     if (currentPage() == Page::Library)
         d_->sidebar->selectAllRuns();
     else if (const auto& run = d_->session->run())
@@ -1072,6 +1125,46 @@ void MainWindow::compareBundle(const QString& directory)
     openBundle(directory);
 }
 
+void MainWindow::compareAt(const QString& directory, const QString& rival, double time)
+{
+    // Same frame, so both panes show the same picture at their own quality.
+    d_->compare->setAlignment(ComparisonClock::Alignment::MediaTime);
+    if (d_->compare->layoutMode() == CompareView::Layout::Single)
+        d_->compare->setLayoutMode(CompareView::Layout::SideBySide);
+    d_->compareAfterOpen = std::pair{rival, time};
+    d_->pageAfterOpen = Page::Replay;
+    openBundle(directory);
+}
+
+void MainWindow::startHighlights(const QList<BundleSummaryPtr>& bundles)
+{
+    // Every experiment's runs are loaded and compared on a worker thread (under 2 s for 60
+    // runs); the home page shows the result when it arrives.
+    QList<Experiment> experiments = groupExperiments(bundles);
+    auto future = QtConcurrent::run(
+        [](QPromise<std::vector<Highlight>>& promise, const QList<Experiment>& list) {
+            std::vector<Highlight> found;
+            for (const Experiment& e : list) {
+                if (promise.isCanceled())
+                    return;
+                if (!std::ranges::any_of(e.runs, [](const BundleSummaryPtr& r) {
+                        return r->algorithm.compare(QLatin1String("llm"), Qt::CaseInsensitive) == 0;
+                    }))
+                    continue;
+                std::vector<std::shared_ptr<const RunData>> runs;
+                for (const BundleSummaryPtr& r : e.runs)
+                    runs.push_back(loadBundleSync(r->directory).run);
+                if (auto h = findHighlight(runs, QStringLiteral("llm")))
+                    found.push_back(*h);
+            }
+            std::ranges::sort(found, std::greater{}, &Highlight::score);
+            promise.addResult(std::move(found));
+        },
+        std::move(experiments));
+    d_->highlights.reset(future);
+    d_->highlightWatcher->setFuture(future);
+}
+
 void MainWindow::openBundle(const QString& directory)
 {
     if (d_->shutDown)
@@ -1094,6 +1187,8 @@ void MainWindow::scanFinished()
     }
     d_->library->setBundles(future.result(), d_->scanningFolder);
     d_->compare->setLibrary(future.result());
+    d_->highlightList.clear();
+    startHighlights(future.result());
     if (d_->session->run())
         d_->library->setOpenBundle(d_->session->run()->info.bundleDirectory);
     rememberFolder(d_->scanningFolder);
@@ -1115,8 +1210,13 @@ void MainWindow::loadFinished()
     const bool ok = result.run != nullptr;
     d_->session->setRun(std::move(result.run), std::move(result.errors));
     d_->library->setOpenBundle(d_->loadingBundle);
+    const auto compareAfterOpen = std::exchange(d_->compareAfterOpen, std::nullopt);
     if (ok) {
         startLogIndex();
+        if (compareAfterOpen) {
+            d_->compare->compareWith(compareAfterOpen->first);
+            d_->session->cursor()->setTime(compareAfterOpen->second);
+        }
         if (pageAfterOpen)
             showPage(*pageAfterOpen);
         else if (currentPage() == Page::Library)

@@ -42,6 +42,22 @@ gint64 toClock(double seconds)
 }
 
 /**
+ * @brief Handler of the pipeline's "deep-element-added" signal: tells libav's decoders to drop
+ *        frames they could not decode completely.
+ *
+ * After a flushing seek into a different rendition, the decoder can be handed frames whose
+ * references it has not seen; by default it outputs them as grey pictures with smeared edges.
+ * Dropped instead, the last good frame stays on screen until the next complete one.
+ *
+ * @param element The element added somewhere inside the pipeline.
+ */
+void dropCorruptFrames(GstBin*, GstBin*, GstElement* element, gpointer)
+{
+    if (g_object_class_find_property(G_OBJECT_GET_CLASS(element), "output-corrupt"))
+        g_object_set(element, "output-corrupt", FALSE, nullptr);
+}
+
+/**
  * @brief The files `splitmuxsrc` plays, owned by its "format-location" signal handler.
  *
  * `formatLocation()` hands them over as a NULL-terminated string vector that the element takes
@@ -216,10 +232,14 @@ bool GstSegmentSource::buildPipeline(QString* error)
     }
 
     // The appsink does not sync: frames are timed by tick(). Its queue of a few frames lets the
-    // decoder work ahead and blocks it when full.
+    // decoder work ahead and blocks it when full. Each segment is its own MP4 with its own
+    // stream headers (SPS/PPS), and the renditions differ; h264parse writes the headers in
+    // front of every keyframe, so after a seek into another rendition the decoder does not
+    // decode its frames with the previous one's headers (grey, smeared pictures).
     GError* rawError = nullptr;
     GstElement* raw = gst_parse_launch(
-        "splitmuxsrc name=source ! decodebin3 ! videoconvert n-threads=4 "
+        "splitmuxsrc name=source ! h264parse config-interval=-1 "
+        "! video/x-h264,stream-format=byte-stream,alignment=au ! decodebin3 ! videoconvert n-threads=4 "
         "! videoscale n-threads=4 add-borders=true "
         "! video/x-raw,format=NV12,width=1920,height=1080,pixel-aspect-ratio=1/1 "
         "! appsink name=sink sync=false max-buffers=8 drop=false enable-last-sample=false",
@@ -231,6 +251,7 @@ bool GstSegmentSource::buildPipeline(QString* error)
     }
     gst_object_ref_sink(raw);
     pipeline_.reset(raw);
+    g_signal_connect(raw, "deep-element-added", G_CALLBACK(dropCorruptFrames), nullptr);
 
     const gst::GstPtr<GstElement> source(gst_bin_get_by_name(GST_BIN(raw), "source"));
     const gst::GstPtr<GstElement> sink(gst_bin_get_by_name(GST_BIN(raw), "sink"));

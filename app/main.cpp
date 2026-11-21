@@ -102,7 +102,8 @@ void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool wa
                              }
                          });
     } else if (waitForFolder) {
-        QObject::connect(&window, &abrviz::MainWindow::folderScanned, &window, take);
+        // After the highlights, which reorder the home page.
+        QObject::connect(&window, &abrviz::MainWindow::highlightsFound, &window, take);
     } else {
         QTimer::singleShot(0, &window, take);  // the welcome screen
     }

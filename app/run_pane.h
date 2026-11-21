@@ -15,6 +15,8 @@ class QLabel;
 
 namespace abrviz {
 
+class RungStrip;
+
 class ReplayPlayer;
 class Session;
 
@@ -66,6 +68,27 @@ public:
      */
     void setHeaderVisible(bool visible);
 
+    /**
+     * @brief Covers the video with a dark card and a message, while the pane loads or lines up
+     *        with the first pane.
+     *
+     * @param text The message; empty removes the cover.
+     */
+    void setCover(const QString& text);
+
+    /**
+     * @brief Sets the end of the rung strip's time axis, shared by the compared panes.
+     *
+     * @param end Simulation time in seconds.
+     */
+    void setTimeRange(double end);
+
+    /// @return The strip of rungs played, under the header.
+    [[nodiscard]] RungStrip* rungStrip() const { return strip_; }
+
+    /// @return The cover's message; empty if the video is not covered.
+    [[nodiscard]] QString coverText() const;
+
     /// @return The algorithm and what is on screen, as plain text, e.g. "LLM · 2160p · VMAF 92".
     [[nodiscard]] QString summary() const { return summary_; }
 
@@ -91,6 +114,11 @@ private:
     /// Shows as many of the status figures as fit the header.
     void fitStatus();
 
+    /// Keeps the cover over the video when the player is resized.
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+    RungStrip* strip_ = nullptr; ///< The rungs played over the session.
+    QLabel* cover_ = nullptr;    ///< Covers the video while loading or lining up; child of the player.
     QStringList statusParts_;    ///< Quality, VMAF and buffer, in that order.
     /// Updates the header from the session's run and cursor.
     void refresh();

@@ -174,6 +174,14 @@ public:
     /// @param featured Whether this run is the one shown above the rows.
     void setFeatured(bool featured);
 
+    /**
+     * @brief Replaces the card's two lines of text (the algorithm and the feeder rate).
+     *
+     * @param title The large line.
+     * @param subtitle The small line under it.
+     */
+    void setCaption(const QString& title, const QString& subtitle);
+
     /// @return Whether this run is the one shown above the rows.
     [[nodiscard]] bool isFeatured() const { return featured_; }
 
@@ -202,6 +210,8 @@ private:
     BundleSummaryPtr bundle_;  ///< The run.
     QImage image_;             ///< The still, or null.
     bool featured_ = false;    ///< Whether it is the featured run.
+    QString title_;            ///< Large line; empty for the algorithm.
+    QString subtitle_;         ///< Small line; empty for the feeder rate and segments.
     bool hovered_ = false;     ///< Whether the pointer is over the card.
 };
 
@@ -242,6 +252,13 @@ public:
      * @param runs The experiment's runs (the featured one included); fewer than two hides both.
      */
     void setExperiment(const QList<BundleSummaryPtr>& runs);
+
+    /**
+     * @brief Replaces the line under the title (how playback went) with another one.
+     *
+     * @param text The line, as plain text.
+     */
+    void setHighlightText(const QString& text);
 
     /// @return The title label, for tests.
     [[nodiscard]] QLabel* titleLabel() const { return title_; }

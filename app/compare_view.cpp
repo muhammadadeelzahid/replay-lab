@@ -223,6 +223,20 @@ double CompareView::frameDrift(int index) const
     return frame.toDouble() - expected;
 }
 
+double CompareView::frameOffset(int index) const
+{
+    if (index < 1 || index >= paneCount() || index >= clock_.runCount() || !clock_.run(index))
+        return 0.0;
+    const ReplaySource* engine = pane(index)->player()->engine();
+    const QVariant frame = engine ? engine->property("frameMediaTime") : QVariant();
+    if (!frame.isValid())
+        return 0.0;
+    // Where this pane should be at the master time, whatever the first pane shows (it may be
+    // frozen in a stall).
+    const double expected = clock_.clock(index).replayToMedia(clock_.positionOf(index, masterTime()).replay);
+    return frame.toDouble() - expected;
+}
+
 bool CompareView::bothPlaying(int index) const
 {
     if (index < 1 || index >= paneCount() || index >= clock_.runCount() || !clock_.run(index))
@@ -359,7 +373,9 @@ void CompareView::loadInto(Follower& follower, const QString& directory)
         return;
     follower.directory = directory;
     follower.held = false;
+    follower.lining = false;
     follower.session->clear();
+    follower.pane->setCover(tr("Loading…"));
     if (!follower.watcher) {
         follower.watcher = new QFutureWatcher<LoadResult>(this);
         Follower* raw = &follower;
@@ -388,6 +404,12 @@ void CompareView::rebuildClock()
     for (const auto& follower : followers_)
         runs.push_back(follower->session->run());
     clock_ = ComparisonClock(std::move(runs), alignment_);
+    // The rung strips share one time axis, the longest of the runs shown.
+    double end = 0.0;
+    for (int i = 0; i < paneCount(); ++i)
+        end = std::max(end, pane(i)->session()->run() ? pane(i)->session()->endTime() : 0.0);
+    for (int i = 0; i < paneCount(); ++i)
+        pane(i)->setTimeRange(end);
     emit runsChanged();
 }
 
@@ -421,7 +443,14 @@ double CompareView::steer(int index, double master, bool running, bool& held)
         return 0.0;
     const ComparisonClock::RunPosition position = clock_.positionOf(index, master);
     const double offset = engine->position() - position.replay;
-    const auto moveTo = [&] { session->cursor()->setTime(position.sim, TimeCursor::Source::Program); };
+    const auto moveTo = [&] {
+        session->cursor()->setTime(position.sim, TimeCursor::Source::Program);
+        Follower& follower = *followers_[static_cast<std::size_t>(index - 1)];
+        if (!follower.lining) {
+            follower.lining = true;
+            follower.liningClock.start();
+        }
+    };
     if (!running || position.ended) {
         held = false;
         if (player->isRunning())
@@ -432,8 +461,17 @@ double CompareView::steer(int index, double master, bool running, bool& held)
     }
     // Frozen in a stall (its own, or at the target), a pane is moved at once: the jump is not
     // seen because the picture does not change.
-    const bool frozen = position.position.stalled
-        || session->clock().positionAtReplay(engine->position()).stalled;
+    const PlaybackClock::Position here = session->clock().positionAtReplay(engine->position());
+    const bool frozen = position.position.stalled || here.stalled;
+    // Frozen in the same stall the master time is in: the picture is already right, and a seek
+    // would only make the decoder start over (the engine plays the stall out by itself).
+    const bool sameStall = here.stalled && position.position.stalled && here.segment == position.position.segment;
+    if (sameStall) {
+        held = false;
+        if (!player->isRunning())
+            player->play();
+        return 0.0;
+    }
     if (offset < -(frozen ? kStalledBehindS : kBehindS)) {
         // Behind, usually while frozen in a stall: jump to where it should be.
         moveTo();
@@ -477,7 +515,35 @@ void CompareView::sync()
     } else {
         mainHeld_ = false;
     }
+    updateCovers();
     steering_ = false;
+}
+
+void CompareView::updateCovers()
+{
+    // A short jump is not covered (the frame arrives within a few ticks); a longer one, or one
+    // the decoder is slow to finish, shows the card instead of a stale or broken picture.
+    constexpr qint64 kShowAfterMs = 150;
+    constexpr qint64 kGiveUpMs = 2000;
+    constexpr double kLinedUpS = 0.08;  // two frames at 25 fps
+    const QString leader = session_->run() ? algorithmDisplayName(session_->run()->info.policyName) : QString();
+    for (std::size_t i = 0; i < followers_.size(); ++i) {
+        Follower& follower = *followers_[i];
+        const ReplaySource* engine = follower.pane->player()->engine();
+        if (!follower.session->run() || !engine || !engine->isReady()) {
+            follower.pane->setCover(tr("Loading…"));
+            continue;
+        }
+        if (follower.lining) {
+            const qint64 elapsed = follower.liningClock.elapsed();
+            if (std::abs(frameOffset(static_cast<int>(i) + 1)) <= kLinedUpS || elapsed > kGiveUpMs)
+                follower.lining = false;
+            else if (elapsed > kShowAfterMs)
+                follower.pane->setCover(tr("Lining up with %1…").arg(leader));
+        }
+        if (!follower.lining)
+            follower.pane->setCover({});
+    }
 }
 
 void CompareView::placePanes()

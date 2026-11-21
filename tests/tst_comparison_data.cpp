@@ -5,6 +5,7 @@
 
 #include "abrviz/core/load/bundle_library.h"
 #include "abrviz/core/load/bundle_reader.h"
+#include "abrviz/core/metrics/highlights.h"
 #include "abrviz/core/metrics/qoe_metrics.h"
 #include "abrviz/core/model/run_data.h"
 
@@ -225,6 +226,45 @@ private slots:
         QVERIFY(qoe.meanVmafShown && *qoe.meanVmafShown > 0.0 && *qoe.meanVmafShown <= 100.0);
         QVERIFY(qoe.minVmafShown && *qoe.minVmafShown <= *qoe.meanVmafShown);
         QVERIFY(!qoe.hasPolicyDetails);
+    }
+
+    void highlightsAreTheExperimentsWhereTheLlmLooksBetter()
+    {
+        if (!test::haveComparisonBundles())
+            QSKIP("viewer_bundles_phasef/ is not present");
+        const QList<BundleSummaryPtr> library = scanLibrary(test::comparisonBundlesPath()).result();
+        std::vector<Highlight> found;
+        for (const Experiment& e : groupExperiments(library)) {
+            std::vector<std::shared_ptr<const RunData>> runs;
+            for (const BundleSummaryPtr& r : e.runs)
+                runs.push_back(loadBundleSync(r->directory).run);
+            if (auto h = findHighlight(runs, QStringLiteral("llm")))
+                found.push_back(*h);
+        }
+        std::ranges::sort(found, std::greater{}, &Highlight::score);
+        QStringList names;
+        for (const Highlight& h : found)
+            names << QDir(h.directory).dirName();
+        // LLM beats every other algorithm's mean VMAF by 2 or more without stalling longer.
+        QCOMPARE(names, (QStringList{QStringLiteral("pexels_34797065_llm_18Mbps_run_3"),
+                                     QStringLiteral("pexels_34797065_llm_9Mbps_run_4"),
+                                     QStringLiteral("chef_cooking_llm_18Mbps_run_3"),
+                                     QStringLiteral("peace_autumn_lake_llm_36Mbps_run_2"),
+                                     QStringLiteral("big_buck_bunny_llm_36Mbps_run_2")}));
+        for (const Highlight& h : found) {
+            qInfo("%s: VMAF %.1f vs %.1f best other; segments %d-%d at %.1f s, %.0f vs %.0f for %s",
+                  qPrintable(QDir(h.directory).dirName()), h.vmaf, h.bestOtherVmaf, h.segment,
+                  h.segment + kHighlightSegments - 1, h.time, h.momentVmaf, h.rivalMomentVmaf,
+                  qPrintable(h.rivalAlgorithm));
+            QVERIFY(h.vmaf >= h.bestOtherVmaf + kHighlightMinGain);
+            QVERIFY(h.momentVmaf > h.rivalMomentVmaf);
+            QVERIFY(!h.rivalAlgorithm.isEmpty() && h.rivalAlgorithm != QStringLiteral("llm"));
+            QVERIFY(h.time > 0.0);
+        }
+        // RobustMPC is not a winner for itself anywhere it stalled for 31 s.
+        QVERIFY(!findHighlight({loadBundleSync(QDir(test::comparisonBundlesPath())
+                                                   .filePath(QStringLiteral("pexels_34797065_robustmpc_9Mbps_run_4"))).run},
+                               QStringLiteral("robustmpc")));
     }
 };
 

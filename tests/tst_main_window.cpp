@@ -1,6 +1,8 @@
 #include "test_paths.h"
 
 #include "library_view.h"
+#include "compare_view.h"
+#include "home_widgets.h"
 #include "branding.h"
 #include "main_window.h"
 #include "replay_player.h"
@@ -79,6 +81,33 @@ private slots:
         QVERIFY(found);
     }
 
+    void highlightsComeFirstAndOpenAtTheirMoment()
+    {
+        if (!test::haveComparisonBundles())
+            QSKIP("viewer_bundles_phasef/ is not present");
+        MainWindow window;
+        QSignalSpy found(&window, &MainWindow::highlightsFound);
+        window.openFolder(test::comparisonBundlesPath());
+        QVERIFY(waitFor(found));
+        const auto& highlights = window.library()->highlights();
+        QCOMPARE(highlights.size(), std::size_t{5});
+        // The clearest one is featured, and the sidebar lists them above the videos.
+        QCOMPARE(window.library()->featuredBanner()->bundle()->directory, highlights.front().directory);
+        QCOMPARE(window.findChild<SourceList*>()->highlightCount(), 5);
+
+        // Compare opens the run next to its rival, lined up by frame, at the moment.
+        const Highlight h = highlights.front();
+        QSignalSpy opened(&window, &MainWindow::bundleOpened);
+        window.compareAt(h.directory, h.rivalDirectory, h.time);
+        QVERIFY(waitFor(opened));
+        CompareView* compare = window.compareView();
+        QCOMPARE(compare->layoutMode(), CompareView::Layout::SideBySide);
+        QCOMPARE(compare->alignment(), ComparisonClock::Alignment::MediaTime);
+        QTRY_VERIFY_WITH_TIMEOUT(compare->isReady(), kTimeoutMs);
+        QCOMPARE(compare->otherRuns().front()->info.bundleDirectory, h.rivalDirectory);
+        QVERIFY(std::abs(window.session()->cursor()->time() - h.time) < 0.5);
+    }
+
     void hasMenus()
     {
         MainWindow window;
@@ -92,7 +121,7 @@ private slots:
         QCOMPARE(menus[1]->text(), QStringLiteral("View"));
         QCOMPARE(menuTexts(menus[1]->menu()),
                  (QStringList{QStringLiteral("Show Sidebar"), QStringLiteral("Show Inspector"),
-                              QStringLiteral("All Runs"), QStringLiteral("Replay"),
+                              QStringLiteral("Show Network Path"), QStringLiteral("All Runs"), QStringLiteral("Replay"),
                               QStringLiteral("Analysis"), QStringLiteral("Logs"),
                               QStringLiteral("Report"), QStringLiteral("Show Video Overlay"),
                               QStringLiteral("Enter Full Screen")}));

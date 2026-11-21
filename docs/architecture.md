@@ -217,6 +217,11 @@ Runs with the same video, feeder rate and run number form an experiment
   episodes as stalls and keeps the raw count as player pauses.
 - Picture quality comes from the bundle's VMAF per segment and rung; `computeQoe` averages the
   VMAF of the segments that were on screen.
+- `findHighlight()` (core/metrics) tells whether the LLM run of an experiment looks clearly
+  better (mean VMAF at least 2 above every other run, stalled no longer) and finds the three
+  segments where it is furthest ahead of one of them. `MainWindow` runs it over every
+  experiment on a worker thread after a folder scan; the home page and the sidebar list the
+  results first.
 
 
 - `MainWindow`: laid out as a macOS app. A source-list sidebar (`SourceList`) shows All Runs
@@ -260,6 +265,10 @@ Runs with the same video, feeder rate and run number form an experiment
   `Session` and engine and loads its run in the background. A timer every 100 ms steers the
   other panes to the master time: a pane that is ahead waits, one that is behind seeks, and
   the main pane waits for one that cannot keep up.
+- Each pane covers its video with "Loading…" until its run is ready, and with "Lining up…" after
+  a jump until its frame is the right one. A pane frozen in the same stall as the master time
+  is not moved: a seek would only restart the decoder. Each pane shows a `RungStrip`: the rung
+  on screen over the session, on a time axis shared by the panes.
 - `WipeView`: two engines' video sinks in one scene, the right one clipped at a divider that
   can be dragged, and a round 2x loupe that is a second view of the same scene.
 - `Scoreboard`: on the Report page, one row per algorithm of the experiment, loaded in the
@@ -309,6 +318,12 @@ the cursor synchronisation are shared. Switching engines destroys the old one be
 new one.
 
 ### GStreamer engine (`GstSegmentSource`)
+
+The pipeline is `splitmuxsrc ! h264parse config-interval=-1 ! decodebin3 ! videoconvert !
+videoscale ! appsink`. Each segment is its own MP4, with its own SPS/PPS, and renditions
+differ: `h264parse` writes the headers before every keyframe, so a seek into another rendition
+does not decode its frames with the previous one's headers. libav's decoder is also told not to
+output frames it could not decode completely (`output-corrupt=false`).
 
 ```
 splitmuxsrc ! decodebin3 ! videoconvert ! videoscale

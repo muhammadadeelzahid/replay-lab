@@ -357,6 +357,13 @@ void RunCard::setImage(const QImage& image)
     update();
 }
 
+void RunCard::setCaption(const QString& title, const QString& subtitle)
+{
+    title_ = title;
+    subtitle_ = subtitle;
+    update();
+}
+
 void RunCard::setFeatured(bool featured)
 {
     featured_ = featured;
@@ -429,15 +436,18 @@ void RunCard::paintEvent(QPaintEvent*)
     // The algorithm, large, when the run names one; otherwise the feeder rate.
     const QString feeder = rate.isEmpty() ? tr("Uncongested") : tr("%1 feeder").arg(rate);
     const bool named = !bundle_->algorithm.isEmpty();
+    const QString heading = !title_.isEmpty() ? title_ : named ? algorithmDisplayName(bundle_->algorithm) : feeder;
     painter.drawText(QRectF(frame.left() + 12, frame.bottom() - 44, frame.width() - 24, 22),
-                     Qt::AlignLeft | Qt::AlignVCenter, named ? algorithmDisplayName(bundle_->algorithm) : feeder);
+                     Qt::AlignLeft | Qt::AlignVCenter,
+                     QFontMetricsF(title).elidedText(heading, Qt::ElideRight, frame.width() - 24));
     QFont small = format::scaled(font(), 0.85);
     painter.setFont(small);
     painter.setPen(QColor(255, 255, 255, 190));
     painter.drawText(QRectF(frame.left() + 12, frame.bottom() - 24, frame.width() - 24, 16),
                      Qt::AlignLeft | Qt::AlignVCenter,
-                     named ? tr("%1 · %2").arg(feeder, counted(bundle_->segments, tr("segment"), tr("segments")))
-                           : counted(bundle_->segments, tr("segment"), tr("segments")));
+                     !subtitle_.isEmpty() ? subtitle_
+                     : named ? tr("%1 · %2").arg(feeder, counted(bundle_->segments, tr("segment"), tr("segments")))
+                             : counted(bundle_->segments, tr("segment"), tr("segments")));
 
     // A badge for how playback went: red for stalls, orange for a cut-off, green otherwise.
     const QString badge = outcome(*bundle_);
@@ -606,6 +616,11 @@ void FeaturedBanner::setBundle(BundleSummaryPtr bundle, const QString& satellite
                                        ? tr("An LLM") : algorithm));
     path_->setDetails(rate.isEmpty() ? QString() : tr("%1 feeder").arg(rate), satellite, backhaul);
     update();
+}
+
+void FeaturedBanner::setHighlightText(const QString& text)
+{
+    highlight_->setText(text);
 }
 
 void FeaturedBanner::setExperiment(const QList<BundleSummaryPtr>& runs)

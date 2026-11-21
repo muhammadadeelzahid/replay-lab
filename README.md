@@ -35,11 +35,15 @@ its video is rendered (a few seconds) and cached. Build from source for the GStr
 
 ## Features
 
+- The experiments where the LLM's picture is clearly better listed first, each opening next to
+  the algorithm it beats most, at the moment it shows best
 - Library grouped by video and feeder link rate, one entry per algorithm, with stalls and
   cut-off playback marked
 - Replay of one run, two side by side, a grid of up to four, or two in one frame split by a
   divider that can be dragged, with a 2x magnifier
-- Runs lined up at the same moment of the session or at the same frame of the video
+- Runs lined up at the same moment of the session or at the same frame of the video, with each
+  run's rungs on screen in a strip above its video
+- The network path (server, satellite, IAB relay, user) shown on request from the toolbar
 - Charts of buffer, throughput, bitrate, VMAF, RTT, loss and decision delay, with the compared
   runs drawn over the open one
 - A scoreboard of every algorithm of an experiment: bitrate, VMAF, switches, stalls, stalled
@@ -53,8 +57,9 @@ The app follows the system's light or dark appearance.
 
 ![The welcome screen in light and dark mode](docs/images/welcome.jpg)
 
-**All Runs.** The featured run, how each algorithm did on the same video and link, and a row of
-runs for each video. Compare opens the run next to another algorithm.
+**All Runs.** The experiments where the LLM looks better come first. The featured one shows how
+each algorithm did on the same video and link; Compare opens the LLM run next to the algorithm
+it beats most, lined up by frame, at the moment its picture is furthest ahead.
 
 ![All Runs](docs/images/home.jpg)
 
@@ -90,6 +95,9 @@ algorithm.
 - **Same moment and same frame.** A simulated segment takes 3.3 s of session time but holds
   2 s of video, so in Same moment a pane that is playing moves ahead of one that is stalled.
   Same frame keeps the video in step instead.
+- **Where the LLM looks better.** An experiment is listed when the LLM's mean VMAF is at
+  least 2 points above every other algorithm's and it stalled no longer than the others. It is
+  computed from the bundles when a folder is opened; with this data, 5 of the 15 experiments.
 - **The grid is best effort at 4K.** Four 2160p videos decoded at once can be more than the
   CPU keeps up with; panes are then kept in step by jumping, not smoothly.
 

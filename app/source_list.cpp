@@ -143,6 +143,7 @@ void SourceList::setRuns(const QList<BundleSummaryPtr>& runs)
     const QSignalBlocker block(this);
     while (topLevelItemCount() > 1)
         delete takeTopLevelItem(1);
+    highlights_ = nullptr;
 
     QTreeWidgetItem* section = nullptr;
     QString sectionTitle;
@@ -180,10 +181,58 @@ void SourceList::setRuns(const QList<BundleSummaryPtr>& runs)
     applyStyle();
 }
 
+void SourceList::setHighlights(const std::vector<Highlight>& highlights, const QList<BundleSummaryPtr>& runs)
+{
+    const QSignalBlocker block(this);
+    delete highlights_;
+    highlights_ = nullptr;
+    if (highlights.empty())
+        return;
+    // Above the videos, right under All Runs.
+    highlights_ = new QTreeWidgetItem({tr("Where the LLM looks better")});
+    highlights_->setData(0, KindRole, Section);
+    highlights_->setFlags(Qt::ItemIsEnabled);
+    QFont font = highlights_->font(0);
+    font.setBold(true);
+    highlights_->setFont(0, format::scaled(font, 0.85));
+    highlights_->setSizeHint(0, QSize(0, 30));
+    insertTopLevelItem(1, highlights_);
+    for (const Highlight& h : highlights) {
+        const auto it = std::ranges::find(runs, h.directory, [](const BundleSummaryPtr& r) { return r->directory; });
+        if (it == runs.end())
+            continue;
+        const BundleSummary& run = **it;
+        const QString rate = run.linkRate ? format::bitrate(static_cast<double>(*run.linkRate)) : tr("uncongested");
+        auto* item = new QTreeWidgetItem(highlights_, {tr("%1 · %2").arg(run.videoTitle, rate)});
+        item->setData(0, KindRole, HighlightRun);
+        item->setData(0, DirectoryRole, h.directory);
+        item->setData(0, RivalRole, h.rivalDirectory);
+        item->setData(0, TimeRole, h.time);
+        // No note on the right: the names are long. The numbers are in the tool tip.
+        item->setToolTip(0, tr("%1\nVMAF %2 against %3 for the next best algorithm.\nOpens LLM next to %4, "
+                               "lined up by frame, where its picture is furthest ahead (VMAF %5 against %6).")
+                                .arg(item->text(0))
+                                .arg(h.vmaf, 0, 'f', 1)
+                                .arg(h.bestOtherVmaf, 0, 'f', 1)
+                                .arg(algorithmDisplayName(h.rivalAlgorithm))
+                                .arg(h.momentVmaf, 0, 'f', 0)
+                                .arg(h.rivalMomentVmaf, 0, 'f', 0));
+    }
+    highlights_->setExpanded(true);
+    applyStyle();
+}
+
+int SourceList::highlightCount() const
+{
+    return highlights_ ? highlights_->childCount() : 0;
+}
+
 QTreeWidgetItem* SourceList::findRun(const QString& directory) const
 {
     for (int s = 1; s < topLevelItemCount(); ++s) {
         QTreeWidgetItem* section = topLevelItem(s);
+        if (section == highlights_)
+            continue;
         for (int r = 0; r < section->childCount(); ++r) {
             if (section->child(r)->data(0, DirectoryRole).toString() == directory)
                 return section->child(r);
@@ -210,8 +259,10 @@ void SourceList::selectAllRuns()
 int SourceList::runCount() const
 {
     int count = 0;
-    for (int s = 1; s < topLevelItemCount(); ++s)
-        count += topLevelItem(s)->childCount();
+    for (int s = 1; s < topLevelItemCount(); ++s) {
+        if (topLevelItem(s) != highlights_)
+            count += topLevelItem(s)->childCount();
+    }
     return count;
 }
 
@@ -228,6 +279,10 @@ void SourceList::itemChanged(QTreeWidgetItem* current)
     switch (current->data(0, KindRole).toInt()) {
     case AllRuns:
         emit allRunsSelected();
+        break;
+    case HighlightRun:
+        emit compareAtRequested(current->data(0, DirectoryRole).toString(),
+                                current->data(0, RivalRole).toString(), current->data(0, TimeRole).toDouble());
         break;
     case Run:
         emit runSelected(current->data(0, DirectoryRole).toString());

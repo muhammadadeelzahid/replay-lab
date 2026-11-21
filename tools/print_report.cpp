@@ -44,7 +44,8 @@ QString seconds(double value)
 /**
  * @brief Prints the QoE report of one run.
  *
- * Lists segments, bitrates and switches, startup delay, stalls, throughput, guard overrides,
+ * Lists segments, bitrates and switches, startup delay, stalls (episodes and player pauses),
+ * the VMAF shown, throughput, guard overrides,
  * decision delay and replay duration, then one MISMATCH line for every number that disagrees
  * with summary.json.
  *
@@ -68,7 +69,13 @@ void printReport(QTextStream& out, const abrviz::RunData& run)
     out << "  bitrate chosen   " << mbps(r.averageChosenBitrate) << ", " << r.chosenSwitches
         << " switches\n";
     out << "  startup delay    " << seconds(r.startupDelay) << '\n';
-    out << "  stalls           " << r.stallCount << ", " << seconds(r.rebufferTime) << '\n';
+    out << "  stalls           " << r.stallEpisodes << " (" << r.stallCount << " player pauses), "
+        << seconds(r.rebufferTime) << '\n';
+    if (r.meanVmafShown) {
+        out << "  VMAF shown       " << QString::number(*r.meanVmafShown, 'f', 1) << " average, "
+            << QString::number(r.minVmafShown.value_or(0.0), 'f', 1) << " lowest segment, "
+            << seconds(r.timeBelowVmaf60.value_or(0.0)) << " below 60\n";
+    }
     out << "  throughput       " << mbps(r.averageThroughput) << '\n';
     out << "  guard overrides  " << r.guardOverrides << " of " << r.decisions << " decisions\n";
     out << "  decision delay   " << seconds(r.averageDecisionDelay) << " average, "

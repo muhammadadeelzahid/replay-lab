@@ -77,7 +77,7 @@ bool hasPipelineElements(QString* missing)
     if (!ensureInitialized(missing))
         return false;
     QStringList absent;
-    for (const char* name : {"splitmuxsrc", "decodebin3", "videoconvert", "videoscale", "appsink"}) {
+    for (const char* name : {"splitmuxsrc", "h264parse", "decodebin3", "videoconvert", "videoscale", "appsink"}) {
         const GstPtr<GstElementFactory> factory(gst_element_factory_find(name));
         if (!factory)
             absent << QString::fromLatin1(name);

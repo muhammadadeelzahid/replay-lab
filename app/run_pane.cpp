@@ -1,5 +1,7 @@
 #include "run_pane.h"
 
+#include "rung_strip.h"
+
 #include "algorithm_colors.h"
 #include "format.h"
 #include "replay_player.h"
@@ -8,6 +10,7 @@
 
 #include <QComboBox>
 #include <QHBoxLayout>
+#include <QEvent>
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
@@ -59,11 +62,26 @@ RunPane::RunPane(Session* session, ReplayPlayer* player, QWidget* parent)
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
+    // Every header is as tall as the run picker, so the videos of a row start at the same height
+    // whether or not their header has one.
+    const int headerHeight = std::max(choice_->sizeHint().height(), name_->sizeHint().height()) + 12;
+    header_->setFixedHeight(headerHeight);
     layout->addWidget(header_);
+    strip_ = new RungStrip(session_, this);
+    strip_->setToolTip(tr("Quality on screen over the session"));
+    layout->addWidget(strip_);
     player_->setParent(this);
     layout->addWidget(player_, 1);
     player_->show();
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
+
+    cover_ = new QLabel(player_);
+    cover_->setAlignment(Qt::AlignCenter);
+    cover_->setAttribute(Qt::WA_TransparentForMouseEvents);
+    cover_->setStyleSheet(QStringLiteral(
+        "QLabel { background: rgba(10,10,12,235); color: rgba(255,255,255,210); font-weight: 600; }"));
+    cover_->hide();
+    player_->installEventFilter(this);
 
     connect(session_, &Session::runChanged, this, &RunPane::refresh);
     connect(session_->cursor(), &TimeCursor::timeChanged, this, &RunPane::refresh);
@@ -147,6 +165,33 @@ void RunPane::refresh()
     plain << parts;
     summary_ = plain.join(QStringLiteral(" · "));
     emit summaryChanged();
+}
+
+void RunPane::setCover(const QString& text)
+{
+    if (text == cover_->text() && cover_->isVisible() == !text.isEmpty())
+        return;
+    cover_->setText(text);
+    cover_->setGeometry(player_->rect());
+    cover_->setVisible(!text.isEmpty());
+    cover_->raise();
+}
+
+void RunPane::setTimeRange(double end)
+{
+    strip_->setTimeRange(end);
+}
+
+QString RunPane::coverText() const
+{
+    return cover_->isVisible() ? cover_->text() : QString();
+}
+
+bool RunPane::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == player_ && event->type() == QEvent::Resize)
+        cover_->setGeometry(player_->rect());
+    return QWidget::eventFilter(watched, event);
 }
 
 void RunPane::resizeEvent(QResizeEvent* event)

@@ -362,7 +362,12 @@ LibraryView::LibraryView(QWidget* parent)
                 emit openRequested(banner_->bundle()->directory);
         });
         connect(banner_, &FeaturedBanner::compareRequested, this, [this] {
-            if (banner_->bundle())
+            if (!banner_->bundle())
+                return;
+            // A highlight opens next to its rival at its moment.
+            if (const Highlight* h = highlightOf(banner_->bundle()->directory))
+                emit compareAtRequested(h->directory, h->rivalDirectory, h->time);
+            else
                 emit compareRequested(banner_->bundle()->directory);
         });
         connect(banner_, &FeaturedBanner::infoRequested, this, [this] {
@@ -504,7 +509,79 @@ void LibraryView::rebuildHome()
         delete item;
     }
     cards_.clear();
-    // One row per video, in the order the videos first appear, its runs by feeder rate.
+    // A row of cards under a heading; `caption` may relabel each card.
+    const auto addRow = [this](const QString& heading, const QList<BundleSummaryPtr>& runs,
+                               const std::function<void(RunCard*, const BundleSummaryPtr&)>& setUp) {
+        auto* label = new QLabel(heading, home_);
+        QFont font = format::scaled(label->font(), 1.25);
+        font.setBold(true);
+        label->setFont(font);
+        auto* strip = new QWidget(home_);
+        auto* stripLayout = new QHBoxLayout(strip);
+        stripLayout->setContentsMargins(0, 0, 0, 0);
+        stripLayout->setSpacing(12);
+        for (const BundleSummaryPtr& bundle : runs) {
+            auto* card = new RunCard(bundle, strip);
+            connect(card, &RunCard::clicked, this, [this, bundle] { feature(bundle); });
+            setUp(card, bundle);
+            stripLayout->addWidget(card);
+            cards_ << card;
+            if (thumbnails_) {
+                card->setImage(thumbnails_->image(bundle->directory));
+                // A different moment of the video on each card of the row.
+                const double position = 0.25 + 0.2 * static_cast<double>((stripLayout->count() - 1) % 4);
+                thumbnails_->request(bundle->directory, bundle->videoName, bundle->segments, position);
+            }
+        }
+        stripLayout->addStretch(1);
+        auto* section = new QWidget(home_);
+        auto* sectionLayout = new QVBoxLayout(section);
+        sectionLayout->setContentsMargins(0, 0, 0, 0);
+        sectionLayout->setSpacing(10);
+        sectionLayout->addWidget(label);
+        auto* scroller = new QScrollArea(section);
+        scroller->setFrameShape(QFrame::NoFrame);
+        scroller->setWidget(strip);
+        scroller->setWidgetResizable(true);
+        scroller->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        scroller->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        scroller->setFixedHeight(strip->sizeHint().height() + 14);
+        // The row scrolls sideways rather than widening the window to fit every card.
+        scroller->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        scroller->setMinimumWidth(1);
+        scroller->viewport()->setAutoFillBackground(false);
+        strip->setAutoFillBackground(false);
+        sectionLayout->addWidget(scroller);
+        rows_->addWidget(section);
+    };
+
+    // First, the experiments where the LLM looks better; a card opens it next to its rival at
+    // the moment that shows it best.
+    QList<BundleSummaryPtr> highlighted;
+    for (const Highlight& h : highlights_) {
+        for (const BundleSummaryPtr& bundle : std::as_const(bundles_)) {
+            if (bundle->directory == h.directory && bundle->errors.isEmpty())
+                highlighted << bundle;
+        }
+    }
+    if (!highlighted.isEmpty()) {
+        addRow(tr("Where the LLM looks better"), highlighted, [this](RunCard* card, const BundleSummaryPtr& bundle) {
+            const Highlight* h = highlightOf(bundle->directory);
+            const QString rate = bundle->linkRate ? format::bitrate(static_cast<double>(*bundle->linkRate)) : tr("uncongested");
+            card->setCaption(bundle->videoTitle.isEmpty() ? bundle->videoName : bundle->videoTitle,
+                             tr("%1 · VMAF %2, next best %3").arg(rate).arg(h->vmaf, 0, 'f', 1).arg(h->bestOtherVmaf, 0, 'f', 1));
+            card->setToolTip(tr("LLM against %1 at %2: VMAF %3 against %4.\nDouble-click to compare them side by side.")
+                                 .arg(algorithmDisplayName(h->rivalAlgorithm), tr("%1 s").arg(h->time, 0, 'f', 0))
+                                 .arg(h->momentVmaf, 0, 'f', 0)
+                                 .arg(h->rivalMomentVmaf, 0, 'f', 0));
+            const Highlight copy = *h;
+            const auto compare = [this, copy] { emit compareAtRequested(copy.directory, copy.rivalDirectory, copy.time); };
+            connect(card, &RunCard::opened, this, compare);
+            connect(card, &RunCard::compareRequested, this, compare);
+        });
+    }
+
+    // Then one row per video, in the order the videos first appear, its runs by feeder rate.
     QStringList titles;
     QHash<QString, QList<BundleSummaryPtr>> byTitle;
     for (const BundleSummaryPtr& bundle : std::as_const(bundles_)) {
@@ -525,48 +602,10 @@ void LibraryView::rebuildHome()
                 return a->runNumber < b->runNumber;
             return algorithmRank(a->algorithm) < algorithmRank(b->algorithm);
         });
-        auto* heading = new QLabel(title, home_);
-        QFont font = format::scaled(heading->font(), 1.25);
-        font.setBold(true);
-        heading->setFont(font);
-        auto* strip = new QWidget(home_);
-        auto* stripLayout = new QHBoxLayout(strip);
-        stripLayout->setContentsMargins(0, 0, 0, 0);
-        stripLayout->setSpacing(12);
-        for (const BundleSummaryPtr& bundle : std::as_const(runs)) {
-            auto* card = new RunCard(bundle, strip);
-            connect(card, &RunCard::clicked, this, [this, bundle] { feature(bundle); });
+        addRow(title, runs, [this](RunCard* card, const BundleSummaryPtr& bundle) {
             connect(card, &RunCard::opened, this, [this, bundle] { emit openRequested(bundle->directory); });
             connect(card, &RunCard::compareRequested, this, [this, bundle] { emit compareRequested(bundle->directory); });
-            stripLayout->addWidget(card);
-            cards_ << card;
-            if (thumbnails_) {
-                card->setImage(thumbnails_->image(bundle->directory));
-                // A different moment of the video on each card of the row.
-                const double position = 0.25 + 0.2 * static_cast<double>(stripLayout->count() - 1);
-                thumbnails_->request(bundle->directory, bundle->videoName, bundle->segments, position);
-            }
-        }
-        stripLayout->addStretch(1);
-        auto* section = new QWidget(home_);
-        auto* sectionLayout = new QVBoxLayout(section);
-        sectionLayout->setContentsMargins(0, 0, 0, 0);
-        sectionLayout->setSpacing(10);
-        sectionLayout->addWidget(heading);
-        auto* scroller = new QScrollArea(section);
-        scroller->setFrameShape(QFrame::NoFrame);
-        scroller->setWidget(strip);
-        scroller->setWidgetResizable(true);
-        scroller->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        scroller->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        scroller->setFixedHeight(strip->sizeHint().height() + 14);
-        // The row scrolls sideways rather than widening the window to fit every card.
-        scroller->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-        scroller->setMinimumWidth(1);
-        scroller->viewport()->setAutoFillBackground(false);
-        strip->setAutoFillBackground(false);
-        sectionLayout->addWidget(scroller);
-        rows_->addWidget(section);
+        });
     }
     // Keep the featured run if it is still listed; otherwise the first run that stalled, or
     // the first run.
@@ -575,6 +614,8 @@ void LibraryView::rebuildHome()
         if (banner_->bundle() && card->bundle()->directory == banner_->bundle()->directory)
             featured = card->bundle();
     }
+    if (!featured && !highlighted.isEmpty())
+        featured = highlighted.front();
     for (RunCard* card : std::as_const(cards_)) {
         if (!featured && card->bundle()->stallEpisodes > 0)
             featured = card->bundle();
@@ -607,10 +648,36 @@ void LibraryView::feature(const BundleSummaryPtr& bundle)
         }
     }
     banner_->setExperiment(experiment);
+    if (const Highlight* h = bundle ? highlightOf(bundle->directory) : nullptr) {
+        banner_->setHighlightText(
+            tr("Best picture of the four: VMAF %1, next %2%3")
+                .arg(h->vmaf, 0, 'f', 1)
+                .arg(h->bestOtherVmaf, 0, 'f', 1)
+                .arg(h->stalledTime > 0.0 ? QString() : tr(", no stalls")));
+    }
     if (bundle && thumbnails_)
         banner_->setImage(thumbnails_->image(bundle->directory));
     for (RunCard* card : std::as_const(cards_))
         card->setFeatured(bundle && card->bundle()->directory == bundle->directory);
+}
+
+void LibraryView::setHighlights(std::vector<Highlight> highlights)
+{
+    highlights_ = std::move(highlights);
+    rebuildHome();
+    // The clearest one is featured.
+    for (RunCard* card : std::as_const(cards_)) {
+        if (!highlights_.empty() && card->bundle()->directory == highlights_.front().directory) {
+            feature(card->bundle());
+            break;
+        }
+    }
+}
+
+const Highlight* LibraryView::highlightOf(const QString& directory) const
+{
+    const auto it = std::ranges::find(highlights_, directory, &Highlight::directory);
+    return it == highlights_.end() ? nullptr : &*it;
 }
 
 bool LibraryView::eventFilter(QObject* watched, QEvent* event)

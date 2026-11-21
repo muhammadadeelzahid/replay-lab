@@ -6,6 +6,7 @@
  */
 
 #include "abrviz/core/load/bundle_library.h"
+#include "abrviz/core/metrics/highlights.h"
 
 #include <QTreeWidget>
 
@@ -87,6 +88,27 @@ signals:
      */
     void compareRequested(const QString& directory);
 
+    /**
+     * @brief A highlight was selected: open its run next to the rival at the moment.
+     *
+     * @param directory The run's directory.
+     * @param rival The directory of the run to show next to it.
+     * @param time Simulation time of the run to start at.
+     */
+    void compareAtRequested(const QString& directory, const QString& rival, double time);
+
+public:
+    /**
+     * @brief Lists the experiments where the LLM looks better in a section above the videos.
+     *
+     * @param highlights Best first; empty removes the section.
+     * @param runs The runs, for each highlight's video title and rate.
+     */
+    void setHighlights(const std::vector<Highlight>& highlights, const QList<BundleSummaryPtr>& runs);
+
+    /// @return The number of highlights listed.
+    [[nodiscard]] int highlightCount() const;
+
 protected:
     /**
      * @brief Restyles the list when the palette changes (light/dark switch).
@@ -104,9 +126,11 @@ protected:
 
 private:
     /** @brief Item data roles. */
-    enum Role { KindRole = Qt::UserRole + 1, DirectoryRole };
+    enum Role { KindRole = Qt::UserRole + 1, DirectoryRole, RivalRole, TimeRole };
     /** @brief What an item is, stored under KindRole. */
-    enum Kind { Section, AllRuns, Run };
+    enum Kind { Section, AllRuns, Run, HighlightRun };
+
+    QTreeWidgetItem* highlights_ = nullptr;  ///< The highlights section; null if none.
 
     /**
      * @brief Appends a bold, non-selectable section heading.

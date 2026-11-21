@@ -43,6 +43,7 @@ add_library(abrviz_core STATIC
     src/playback/playback_clock.cpp
     src/playback/comparison_clock.cpp
     src/metrics/qoe_metrics.cpp
+    src/metrics/highlights.cpp
     src/logs/log_index.cpp
     src/logs/log_filter.cpp
     src/util/process_guard.cpp

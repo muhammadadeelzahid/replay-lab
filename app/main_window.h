@@ -7,6 +7,8 @@
 
 #include "abrviz/media/replay_source_factory.h"
 
+#include "abrviz/core/load/bundle_library.h"
+
 #include <QMainWindow>
 
 #include <memory>
@@ -106,6 +108,15 @@ public:
      * @param directory The bundle's directory.
      */
     void compareBundle(const QString& directory);
+
+    /**
+     * @brief Opens a run side by side with another one, lined up by video frame, at a moment.
+     *
+     * @param directory The run to open.
+     * @param rival The run of the same experiment to show next to it.
+     * @param time Simulation time of the open run to start at.
+     */
+    void compareAt(const QString& directory, const QString& rival, double time);
 
     /**
      * @brief Loads the bundle in a directory and makes it the open run when the load finishes.
@@ -314,6 +325,9 @@ signals:
      */
     void folderScanned(const QString& folder);
 
+    /// The scanned folder's highlights were found (possibly none) and shown on the home page.
+    void highlightsFound();
+
     /**
      * @brief A load finished; the session holds the new run, or no run if the load failed.
      *
@@ -411,6 +425,9 @@ private:
      * cancelled scan only updates the banner.
      */
     void scanFinished();
+
+    /// Starts finding the experiments where the LLM looks better, for the home page.
+    void startHighlights(const QList<BundleSummaryPtr>& bundles);
 
     /**
      * @brief Handles the end of a bundle load.

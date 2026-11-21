@@ -6,6 +6,7 @@
  */
 
 #include "abrviz/core/load/bundle_library.h"
+#include "abrviz/core/metrics/highlights.h"
 
 #include <QAbstractTableModel>
 #include <QWidget>
@@ -243,6 +244,15 @@ signals:
      */
     void compareRequested(const QString& directory);
 
+    /**
+     * @brief Compare was chosen for a highlight: open the run next to its rival at the moment.
+     *
+     * @param directory The run's folder.
+     * @param rival The folder of the run to show next to it.
+     * @param time Simulation time of the run to start at.
+     */
+    void compareAtRequested(const QString& directory, const QString& rival, double time);
+
 protected:
     /**
      * @brief Opens the selected run when Return or Enter is pressed in the table.
@@ -280,7 +290,26 @@ public:
      */
     void feature(const BundleSummaryPtr& bundle);
 
+    /**
+     * @brief Shows the experiments where the LLM looks better first: featured in the banner and
+     *        in a row above the videos.
+     *
+     * @param highlights Best first, from findHighlight().
+     */
+    void setHighlights(std::vector<Highlight> highlights);
+
+    /// @return The highlights shown, best first.
+    [[nodiscard]] const std::vector<Highlight>& highlights() const { return highlights_; }
+
 private:
+    /**
+     * @brief The highlight of a run.
+     *
+     * @param directory The run's folder.
+     * @return Its highlight, or null if it has none.
+     */
+    [[nodiscard]] const Highlight* highlightOf(const QString& directory) const;
+
     /// Rebuilds the rows of cards from bundles_ and picks the featured run.
     void rebuildHome();
 
@@ -321,6 +350,7 @@ private:
     QVBoxLayout* rows_;             ///< One row of cards per video.
     QList<RunCard*> cards_;         ///< Every card, in row order.
     QList<BundleSummaryPtr> bundles_;  ///< The runs listed.
+    std::vector<Highlight> highlights_;  ///< Where the LLM looks better, best first.
     ThumbnailCache* thumbnails_ = nullptr;  ///< Makes the stills; null until setThumbnailSource().
 };
 

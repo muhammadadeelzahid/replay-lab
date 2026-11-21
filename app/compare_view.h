@@ -11,6 +11,7 @@
 #include "abrviz/core/util/future_guard.h"
 
 #include <QFutureWatcher>
+#include <QElapsedTimer>
 #include <QWidget>
 
 #include <memory>
@@ -180,7 +181,20 @@ private:
         FutureGuard<LoadResult> load;            ///< the pending load
         QFutureWatcher<LoadResult>* watcher = nullptr;  ///< reports the load
         bool held = false;            ///< paused because it was ahead
+        bool lining = false;          ///< jumped to the master time, its frame not shown yet
+        QElapsedTimer liningClock;    ///< since the jump
     };
+
+    /// Covers each other pane while it loads, or after a jump until its frame is right.
+    void updateCovers();
+
+    /**
+     * @brief How far a pane's frame is from the frame it should show at the master time.
+     *
+     * @param index A pane other than the first.
+     * @return Media seconds; 0 if unknown.
+     */
+    [[nodiscard]] double frameOffset(int index) const;
 
     /// Finds the open run's experiment and rebuilds the panes.
     void mainRunChanged();
