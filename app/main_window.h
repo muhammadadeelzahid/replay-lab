@@ -111,6 +111,17 @@ public:
     void compareBundle(const QString& directory);
 
     /**
+     * @brief Watches the replay full screen: the window full screen, the sidebar, inspector and
+     *        network path hidden; or ends it, putting them back as they were.
+     *
+     * @param on True to start watching.
+     */
+    void setWatching(bool on);
+
+    /// @return True while watching full screen.
+    [[nodiscard]] bool isWatching() const;
+
+    /**
      * @brief Opens a run side by side with another one, lined up by video frame, at a moment.
      *
      * @param directory The run to open.

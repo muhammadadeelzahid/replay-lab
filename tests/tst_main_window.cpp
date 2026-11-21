@@ -125,7 +125,7 @@ private slots:
                               QStringLiteral("Show Network Path"), QStringLiteral("All Runs"), QStringLiteral("Replay"),
                               QStringLiteral("Analysis"), QStringLiteral("Logs"),
                               QStringLiteral("Report"), QStringLiteral("Show Video Overlay"),
-                              QStringLiteral("Enter Full Screen")}));
+                              QStringLiteral("Watch Full Screen"), QStringLiteral("Enter Full Screen")}));
         QCOMPARE(menus[2]->text(), QStringLiteral("Playback"));
         QCOMPARE(menuTexts(menus[2]->menu()),
                  (QStringList{QStringLiteral("Play"), QStringLiteral("Back 5 Seconds"),
@@ -354,6 +354,36 @@ private slots:
         QCOMPARE(changed.first().at(1).value<TimeCursor::Source>(), TimeCursor::Source::Timeline);
         const double perPixel = window.session()->endTime() / timeline->width();
         QVERIFY(std::abs(cursor->time() - target) <= perPixel);
+    }
+
+    void watchingFullScreenHidesThePanesAndPutsThemBack()
+    {
+        MainWindow window;
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QVERIFY(open(window, bbb()));
+        window.showPage(MainWindow::Page::Replay);
+        auto* sidebar = window.findChild<SourceList*>();
+        QVERIFY(sidebar->isVisible());
+        QVERIFY(window.moment()->isVisible());
+
+        window.setWatching(true);
+        QVERIFY(window.isWatching());
+        QTRY_VERIFY(window.isFullScreen());
+        QVERIFY(!sidebar->isVisible());
+        QVERIFY(!window.moment()->isVisible());
+        QVERIFY(window.transport()->isVisible());  // the controls stay
+        // Changing page while watching does not bring the inspector back.
+        window.showPage(MainWindow::Page::Analysis);
+        QVERIFY(!window.moment()->isVisible());
+
+        // Esc leaves it, and everything is as before.
+        window.showPage(MainWindow::Page::Replay);
+        QTest::keyClick(&window, Qt::Key_Escape);
+        QVERIFY(!window.isWatching());
+        QTRY_VERIFY(!window.isFullScreen());
+        QVERIFY(sidebar->isVisible());
+        QVERIFY(window.moment()->isVisible());
     }
 
     void scrubberSeeksAndShowsStalls()

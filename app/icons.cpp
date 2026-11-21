@@ -98,6 +98,10 @@ QString glyphBody(Glyph glyph)
             <path d="M4.5 15.5v2.6a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2.6"/>)");
     case Glyph::Chevron:
         return QStringLiteral(R"(<path d="M9.5 6l6 6-6 6"/>)");
+    case Glyph::Expand:  // arrows out to two corners
+        return QStringLiteral(R"(<path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/>)");
+    case Glyph::Collapse:  // arrows in from two corners
+        return QStringLiteral(R"(<path d="M20 10h-6V4M4 14h6v6M14 10l6.5-6.5M10 14l-6.5 6.5"/>)");
     case Glyph::Search:
         return QStringLiteral(R"(<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/>)");
     case Glyph::Overlay:

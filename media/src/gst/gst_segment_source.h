@@ -368,6 +368,9 @@ private:
     quint64 generation_ = 0;              ///< counts pipelines built; GUI thread only
     bool wantPlay_ = false;               ///< play requested before the preroll
     std::optional<double> pendingSeek_;   ///< seek requested before the preroll
+    std::optional<double> queuedSeek_;    ///< seek waiting for the previous seek's frame
+    QElapsedTimer seekClock_;             ///< since the last seek was sent
+    static constexpr qint64 kSeekPatienceMs = 500;  ///< longest a seek waits for the previous one
 
     GstElement* appsink_ = nullptr;  ///< owned by the pipeline
     gst::PipelineGuard pipeline_;    ///< stops the streaming threads, then unrefs

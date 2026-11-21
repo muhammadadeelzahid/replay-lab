@@ -43,6 +43,8 @@ enum class Glyph {
     Laptop,
     Download,
     Chevron,
+    Expand,
+    Collapse,
 };
 
 /**

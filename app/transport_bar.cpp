@@ -95,7 +95,9 @@ TransportBar::TransportBar(Session* session, ReplayPlayer* player, QWidget* scru
     // time played and the time left, as in Apple's players.
     auto* controls = new QHBoxLayout();
     controls->setSpacing(6);
-    controls->addSpacing(state_->width());
+    QToolButton* watch = actions.watch ? button(actions.watch, 18) : nullptr;
+    // Balances the state (and the full-screen button) on the right, so the buttons are centred.
+    controls->addSpacing(state_->width() + (watch ? watch->sizeHint().width() + controls->spacing() : 0));
     controls->addStretch(1);
     controls->addWidget(button(actions.previousSegment, 16));
     controls->addWidget(button(actions.stepBack, 18));
@@ -106,6 +108,8 @@ TransportBar::TransportBar(Session* session, ReplayPlayer* player, QWidget* scru
     controls->addWidget(button(actions.nextSegment, 16));
     controls->addStretch(1);
     controls->addWidget(state_);
+    if (watch)
+        controls->addWidget(watch);
 
     auto* bar = new QHBoxLayout();
     bar->setSpacing(10);

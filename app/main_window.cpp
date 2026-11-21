@@ -35,6 +35,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QWindowStateChangeEvent>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
@@ -268,6 +269,10 @@ struct MainWindow::Impl {
     QAction* renderAction = nullptr;           ///< Renders the video for the pre-rendered engine.
     QAction* overlayAction = nullptr;          ///< Checkable; shows the video overlay.
     QAction* fullScreenAction = nullptr;       ///< Toggles full screen.
+    QAction* watchAction = nullptr;            ///< Checkable; full screen with the video alone.
+    QAction* leaveWatchAction = nullptr;       ///< Esc, while watching: leaves it.
+    bool watching = false;                     ///< The sidebar, inspector and path are hidden for watching.
+    bool wasFullScreen = false;                ///< The window was full screen before watching.
     QAction* sidebarAction = nullptr;          ///< Checkable; shows the sidebar pane.
     QAction* inspectorAction = nullptr;        ///< Checkable; shows the inspector pane.
     QAction* networkAction = nullptr;          ///< Checkable; shows the network path over the replay.
@@ -638,7 +643,7 @@ void MainWindow::createPages()
     d_->scrubber = new Scrubber(d_->session, this);
     d_->transport = new TransportBar(d_->session, d_->player, d_->scrubber,
                                      {d_->previousSegmentAction, d_->stepBackAction, d_->playAction,
-                                      d_->stepForwardAction, d_->nextSegmentAction},
+                                      d_->stepForwardAction, d_->nextSegmentAction, d_->watchAction},
                                      this);
 
     d_->notice = new QLabel(this);
@@ -747,6 +752,16 @@ void MainWindow::createActions()
     connect(d_->fullScreenAction, &QAction::triggered, this, [this] {
         setWindowState(windowState() ^ Qt::WindowFullScreen);
     });
+    // Watching: the window full screen with only the video, its controls and the views.
+    d_->watchAction = make(tr("Watch Full Screen"), QKeySequence(Qt::SHIFT | Qt::CTRL | Qt::Key_F));
+    d_->watchAction->setCheckable(true);
+    d_->watchAction->setToolTip(tr("Full screen, without the sidebar and the inspector (⇧⌘F, Esc to leave)"));
+    connect(d_->watchAction, &QAction::toggled, this, &MainWindow::setWatching);
+    d_->leaveWatchAction = new QAction(this);
+    d_->leaveWatchAction->setShortcut(QKeySequence(Qt::Key_Escape));
+    d_->leaveWatchAction->setEnabled(false);
+    addAction(d_->leaveWatchAction);
+    connect(d_->leaveWatchAction, &QAction::triggered, this, [this] { d_->watchAction->setChecked(false); });
     d_->settingsAction = make(tr("Settings..."), QKeySequence::Preferences);
     d_->settingsAction->setMenuRole(QAction::PreferencesRole);
     connect(d_->settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
@@ -803,6 +818,7 @@ void MainWindow::createMenus()
     viewMenu->addSeparator();
     viewMenu->addAction(d_->overlayAction);
     viewMenu->addSeparator();
+    viewMenu->addAction(d_->watchAction);
     viewMenu->addAction(d_->fullScreenAction);
 
     auto* playbackMenu = menuBar()->addMenu(tr("Playback"));
@@ -927,7 +943,7 @@ void MainWindow::updateTitle()
 void MainWindow::updatePanes()
 {
     const bool run = d_->session->run() != nullptr;
-    d_->inspectorPane->setVisible(run && d_->inspectorAction->isChecked() && currentPage() != Page::Library);
+    d_->inspectorPane->setVisible(run && !d_->watching && d_->inspectorAction->isChecked() && currentPage() != Page::Library);
     d_->transport->setVisible(run);
 }
 
@@ -949,6 +965,7 @@ void MainWindow::applyStyle()
         else if (action->objectName() == QLatin1String("networkButton"))
             action->setIcon(glyphIcon(Glyph::Satellite, text));
     }
+    d_->watchAction->setIcon(glyphIcon(d_->watching ? Glyph::Collapse : Glyph::Expand, text));
     d_->playAction->setIcon(glyphIcon(d_->player->isRunning() ? Glyph::Pause : Glyph::Play, text));
     if (auto* icon = findChild<QLabel*>(QStringLiteral("networkIcon")))
         icon->setPixmap(tileIcon(Glyph::Satellite, accentColor(pal)).pixmap(40, 40));
@@ -971,9 +988,45 @@ void MainWindow::applyStyle()
     )").arg(line, grouped, noticeBg, sidebar.name()));
 }
 
+void MainWindow::setWatching(bool on)
+{
+    if (on == d_->watching)
+        return;
+    d_->watching = on;
+    d_->leaveWatchAction->setEnabled(on);
+    // The panes are hidden, not switched off: their menu items and saved settings stay as they
+    // were, and come back when watching ends.
+    d_->sidebarPane->setVisible(!on && d_->sidebarAction->isChecked());
+    d_->networkPath->setVisible(!on && d_->networkAction->isChecked());
+    updatePanes();
+    if (on) {
+        d_->wasFullScreen = isFullScreen();
+        if (!d_->wasFullScreen)
+            setWindowState(windowState() | Qt::WindowFullScreen);
+    } else if (!d_->wasFullScreen && isFullScreen()) {
+        setWindowState(windowState() & ~Qt::WindowFullScreen);
+    }
+    {
+        const QSignalBlocker block(d_->watchAction);
+        d_->watchAction->setChecked(on);
+    }
+    applyStyle();
+}
+
+bool MainWindow::isWatching() const
+{
+    return d_->watching;
+}
+
 void MainWindow::changeEvent(QEvent* event)
 {
     QMainWindow::changeEvent(event);
+    // Leaving full screen some other way (the green button, ⌃⌘F) ends watching too.
+    if (event->type() == QEvent::WindowStateChange && d_ && d_->watching && !isFullScreen()
+        && (static_cast<QWindowStateChangeEvent*>(event)->oldState() & Qt::WindowFullScreen)) {
+        d_->wasFullScreen = true;  // already out of it: do not toggle it again
+        setWatching(false);
+    }
     // Light and dark mode switches: redraw the icons in the new text colour.
     // Setting a style sheet changes the palette too, so the restyle must not re-enter itself.
     static bool restyling = false;

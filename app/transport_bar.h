@@ -41,6 +41,7 @@ public:
         QAction* play = nullptr;             ///< Toggles play and pause.
         QAction* stepForward = nullptr;      ///< Steps the replay forward.
         QAction* nextSegment = nullptr;      ///< Moves to the next segment.
+        QAction* watch = nullptr;            ///< Full screen with the video alone; optional.
     };
 
     /**

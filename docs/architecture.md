@@ -323,10 +323,16 @@ new one.
 ### GStreamer engine (`GstSegmentSource`)
 
 The pipeline is `splitmuxsrc ! h264parse config-interval=-1 ! decodebin3 ! videoconvert !
-videoscale ! appsink`. Each segment is its own MP4, with its own SPS/PPS, and renditions
-differ: `h264parse` writes the headers before every keyframe, so a seek into another rendition
-does not decode its frames with the previous one's headers. libav's decoder is also told not to
-output frames it could not decode completely (`output-corrupt=false`).
+videoscale ! appsink`. Each segment is its own MP4, and each rendition has its own SPS/PPS
+(`codec_data` in the caps). After some seeks, `splitmuxsrc` (GStreamer 1.28) sends a part the
+caps of the part before it, and a 240p segment is decoded with a 1080p one's headers: grey,
+smeared frames. So the engine reads each rendition's caps from one of its files when it builds
+the pipeline, and a probe on `h264parse`'s sink pad drops `splitmuxsrc`'s caps and sends the
+caps of the part each keyframe belongs to (found from its stream time). `h264parse` then writes
+those headers before every keyframe. Seeks are sent one at a time: a seek made while the
+previous one's frame is pending waits for it. libav's decoder is also told not to output frames
+it knows are incomplete (`output-corrupt=false`). `tst_gst_segment_source` checks a second seek
+into a 240p segment; `ABRVIZ_ROUNDS=12` runs a longer scrubbing test against a fresh engine.
 
 ```
 splitmuxsrc ! decodebin3 ! videoconvert ! videoscale

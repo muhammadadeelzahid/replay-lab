@@ -1,8 +1,14 @@
 #include "synthetic_run.h"
+#include "test_paths.h"
+
+#include "abrviz/core/load/bundle_reader.h"
 
 #include "gst/gst_segment_source.h"
 
+#include <QDir>
 #include <QElapsedTimer>
+#include <QImage>
+#include <QRandomGenerator>
 #include <QSignalSpy>
 #include <QTest>
 #include <QVideoFrame>
@@ -49,6 +55,56 @@ private:
         if (!waitForState(*source, State::Paused))
             return nullptr;
         return source;
+    }
+
+    /// The frame on screen, small and grey, for comparing pictures.
+    static QImage thumb(const QVideoSink& sink)
+    {
+        return sink.videoFrame().toImage().convertToFormat(QImage::Format_Grayscale8).scaled(96, 54);
+    }
+
+    /// Mean absolute difference of two thumbnails, 0 to 255.
+    static double difference(const QImage& a, const QImage& b)
+    {
+        double sum = 0.0;
+        for (int y = 0; y < a.height(); ++y)
+            for (int x = 0; x < a.width(); ++x)
+                sum += std::abs(qGray(a.pixel(x, y)) - qGray(b.pixel(x, y)));
+        return sum / (a.width() * a.height());
+    }
+
+    /// Spread of the grey levels of a thumbnail: near 0 for a flat grey (broken) frame.
+    static double spread(const QImage& image)
+    {
+        double sum = 0.0;
+        double squares = 0.0;
+        const int n = image.width() * image.height();
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const double v = qGray(image.pixel(x, y));
+                sum += v;
+                squares += v * v;
+            }
+        }
+        const double mean = sum / n;
+        return std::sqrt(std::max(0.0, squares / n - mean * mean));
+    }
+
+    /// Waits until the source has shown a frame and no new one for `quietMs`.
+    static void settle(const GstSegmentSource& source, int quietMs = 400)
+    {
+        qint64 last = source.framesShown();
+        QElapsedTimer quiet;
+        quiet.start();
+        QElapsedTimer total;
+        total.start();
+        while (quiet.elapsed() < quietMs && total.elapsed() < kTimeoutMs) {
+            QTest::qWait(20);
+            if (source.framesShown() != last) {
+                last = source.framesShown();
+                quiet.restart();
+            }
+        }
     }
 
 private slots:
@@ -181,6 +237,112 @@ private slots:
         QVERIFY(waitForState(*source, State::Playing, 2500));  // after the remaining 1.5 s
         QVERIFY(source->position() >= 7.0 - 1e-6);
         QVERIFY(waitForState(*source, State::Ended, 5000));
+    }
+
+    void secondSeekInA240pSegmentDecodes()
+    {
+        // Before the fix this failed every time: the second seek into the 240p segment (media
+        // 10 to 12 s, between 1080p and 720p ones) decoded it with another rendition's headers.
+        if (!test::haveComparisonBundles())
+            QSKIP("viewer_bundles_phasef/ is not present");
+        const auto run = loadBundleSync(QDir(test::comparisonBundlesPath())
+                                            .filePath(QStringLiteral("pexels_34797065_llm_9Mbps_run_4"))).run;
+        QVERIFY(run);
+        QVideoSink sink;
+        GstSegmentSource source;
+        source.setVideoSink(&sink);
+        source.setRun(run);
+        QVERIFY(waitForState(source, State::Paused));
+        QVideoSink freshSink;
+        GstSegmentSource fresh;
+        fresh.setVideoSink(&freshSink);
+        fresh.setRun(run);
+        QVERIFY(waitForState(fresh, State::Paused));
+        source.seek(11.5);
+        settle(source);
+        source.seek(11.99);
+        settle(source);
+        fresh.seek(11.99);
+        settle(fresh);
+        QVERIFY2(spread(thumb(sink)) > 15.0, "a flat grey frame");
+        const double d = difference(thumb(sink), thumb(freshSink));
+        QVERIFY2(d < 12.0, qPrintable(QString::number(d)));
+    }
+
+    void framesAfterScrubbingMatchAFreshSeek()
+    {
+        // splitmuxsrc can give a segment the headers of the one before it after a seek; the
+        // engine replaces them (see headerProbe()). Play, pause and drag the bar as a user does,
+        // and compare the frame left on screen with the same moment in a fresh engine.
+        // The run where broken frames were seen: Pexels 34797065 at 9 Mbps, LLM (ABRVIZ_RUN
+        // picks another).
+        if (!test::haveComparisonBundles())
+            QSKIP("viewer_bundles_phasef/ is not present");
+        const QString name = qEnvironmentVariableIsSet("ABRVIZ_RUN") ? qEnvironmentVariable("ABRVIZ_RUN")
+                                                                     : QStringLiteral("pexels_34797065_llm_9Mbps_run_4");
+        const auto run = loadBundleSync(QDir(test::comparisonBundlesPath()).filePath(name)).run;
+        QVERIFY(run);
+        QVideoSink sink;
+        GstSegmentSource source;
+        source.setVideoSink(&sink);
+        source.setRun(run);
+        QVERIFY(waitForState(source, State::Paused));
+        const double length = PlaybackClock(*run).replayDuration();
+
+        QRandomGenerator random(7);
+        int broken = 0;
+        QStringList report;
+        // Slow (about 4 s a round), so only on request: ABRVIZ_ROUNDS=12 showed 5 broken
+        // frames before the fix. secondSeekInA240pSegmentDecodes() is the quick check.
+        const int rounds = qEnvironmentVariableIntValue("ABRVIZ_ROUNDS");
+        if (rounds <= 0)
+            QSKIP("set ABRVIZ_ROUNDS to run the scrubbing stress test");
+        for (int round = 0; round < rounds; ++round) {
+            // What a user does: play a little, pause, drag the bar, maybe seek while playing.
+            QStringList steps{QStringLiteral("P")};
+            source.play();
+            const int played = 300 + static_cast<int>(random.bounded(700));
+            QTest::qWait(played);
+            steps << QStringLiteral("w%1").arg(played);
+            if (round % 3 == 0) {
+                const double click = random.generateDouble() * length;
+                source.seek(click);  // a click while playing
+                const int wait = 200 + static_cast<int>(random.bounded(500));
+                QTest::qWait(wait);
+                steps << QStringLiteral("s%1").arg(click, 0, 'f', 3) << QStringLiteral("w%1").arg(wait);
+            }
+            source.pause();
+            steps << QStringLiteral("X");
+            double at = random.generateDouble() * length;
+            for (int step = 0; step < 12; ++step) {  // a drag: seeks 20 ms apart
+                at = std::clamp(at + (random.generateDouble() - 0.4) * 1.5, 0.0, length - 0.1);
+                source.seek(at);
+                QTest::qWait(20);
+                steps << QStringLiteral("q%1").arg(at, 0, 'f', 3);
+            }
+            settle(source);
+            const QImage seen = thumb(sink);
+
+            // The same moment in a fresh engine, with one seek.
+            QVideoSink freshSink;
+            GstSegmentSource fresh;
+            fresh.setVideoSink(&freshSink);
+            fresh.setRun(run);
+            QVERIFY(waitForState(fresh, State::Paused));
+            fresh.seek(at);
+            settle(fresh);
+            const double d = difference(seen, thumb(freshSink));
+            // Both a real picture (the sea, not a flat grey) and the same one.
+            QVERIFY2(spread(seen) > 15.0 && spread(thumb(freshSink)) > 15.0,
+                     qPrintable(QStringLiteral("flat frame at %1 s").arg(at)));
+            report << QStringLiteral("%1 s (media %3): %2").arg(at, 0, 'f', 2).arg(d, 0, 'f', 1).arg(source.frameMediaTime(), 0, 'f', 2);
+            if (d > 12.0) {
+                ++broken;
+                qInfo("round %d broken after: %s", round, qPrintable(steps.join(u',')));
+            }
+        }
+        qInfo("%s", qPrintable(report.join(QStringLiteral(", "))));
+        QCOMPARE(broken, 0);
     }
 
     void deletingDuringPlaybackIsClean()

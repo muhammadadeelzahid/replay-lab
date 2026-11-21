@@ -169,6 +169,7 @@ On Linux the executable is `build/release/app/replaylab`.
 | ⌘[ / ⌘] | previous / next segment |
 | ⌘1 … ⌘5 | All Runs, Replay, Analysis, Logs, Report |
 | ⌃⌘S / ⌥⌘I | sidebar / inspector |
+| ⇧⌘F, Esc | watch full screen (video and controls only) / leave |
 | ⌘O / ⇧⌘O | open a folder / a run |
 | ⌘R | render the video |
 | ⌘, | settings |

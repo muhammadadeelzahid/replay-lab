@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 
 namespace abrviz {
 
@@ -55,6 +56,130 @@ void dropCorruptFrames(GstBin*, GstBin*, GstElement* element, gpointer)
 {
     if (g_object_class_find_property(G_OBJECT_GET_CLASS(element), "output-corrupt"))
         g_object_set(element, "output-corrupt", FALSE, nullptr);
+}
+
+/**
+ * @brief The stream caps (with the H.264 headers, `codec_data`) of an MP4 file's video.
+ *
+ * @param path The file.
+ * @return The caps, owned by the caller; null if they cannot be read.
+ */
+GstCaps* videoCapsOf(const QByteArray& path)
+{
+    GError* rawError = nullptr;
+    GstElement* raw = gst_parse_launch(
+        QByteArray("filesrc name=file ! qtdemux ! fakesink name=sink sync=false").constData(), &rawError);
+    const gst::GErrorPtr error(rawError);
+    if (!raw)
+        return nullptr;
+    gst_object_ref_sink(raw);
+    const gst::GstPtr<GstElement> pipeline(raw);
+    const gst::GstPtr<GstElement> file(gst_bin_get_by_name(GST_BIN(raw), "file"));
+    g_object_set(file.get(), "location", path.constData(), nullptr);
+    GstCaps* caps = nullptr;
+    if (gst_element_set_state(raw, GST_STATE_PAUSED) != GST_STATE_CHANGE_FAILURE
+        && gst_element_get_state(raw, nullptr, nullptr, 2 * GST_SECOND) == GST_STATE_CHANGE_SUCCESS) {
+        const gst::GstPtr<GstElement> sink(gst_bin_get_by_name(GST_BIN(raw), "sink"));
+        GstPad* pad = gst_element_get_static_pad(sink.get(), "sink");
+        caps = gst_pad_get_current_caps(pad);
+        gst_object_unref(pad);
+    }
+    gst_element_set_state(raw, GST_STATE_NULL);
+    return caps;
+}
+
+/**
+ * @brief The right stream caps for every part of the media, for headerProbe().
+ *
+ * splitmuxsrc (GStreamer 1.28) can send a part the caps of the part before it after a seek: a
+ * 240p segment is then decoded with a 1080p segment's headers, and its frames come out grey and
+ * smeared. Each rendition has its own headers, so the probe replaces splitmuxsrc's caps by the
+ * caps of the part each buffer comes from, found by its stream time.
+ */
+struct HeaderFix {
+    std::vector<double> starts;          ///< media time at which each part starts
+    std::vector<GstCaps*> caps;          ///< the caps of each part (owned, may repeat)
+    GstSegment segment{};                ///< the last segment event, for stream times
+    GstCaps* sent = nullptr;             ///< the caps sent downstream last (not owned)
+    bool sending = false;                ///< the probe is sending its own caps event
+
+    HeaderFix() { gst_segment_init(&segment, GST_FORMAT_TIME); }
+    ~HeaderFix()
+    {
+        for (GstCaps* c : caps)
+            gst_caps_unref(c);
+    }
+    HeaderFix(const HeaderFix&) = delete;
+    HeaderFix& operator=(const HeaderFix&) = delete;
+};
+
+/// Destroy notifier of headerProbe(): deletes its HeaderFix.
+void deleteHeaderFix(gpointer data)
+{
+    delete static_cast<HeaderFix*>(data);
+}
+
+/**
+ * @brief Probe on h264parse's sink pad: drops splitmuxsrc's caps and sends the caps of the part
+ *        each buffer belongs to, before the first buffer of a part.
+ *
+ * Runs on the streaming thread; only this probe touches its HeaderFix.
+ */
+GstPadProbeReturn headerProbe(GstPad* pad, GstPadProbeInfo* info, gpointer data)
+{
+    auto* fix = static_cast<HeaderFix*>(data);
+    if (info->type & GST_PAD_PROBE_TYPE_BUFFER) {
+        GstBuffer* buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+        // Caps change only at a keyframe: every part starts with one, and a decoder that is
+        // reconfigured in the middle of a group of pictures loses its reference frames.
+        if (!GST_BUFFER_PTS_IS_VALID(buffer) || GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT))
+            return GST_PAD_PROBE_OK;
+        // After an accurate seek the keyframe comes before the segment's start, where the plain
+        // conversion gives no stream time; the full one does.
+        guint64 stream = 0;
+        if (gst_segment_to_stream_time_full(&fix->segment, GST_FORMAT_TIME, GST_BUFFER_PTS(buffer), &stream) != 1)
+            return GST_PAD_PROBE_OK;
+        // The part that contains this time; a little slack for timestamp rounding.
+        const double media = static_cast<double>(stream) / GST_SECOND + 0.001;
+        const auto it = std::ranges::upper_bound(fix->starts, media);
+        const std::size_t part = it == fix->starts.begin() ? 0 : static_cast<std::size_t>(it - fix->starts.begin() - 1);
+        GstCaps* caps = fix->caps[part];
+        if (caps != fix->sent) {
+            fix->sending = true;
+            gst_pad_send_event(pad, gst_event_new_caps(caps));
+            fix->sending = false;
+            fix->sent = caps;
+        }
+        return GST_PAD_PROBE_OK;
+    }
+    GstEvent* event = GST_PAD_PROBE_INFO_EVENT(info);
+    switch (GST_EVENT_TYPE(event)) {
+    case GST_EVENT_CAPS:
+        // Ours pass; splitmuxsrc's are replaced by the buffer branch above. The first caps
+        // must pass for the pad to be negotiated before any buffer arrives.
+        if (fix->sending)
+            return GST_PAD_PROBE_OK;
+        if (!fix->sent) {
+            GstCaps* caps = nullptr;
+            gst_event_parse_caps(event, &caps);
+            for (GstCaps* known : fix->caps) {
+                if (gst_caps_is_equal(known, caps)) {
+                    fix->sent = known;
+                    break;
+                }
+            }
+            return GST_PAD_PROBE_OK;
+        }
+        return GST_PAD_PROBE_DROP;
+    case GST_EVENT_SEGMENT: {
+        const GstSegment* segment = nullptr;
+        gst_event_parse_segment(event, &segment);
+        gst_segment_copy_into(segment, &fix->segment);
+        return GST_PAD_PROBE_OK;
+    }
+    default:
+        return GST_PAD_PROBE_OK;
+    }
 }
 
 /**
@@ -195,6 +320,7 @@ void GstSegmentSource::setRun(std::shared_ptr<const RunData> run)
     prerolled_ = false;
     wantPlay_ = false;
     pendingSeek_.reset();
+    queuedSeek_.reset();
     setState(State::Idle);
     setPosition(0.0);
     if (!run_ || spans_.empty())
@@ -216,6 +342,9 @@ bool GstSegmentSource::buildPipeline(QString* error)
         return false;
 
     auto locations = std::make_unique<Locations>();
+    auto headers = std::make_unique<HeaderFix>();
+    // One caps per rendition: every segment of a rung has the same headers.
+    std::map<int, GstCaps*> capsByRung;
     for (const PlaybackClock::Piece& piece : clock_.pieces()) {
         if (piece.kind != PlaybackClock::Piece::Kind::Segment)
             continue;
@@ -225,7 +354,18 @@ bool GstSegmentSource::buildPipeline(QString* error)
             return false;
         }
         locations->files.push_back(QFile::encodeName(it->mediaPath));
+        auto known = capsByRung.find(it->playedRung);
+        if (known == capsByRung.end())
+            known = capsByRung.emplace(it->playedRung, videoCapsOf(locations->files.back())).first;
+        headers->starts.push_back(piece.mediaStart);
+        headers->caps.push_back(known->second ? gst_caps_ref(known->second) : nullptr);
     }
+    for (auto& [rung, caps] : capsByRung) {
+        if (caps)
+            gst_caps_unref(caps);
+    }
+    // Without the caps of every part, splitmuxsrc's own caps are used (and the probe is not).
+    const bool fixHeaders = std::ranges::none_of(headers->caps, [](GstCaps* c) { return c == nullptr; });
     if (locations->files.empty()) {
         *error = tr("The run has no played segments.");
         return false;
@@ -238,7 +378,7 @@ bool GstSegmentSource::buildPipeline(QString* error)
     // decode its frames with the previous one's headers (grey, smeared pictures).
     GError* rawError = nullptr;
     GstElement* raw = gst_parse_launch(
-        "splitmuxsrc name=source ! h264parse config-interval=-1 "
+        "splitmuxsrc name=source ! h264parse name=parse config-interval=-1 "
         "! video/x-h264,stream-format=byte-stream,alignment=au ! decodebin3 ! videoconvert n-threads=4 "
         "! videoscale n-threads=4 add-borders=true "
         "! video/x-raw,format=NV12,width=1920,height=1080,pixel-aspect-ratio=1/1 "
@@ -252,6 +392,14 @@ bool GstSegmentSource::buildPipeline(QString* error)
     gst_object_ref_sink(raw);
     pipeline_.reset(raw);
     g_signal_connect(raw, "deep-element-added", G_CALLBACK(dropCorruptFrames), nullptr);
+    if (fixHeaders && !headers->caps.empty()) {
+        const gst::GstPtr<GstElement> parse(gst_bin_get_by_name(GST_BIN(raw), "parse"));
+        GstPad* pad = gst_element_get_static_pad(parse.get(), "sink");
+        gst_pad_add_probe(pad,
+                          static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM),
+                          headerProbe, headers.release(), deleteHeaderFix);
+        gst_object_unref(pad);
+    }
 
     const gst::GstPtr<GstElement> source(gst_bin_get_by_name(GST_BIN(raw), "source"));
     const gst::GstPtr<GstElement> sink(gst_bin_get_by_name(GST_BIN(raw), "sink"));
@@ -410,6 +558,23 @@ void GstSegmentSource::seek(double replayTime)
     if (state() == State::Ended)
         setState(State::Paused);
 
+    // One seek at a time. A flushing seek sent while the previous one is still being served
+    // (a drag on the playback bar sends one every few milliseconds) can leave the decoder
+    // starting part way through a group of pictures, without its keyframe: the frame shown is
+    // then broken (grey, smeared). The newest target waits for the previous seek's frame and
+    // is sent then; the position reports it at once. A seek that never shows a frame does not
+    // hold the next one for long.
+    if (awaitingSeekFrame_ && seekClock_.elapsed() < kSeekPatienceMs) {
+        queuedSeek_ = replayTime;
+        anchor_ = replayTime;
+        if (isRunning())
+            playClock_.start();
+        setPosition(replayTime);
+        positionClock_.start();
+        return;
+    }
+    queuedSeek_.reset();
+
     const Span& span = spans_[spanAt(replayTime)];
     // Seeking into a stall shows the last frame before it: a moment before its media time. A
     // seek to the end shows the last frame (a seek to the media's end would show nothing).
@@ -421,6 +586,7 @@ void GstSegmentSource::seek(double replayTime)
                      GST_SEEK_TYPE_SET, toClock(media),
                      GST_SEEK_TYPE_SET, toClock(clock_.mediaDuration()));
     awaitingSeekFrame_ = true;
+    seekClock_.start();
     seekMedia_ = media;
     frameMedia_ = media;
     anchor_ = replayTime;
@@ -471,6 +637,11 @@ void GstSegmentSource::presentFirstAfterSeek()
             continue;  // from before the seek
         awaitingSeekFrame_ = false;
         show(std::move(*next));
+        // A seek that waited for this one goes now, from where the play clock has got to.
+        if (queuedSeek_) {
+            queuedSeek_.reset();
+            seek(isRunning() ? replayNow() : anchor_);
+        }
         return;
     }
 }
