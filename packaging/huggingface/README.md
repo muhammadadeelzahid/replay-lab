@@ -45,7 +45,7 @@ Each run is a bundle: what the player requested and showed, segment by segment, 
 the network samples it measured, the simulation and policy logs, and the encoded video
 segments it played, with the VMAF, SSIM and PSNR of every segment at every quality. The
 bundles can be replayed and compared side by side in
-[ReplayLab](https://github.com/muhammadadeelzahid/sat-replay).
+[ReplayLab](https://github.com/muhammadadeelzahid/replay-lab).
 
 `runs.csv` has one row per run with its QoE: average bitrate, switches, startup delay,
 stalls, stalled time and the VMAF of what was on screen.

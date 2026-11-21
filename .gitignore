@@ -24,3 +24,4 @@ compile_commands.json
 /dist/
 /ReplayLab.app
 /hf_dataset/
+/replaylab-runs/
