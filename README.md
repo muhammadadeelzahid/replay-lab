@@ -136,8 +136,11 @@ three and drafts a release).
 
 ## Run
 
+The release build also puts `ReplayLab.app` in the repository root, a link to the latest
+build: double-click it in Finder, or
+
 ```sh
-open "build/release/app/ReplayLab.app"
+open ReplayLab.app
 ```
 
 From the command line:

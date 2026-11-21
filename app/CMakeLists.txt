@@ -108,6 +108,16 @@ if(APPLE)
     add_custom_command(TARGET abrviz POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E touch "$<TARGET_BUNDLE_DIR:abrviz>"
         VERBATIM)
+    # The release build also puts ReplayLab.app in the repository root, as a link to the
+    # bundle, so the app can be opened from there with a double-click (and is always the
+    # latest build). Not from the debug or sanitizer builds.
+    if(CMAKE_BINARY_DIR STREQUAL "${PROJECT_SOURCE_DIR}/build/release")
+        add_custom_command(TARGET abrviz POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E rm -f "${PROJECT_SOURCE_DIR}/ReplayLab.app"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink "build/release/app/ReplayLab.app"
+                    "${PROJECT_SOURCE_DIR}/ReplayLab.app"
+            VERBATIM)
+    endif()
 else()
     set_target_properties(abrviz PROPERTIES OUTPUT_NAME "replaylab")
 endif()

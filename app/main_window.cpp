@@ -50,6 +50,7 @@
 #include <QMessageBox>
 #include <QProcessEnvironment>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QSplitter>
 #include <QGuiApplication>
 #include <QEvent>
@@ -210,7 +211,7 @@ QFrame* divider(Qt::Orientation orientation, QWidget* parent)
  */
 /**
  * @brief The ffmpeg to render with: the one shipped next to the executable in the release
- *        packages if there is one, otherwise the one on the PATH.
+ *        packages if there is one, otherwise the one on the PATH, otherwise Homebrew's.
  *
  * @return The path of the bundled `ffmpeg` (`ffmpeg.exe` on Windows), or "ffmpeg".
  */
@@ -222,7 +223,15 @@ QString bundledFfmpeg()
     const QString name = QStringLiteral("ffmpeg");
 #endif
     const QString bundled = QDir(QCoreApplication::applicationDirPath()).filePath(name);
-    return QFileInfo(bundled).isExecutable() ? bundled : QStringLiteral("ffmpeg");
+    if (QFileInfo(bundled).isExecutable())
+        return bundled;
+    if (const QString onPath = QStandardPaths::findExecutable(name); !onPath.isEmpty())
+        return onPath;
+    // An app opened from Finder or the Dock does not get the shell's PATH, so Homebrew's
+    // folders are not on it.
+    const QString installed = QStandardPaths::findExecutable(
+        name, {QStringLiteral("/opt/homebrew/bin"), QStringLiteral("/usr/local/bin")});
+    return installed.isEmpty() ? name : installed;
 }
 
 } // namespace
