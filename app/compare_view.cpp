@@ -20,6 +20,7 @@
 #include <QVBoxLayout>
 
 #include <cmath>
+#include <tuple>
 
 namespace abrviz {
 

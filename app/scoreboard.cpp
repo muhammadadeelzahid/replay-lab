@@ -13,6 +13,7 @@
 
 #include <cmath>
 #include <functional>
+#include <tuple>
 
 namespace abrviz {
 
