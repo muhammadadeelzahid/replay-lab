@@ -400,9 +400,12 @@ private slots:
         QVERIFY(window.report()->verdict().contains(QStringLiteral("No run")));
         QVERIFY(open(window, test::dataPath(QStringLiteral("bbb_36"))));
         const QStringList rows = window.report()->rows();
-        QVERIFY(rows.contains(QStringLiteral("What the viewer saw |  |  | ")));
+        QVERIFY(rows.contains(QStringLiteral("What the user saw |  |  | ")));
+        // Rebuffering episodes in the user's section; the player's pauses checked against
+        // summary.json, which counts those.
+        QVERIFY(std::ranges::any_of(rows, [](const QString& row) { return row.startsWith(QStringLiteral("  Stalls |")); }));
         const auto stalls = std::ranges::find_if(rows, [](const QString& row) {
-            return row.startsWith(QStringLiteral("  Stalls |"));
+            return row.startsWith(QStringLiteral("  Player pauses |"));
         });
         QVERIFY(stalls != rows.end());
         QVERIFY2(stalls->endsWith(QStringLiteral("| agrees")), qPrintable(*stalls));

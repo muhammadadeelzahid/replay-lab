@@ -88,7 +88,7 @@ QVariant LibraryModel::data(const QModelIndex& index, int role) const
         font.setBold(true);
         return font;
     }
-    if (role == Qt::TextAlignmentRole && index.column() != Video)
+    if (role == Qt::TextAlignmentRole && index.column() != Video && index.column() != Algorithm)
         return QVariant::fromValue(Qt::AlignRight | Qt::AlignVCenter);
     if (role != Qt::DisplayRole)
         return {};
@@ -96,13 +96,15 @@ QVariant LibraryModel::data(const QModelIndex& index, int role) const
     switch (index.column()) {
     case Video:
         return bundle->videoTitle.isEmpty() ? bundle->videoName : bundle->videoTitle;
+    case Algorithm:
+        return algorithmDisplayName(bundle->algorithm);
     case LinkRate:
         return bundle->linkRate ? format::bitrate(static_cast<double>(*bundle->linkRate))
                                 : tr("uncongested");
     case Segments:
         return bundle->segments;
     case Stalls:
-        return bundle->stalls;
+        return bundle->stallEpisodes;
     case CutOff:
         return bundle->cutOff ? tr("cut off") : tr("complete");
     case LogAgreement:
@@ -118,6 +120,7 @@ QVariant LibraryModel::headerData(int section, Qt::Orientation orientation, int 
         return {};
     switch (section) {
     case Video: return tr("Video");
+    case Algorithm: return tr("ABR");
     case LinkRate: return tr("Link");
     case Segments: return tr("Segments");
     case Stalls: return tr("Stalls");
@@ -510,7 +513,14 @@ void LibraryView::rebuildHome()
     }
     for (const QString& title : std::as_const(titles)) {
         auto runs = byTitle.value(title);
-        std::ranges::stable_sort(runs, {}, [](const BundleSummaryPtr& b) { return b->linkRate.value_or(0); });
+        // By rate and run, the algorithms of each in the usual order (LLM first).
+        std::ranges::stable_sort(runs, [](const BundleSummaryPtr& a, const BundleSummaryPtr& b) {
+            if (a->linkRate.value_or(0) != b->linkRate.value_or(0))
+                return a->linkRate.value_or(0) < b->linkRate.value_or(0);
+            if (a->runNumber != b->runNumber)
+                return a->runNumber < b->runNumber;
+            return algorithmRank(a->algorithm) < algorithmRank(b->algorithm);
+        });
         auto* heading = new QLabel(title, home_);
         QFont font = format::scaled(heading->font(), 1.25);
         font.setBold(true);
@@ -561,7 +571,7 @@ void LibraryView::rebuildHome()
             featured = card->bundle();
     }
     for (RunCard* card : std::as_const(cards_)) {
-        if (!featured && card->bundle()->stalls > 0)
+        if (!featured && card->bundle()->stallEpisodes > 0)
             featured = card->bundle();
     }
     if (!featured && !cards_.isEmpty())
@@ -647,9 +657,9 @@ void LibraryView::showDetails(const BundleSummaryPtr& bundle)
     html += row(tr("Link"), bundle->linkRate ? format::bitrate(static_cast<double>(*bundle->linkRate))
                                              : tr("uncongested"));
     html += row(tr("Segments"), QString::number(bundle->segments));
-    html += row(tr("Stalls"), bundle->stalls == 0
+    html += row(tr("Stalls"), bundle->stallEpisodes == 0
                                   ? tr("none")
-                                  : QStringLiteral("<b style='color:#d0453a'>%1</b>").arg(bundle->stalls));
+                                  : QStringLiteral("<b style='color:#d0453a'>%1</b>").arg(bundle->stallEpisodes));
     html += row(tr("Playback"), bundle->cutOff ? tr("cut off by the end of the simulation")
                                                : tr("played to the end"));
     html += row(tr("Log match"), QStringLiteral("%1 %").arg(bundle->logDecisionAgreement * 100.0, 0, 'f', 0));

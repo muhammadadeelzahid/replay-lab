@@ -8,6 +8,7 @@
 #include <QJsonObject>
 
 #include <algorithm>
+#include <cmath>
 
 namespace abrviz {
 
@@ -162,6 +163,21 @@ void VideoSegmentTable::set(int segment, int rung, qint64 bytes)
         bytes_[*index] = bytes;
 }
 
+void VideoSegmentTable::setQuality(int segment, int rung, const SegmentQuality& quality)
+{
+    if (const auto index = slot(segment, rung)) {
+        if (quality_.empty())
+            quality_.resize(bytes_.size());
+        quality_[*index] = quality;
+    }
+}
+
+const SegmentQuality* VideoSegmentTable::quality(int segment, int rung) const
+{
+    const auto index = slot(segment, rung);
+    return index && *index < quality_.size() ? &quality_[*index] : nullptr;
+}
+
 std::optional<qint64> VideoSegmentTable::bytes(int segment, int rung) const
 {
     const auto index = slot(segment, rung);
@@ -202,6 +218,23 @@ Parsed<RunInfo> parseRunJson(QByteArrayView json, const QString& bundleDirectory
     info.policyName = policy.value(QLatin1StringView("name")).toString();
     info.policyClient = policy.value(QLatin1StringView("client")).toString();
     info.policyModel = policy.value(QLatin1StringView("model")).toString();
+    info.policyFamily = policy.value(QLatin1StringView("family")).toString();
+    const QJsonObject params = policy.value(QLatin1StringView("params")).toObject();
+    for (auto it = params.begin(); it != params.end(); ++it) {
+        const QJsonValue v = it.value();
+        QString text;
+        if (v.isString())
+            text = v.toString();
+        else if (v.isDouble())
+            text = QString::number(v.toDouble(), 'g', 6);
+        else if (v.isBool())
+            text = v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+        else if (!v.isNull() && !v.isUndefined())
+            text = QString::fromUtf8(QJsonDocument(v.isArray() ? QJsonDocument(v.toArray())
+                                                               : QJsonDocument(v.toObject()))
+                                         .toJson(QJsonDocument::Compact));
+        info.policyParams.append({it.key(), text});
+    }
 
     const QJsonObject network = root->value(QLatin1StringView("network")).toObject();
     info.numUes = network.value(QLatin1StringView("num_ues")).toInt(1);
@@ -410,9 +443,19 @@ Parsed<VideoSegmentTable> parseVideoSegments(QByteArrayView jsonl, int segmentCo
     forEachRecord(jsonl, file, result, [&](const QJsonObject& o, qsizetype line) {
         if (!requireKeys(o, {"segment", "rung", "bytes"}, file, line, result.errors))
             return;
-        result.value.set(o.value(QLatin1StringView("segment")).toInt(),
-                         o.value(QLatin1StringView("rung")).toInt(),
-                         toInt64(o.value(QLatin1StringView("bytes"))));
+        const int segment = o.value(QLatin1StringView("segment")).toInt();
+        const int rung = o.value(QLatin1StringView("rung")).toInt();
+        result.value.set(segment, rung, toInt64(o.value(QLatin1StringView("bytes"))));
+        // Picture quality against the source, when the bundle has it.
+        const auto number = [&o](const char* key) -> std::optional<double> {
+            const QJsonValue v = o.value(QLatin1StringView(key));
+            if (!v.isDouble() || !std::isfinite(v.toDouble()))
+                return std::nullopt;
+            return v.toDouble();
+        };
+        SegmentQuality quality{number("vmaf"), number("vmaf_min"), number("ssim"), number("psnr")};
+        if (quality.vmaf || quality.vmafMin || quality.ssim || quality.psnr)
+            result.value.setQuality(segment, rung, quality);
     });
     for (int s = 0; s < segmentCount; ++s) {
         for (int r = 0; r < rungCount; ++r) {

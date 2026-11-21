@@ -29,7 +29,13 @@ struct BundleSummary {
     QString videoTitle;  ///< `title` of `video.json`
     std::optional<qint64> linkRate;  ///< feeder link rate in bits per second; empty if uncongested
     int segments = 0;  ///< `segment_count` of `video.json`
-    int stalls = 0;    ///< number of stalls in `player_events.jsonl`
+    int stalls = 0;    ///< number of stalls in `player_events.jsonl`, as the player logged them
+    int stallEpisodes = 0;  ///< rebuffering episodes (see `stallEpisodes()`)
+    double stalledTime = 0.0;  ///< seconds stalled in total
+    QString algorithm;  ///< `policy.name` of `run.json`, e.g. `llm` or `robustmpc`
+    int seed = 0;       ///< `network.rng_run` of `run.json`
+    /** @brief `N` of a `_run_N` suffix of the run id or folder; -1 without one. */
+    int runNumber = -1;
     /// Estimated from the play time in `player_events.jsonl`: true if the simulation stopped
     /// more than one segment before the end. A cut-off in the last segment is not detected
     /// here; the full load finds the exact segment and frame.
@@ -41,6 +47,40 @@ struct BundleSummary {
 
 /** @brief Shared, immutable bundle summary. */
 using BundleSummaryPtr = QSharedPointer<const BundleSummary>;
+
+/**
+ * @brief Runs of one video at one feeder rate and run number, streamed by different ABR
+ *        algorithms: what the viewer compares side by side.
+ */
+struct Experiment {
+    QString key;         ///< video, rate and run number, e.g. `chef_cooking/18000000/3`
+    QString videoName;   ///< the video's folder name
+    QString videoTitle;  ///< the video's title
+    std::optional<qint64> linkRate;  ///< feeder link rate in bits per second
+    int runNumber = -1;  ///< the shared `run_N`; -1 without one
+    /** @brief The runs: LLM, RobustMPC, MPC, BOLA first, then others by name. */
+    QList<BundleSummaryPtr> runs;
+};
+
+/**
+ * @brief Groups bundles into experiments by video, feeder rate and run number.
+ *
+ * Bundles with errors are left out. A bundle with no other algorithm of its video, rate and run
+ * number forms an experiment of one run.
+ *
+ * @param bundles The bundles of a library.
+ * @return The experiments, by video in the order the videos first appear, then by rate.
+ */
+[[nodiscard]] QList<Experiment> groupExperiments(const QList<BundleSummaryPtr>& bundles);
+
+/**
+ * @brief Orders ABR algorithm keys for display: `llm`, `robustmpc`, `mpc`, `bola`, then others
+ *        alphabetically.
+ *
+ * @param key An algorithm key.
+ * @return A sort rank; lower comes first.
+ */
+[[nodiscard]] int algorithmRank(const QString& key);
 
 /**
  * @brief Finds the bundles in a folder.
@@ -75,7 +115,8 @@ using BundleSummaryPtr = QSharedPointer<const BundleSummary>;
                                                            QThreadPool* pool = nullptr);
 
 /**
- * @brief Sorts bundles by video name, then by link rate.
+ * @brief Sorts bundles by video name, link rate and run number, then by algorithm (LLM,
+ *        RobustMPC, MPC, BOLA, others), so that the runs of an experiment are together.
  *
  * A bundle without a link rate sorts as rate 0.
  *

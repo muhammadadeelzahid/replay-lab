@@ -113,6 +113,7 @@ QoeReport computeQoe(const RunData& run)
 
     r.startupDelay = run.playbackStart - run.streamStart;
     r.stallCount = static_cast<int>(run.stalls.size());
+    r.stallEpisodes = static_cast<int>(stallEpisodes(run.stalls).size());
     for (const Stall& stall : run.stalls)
         r.rebufferTime += stall.duration();
 
@@ -134,6 +135,28 @@ QoeReport computeQoe(const RunData& run)
             delays.push_back(*d.decisionDelay);
     }
     r.averageDecisionDelay = mean(delays);
+    r.hasPolicyDetails = !delays.empty() || r.guardOverrides > 0;
+
+    // Picture quality of what was shown.
+    double weighted = 0.0;
+    double shownSeconds = 0.0;
+    double below = 0.0;
+    for (const Segment& segment : run.segments) {
+        // Only what reached the screen: not segments skipped or after a cut-off.
+        if (!segment.played || segment.index > r.lastSegmentShown || !segment.quality.vmaf)
+            continue;
+        const double seconds = segment.mediaDuration > 0.0 ? segment.mediaDuration : 1.0;
+        weighted += *segment.quality.vmaf * seconds;
+        shownSeconds += seconds;
+        if (*segment.quality.vmaf < 60.0)
+            below += seconds;
+        const double low = segment.quality.vmafMin.value_or(*segment.quality.vmaf);
+        r.minVmafShown = r.minVmafShown ? std::min(*r.minVmafShown, low) : low;
+    }
+    if (shownSeconds > 0.0) {
+        r.meanVmafShown = weighted / shownSeconds;
+        r.timeBelowVmaf60 = below;
+    }
     if (!delays.empty())
         r.maxDecisionDelay = *std::ranges::max_element(delays);
 
@@ -144,7 +167,8 @@ QoeReport computeQoe(const RunData& run)
          toDouble(s.switchCount)},
         {QStringLiteral("average throughput"), r.averageThroughput, s.averageThroughput},
         {QStringLiteral("startup delay"), r.startupDelay, s.startupDelay},
-        {QStringLiteral("stalls"), static_cast<double>(r.stallCount), toDouble(s.stallCount)},
+        // summary.json counts the player's pauses, not the rebuffering episodes.
+        {QStringLiteral("player pauses"), static_cast<double>(r.stallCount), toDouble(s.stallCount)},
         {QStringLiteral("rebuffer time"), r.rebufferTime, s.rebufferTime},
     };
     return r;

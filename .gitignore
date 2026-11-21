@@ -1,6 +1,8 @@
 # Simulation data: 714 MB, distributed as a GitHub Release asset, not in git
 /viewer_bundles/
 /viewer_bundles.tar
+/viewer_bundles_phasef/
+/viewer_bundles_phasef.tar
 
 # Build output
 /build/

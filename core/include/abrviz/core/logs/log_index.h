@@ -106,7 +106,7 @@ public:
      * empty index plus an error.
      *
      * @param simLogPath Path of `sim.log`.
-     * @param policyLogPath Path of `policy.log`.
+     * @param policyLogPath Path of `policy.log`; empty if the run has none.
      * @param nodeId ns-3 node of the bundle's UE.
      * @return The index; never null.
      */
@@ -284,7 +284,7 @@ using LogIndexPtr = std::shared_ptr<const LogIndex>;
  * cancelled build yields no result.
  *
  * @param simLogPath Path of `sim.log`.
- * @param policyLogPath Path of `policy.log`.
+ * @param policyLogPath Path of `policy.log`; empty if the run has none.
  * @param nodeId ns-3 node of the bundle's UE.
  * @param pool Thread pool to run on; null for the global pool.
  * @return The future of the index.

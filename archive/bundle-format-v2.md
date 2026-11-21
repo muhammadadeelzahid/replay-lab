@@ -1,7 +1,7 @@
 # Bundle format, version 2: experiments
 
 Version 1 bundles hold one streaming session of one ABR policy (see
-[simulation-data.md](simulation-data.md)). Version 2 holds an **experiment**: the same video
+[simulation-data.md](../docs/simulation-data.md)). Version 2 holds an **experiment**: the same video
 streamed over the same network by several ABR algorithms, so that the viewer can play them
 alone or side by side. The viewer reads both versions; a version 1 bundle is shown as an
 experiment with one run.

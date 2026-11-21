@@ -96,6 +96,33 @@ public:
     [[nodiscard]] std::optional<qint64> bytes(int segment, int rung) const;
 
     /**
+     * @brief Stores the picture quality of one segment at one rung.
+     *
+     * Indices outside the table are ignored.
+     *
+     * @param segment Zero-based segment index.
+     * @param rung Zero-based rung index.
+     * @param quality The scores read from the file.
+     */
+    void setQuality(int segment, int rung, const SegmentQuality& quality);
+
+    /**
+     * @brief Returns the picture quality of one segment at one rung.
+     *
+     * @param segment Zero-based segment index.
+     * @param rung Zero-based rung index.
+     * @return The scores, or null if the indices are out of range or the file had none.
+     */
+    [[nodiscard]] const SegmentQuality* quality(int segment, int rung) const;
+
+    /**
+     * @brief Returns every entry's quality, row-major by segment.
+     *
+     * @return The scores; empty if the file had none.
+     */
+    [[nodiscard]] const std::vector<SegmentQuality>& qualities() const { return quality_; }
+
+    /**
      * @brief Returns the number of segments the table was created with.
      *
      * @return The segment count.
@@ -122,6 +149,7 @@ private:
     int segmentCount_ = 0;  ///< Number of segments (rows).
     int rungCount_ = 0;     ///< Number of rungs (columns).
     std::vector<std::optional<qint64>> bytes_;  ///< Row-major: segment * rungCount_ + rung.
+    std::vector<SegmentQuality> quality_;  ///< Same layout as `bytes_`; empty if none was read.
 };
 
 /**

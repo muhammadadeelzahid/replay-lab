@@ -8,7 +8,7 @@ the logs, and a QoE report.
 Names: repository `sat-replay`; application SatReplay (`SatReplay.app` on macOS, `satreplay` elsewhere); CMake target `abrviz`, C++ namespace `abrviz`.
 
 Class and thread diagrams are in [diagrams.md](diagrams.md); the build order is in
-[development-plan.md](development-plan.md).
+[development-plan.md](../archive/development-plan.md).
 
 
 ## Goals

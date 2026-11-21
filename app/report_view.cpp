@@ -134,21 +134,45 @@ void ReportView::refresh()
     const QoeReport& r = report_;
     const PlaybackClock& clock = session_->clock();
 
-    addSection(tr("What the viewer saw"));
+    addSection(tr("What the user saw"));
     QString shown = QString::number(r.segmentsShown) + tr(" of %1").arg(r.segmentsTotal);
     if (r.cutOff)
         shown += tr(" (cut off in segment %1 after %2 frames)").arg(r.lastSegmentShown).arg(r.lastSegmentFrames);
     addRow(tr("Segments shown"), shown);
     addRow(tr("Average bitrate played"), format::bitrate(r.averagePlayedBitrate));
     addRow(tr("Quality switches played"), QString::number(r.playedSwitches));
+    addRow(tr("Stalls"), r.stallEpisodes == r.stallCount
+                             ? QString::number(r.stallEpisodes)
+                             : tr("%1 (%2 player pauses)").arg(r.stallEpisodes).arg(r.stallCount));
+    addRow(tr("Stalled time"), format::seconds(r.rebufferTime, 2));
+    addRow(tr("Startup delay"), format::seconds(r.startupDelay, 3));
     addRow(tr("Replay length"), format::seconds(clock.replayDuration()));
     addRow(tr("Simulated playback"), format::seconds(clock.simEnd() - clock.simStart()));
 
+    if (r.meanVmafShown) {
+        addSection(tr("Picture quality"));
+        addRow(tr("VMAF, average shown"), QString::number(*r.meanVmafShown, 'f', 1));
+        if (r.minVmafShown)
+            addRow(tr("VMAF, lowest frame"), QString::number(*r.minVmafShown, 'f', 1));
+        if (r.timeBelowVmaf60)
+            addRow(tr("Time below VMAF 60"), format::seconds(*r.timeBelowVmaf60, 1));
+    }
+
     addSection(tr("Policy"));
+    QString policy = algorithmDisplayName(run->info.policyName);
+    if (!run->info.policyFamily.isEmpty())
+        policy += tr(" (%1)").arg(run->info.policyFamily);
+    addRow(tr("Algorithm"), policy);
+    if (!run->info.policyModel.isEmpty())
+        addRow(tr("Model"), run->info.policyModel);
+    for (const auto& [name, value] : run->info.policyParams)
+        addRow(name, value);
     addRow(tr("Decisions"), QString::number(r.decisions));
-    addRow(tr("Guard overrides"), QString::number(r.guardOverrides));
-    addRow(tr("Decision delay, average"), format::seconds(r.averageDecisionDelay, 4));
-    addRow(tr("Decision delay, maximum"), format::seconds(r.maxDecisionDelay, 4));
+    if (r.hasPolicyDetails) {
+        addRow(tr("Guard overrides"), QString::number(r.guardOverrides));
+        addRow(tr("Decision delay, average"), format::seconds(r.averageDecisionDelay, 4));
+        addRow(tr("Decision delay, maximum"), format::seconds(r.maxDecisionDelay, 4));
+    }
 
     addSection(tr("Checked against summary.json"));
     int disagreeing = 0;

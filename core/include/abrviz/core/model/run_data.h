@@ -5,6 +5,8 @@
  * @brief The data model of one loaded run: video, segments, decisions, logs and warnings.
  */
 
+#include <QList>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 
@@ -20,6 +22,17 @@ inline constexpr int kFramesPerSegment = 100;
 /**
  * @brief One rung of the bitrate ladder.
  */
+/**
+ * @brief Picture quality of one segment at one rung, measured against the source video
+ *        (`videos/<name>/segments.jsonl`). Every field may be missing.
+ */
+struct SegmentQuality {
+    std::optional<double> vmaf;     ///< mean VMAF over the segment's frames (`vmaf`)
+    std::optional<double> vmafMin;  ///< lowest frame VMAF (`vmaf_min`)
+    std::optional<double> ssim;     ///< mean SSIM (`ssim`)
+    std::optional<double> psnr;     ///< mean PSNR in dB (`psnr`)
+};
+
 struct Rung {
     /** @brief Zero-based rung index (`rung` in `video.json`); equals the position in the ladder. */
     int index = 0;
@@ -74,6 +87,9 @@ struct RunInfo {
     QString policyName;         ///< ABR policy name (`policy.name`)
     QString policyClient;       ///< policy client (`policy.client`)
     QString policyModel;        ///< model behind the policy (`policy.model`)
+    QString policyFamily;       ///< `learned`, `mpc`, `buffer`, `rate` or `hybrid` (`policy.family`)
+    /** @brief Algorithm parameters (`policy.params`), as name and value text, in file order. */
+    QList<QPair<QString, QString>> policyParams;
     QString notes;              ///< free text from the exporter (`notes`)
     QString simLogSource;  ///< origin of `sim.log` as stated by the exporter (`sim_log_source`)
     QString videoName;  ///< video streamed by the UE (`ues[0].video`), the folder under `videos/`
@@ -103,6 +119,7 @@ struct Segment {
     /** @brief Media file size at `playedRung`, from `videos/<name>/segments.jsonl`; 0 if absent. */
     qint64 bytes = 0;
     QString mediaPath;         ///< absolute path of the media file at `playedRung`
+    SegmentQuality quality;    ///< picture quality at `playedRung`; empty if not in the bundle
     double mediaDuration = 0.0;  ///< seconds, from the MP4 header (nominal if unreadable)
     bool played = true;          ///< false if the simulated player never showed it
 };
@@ -179,6 +196,43 @@ struct Stall {
      */
     [[nodiscard]] double duration() const { return end - start; }
 };
+
+/**
+ * @brief One rebuffering episode: stalls with less than `kEpisodeGap` of playback between
+ *        them, merged.
+ *
+ * The ns-3 player resumes as soon as one frame has arrived, so while a slow download trickles
+ * in it logs a pause, one frame, a pause, and so on. A user sees one long freeze.
+ */
+struct StallEpisode {
+    double start = 0.0;        ///< simulation time the first stall began, in seconds
+    double end = 0.0;          ///< simulation time the last stall ended, in seconds
+    double stalledTime = 0.0;  ///< sum of the merged stalls' durations, in seconds
+    int pauses = 0;            ///< stalls merged into the episode
+    bool terminal = false;     ///< the last stall never ended
+};
+
+/// Stalls separated by less than this much playback, in seconds, form one episode.
+inline constexpr double kEpisodeGap = 1.0;
+
+/**
+ * @brief Merges stalls into rebuffering episodes.
+ *
+ * @param stalls Stalls in time order.
+ * @param gap Playback between two stalls, in seconds, below which they are merged.
+ * @return The episodes in time order; their stalled times add up to the stalls' durations.
+ */
+[[nodiscard]] std::vector<StallEpisode> stallEpisodes(const std::vector<Stall>& stalls,
+                                                      double gap = kEpisodeGap);
+
+/**
+ * @brief Returns the name of an ABR algorithm for display.
+ *
+ * @param key The algorithm's key (`policy.name`), e.g. `robustmpc`.
+ * @return "LLM", "RobustMPC", "MPC" or "BOLA" for the known keys; the key itself otherwise
+ *         ("ABR" if it is empty).
+ */
+[[nodiscard]] QString algorithmDisplayName(const QString& key);
 
 /**
  * @brief Contents of `summary.json` as written by the exporter.
@@ -262,8 +316,19 @@ struct RunData {
     std::vector<BufferPoint> buffer;      ///< expected in time order
     std::vector<SegmentPlayback> playback;  ///< expected in order of first frame time
     std::vector<Stall> stalls;      ///< stalls from `player_events.jsonl`, in time order
+    /** @brief Quality of every (segment, rung), row-major by segment; empty if not in the bundle. */
+    std::vector<SegmentQuality> ladderQuality;
     ExporterSummary summary;        ///< contents of `summary.json`
     std::vector<Warning> warnings;  ///< problems found while assembling the run
+
+    /**
+     * @brief Returns the picture quality of one segment at one rung.
+     *
+     * @param segment Zero-based segment index.
+     * @param rung Zero-based rung index.
+     * @return The quality, or null if the indices are out of range or the bundle has none.
+     */
+    [[nodiscard]] const SegmentQuality* qualityAt(int segment, int rung) const;
 
     /**
      * @brief Returns the segment on screen at a simulation time.

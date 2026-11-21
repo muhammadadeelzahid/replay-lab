@@ -1,9 +1,9 @@
 # Development plan
 
-The application described in [architecture.md](architecture.md) is built in the steps below.
+The application described in [architecture.md](../docs/architecture.md) is built in the steps below.
 Each step ends with something that runs and is tested, and is committed on its own.
 
-Scope: one bundle at a time, the 14 bundles in [simulation-data.md](simulation-data.md), two
+Scope: one bundle at a time, the 14 bundles in [simulation-data.md](../docs/simulation-data.md), two
 replay engines (GStreamer and pre-rendered). Comparing runs side by side is not planned.
 
 
@@ -40,27 +40,45 @@ full 680 MB of bundles is too large for a web page, so the web build ships a few
 
 ## Comparing ABR algorithms (ReplayLab)
 
-Play one ABR run on its own, or several side by side, on the same video and network. The runs
-come from the ns-3 side as experiments: one video at one feeder rate, streamed by several ABR
-algorithms. What the viewer needs is in [ns3-data-requirements.md](ns3-data-requirements.md)
-and the layout in [bundle-format-v2.md](bundle-format-v2.md); how the data is produced is
-left to the ns-3 side. The viewer re-implements no ABR algorithm and simulates nothing: it
-reads, aligns and shows what the bundles contain.
+Play one ABR run on its own, or several side by side, on the same video and network. The
+viewer re-implements no ABR algorithm and simulates nothing: it reads, aligns and shows what
+the bundles contain. What it asked of the ns-3 side is in
+[ns3-data-requirements.md](ns3-data-requirements.md).
 
-Until the first experiment arrives, steps 16 to 22 are built against a small hand-written test
-experiment in `tests/data/` that follows the format.
+**Data (received 2026-11-20):** `viewer_bundles_phasef.tar`, 7.9 GB, 60 version 1 bundles,
+one per run: 5 videos × 4 algorithms (`llm` abr-llm-v3, `robustmpc`, `mpc`, `bola`) × 3 feeder
+rates (9, 18, 36 Mbps). Runs with the same video, rate and `run_N` share a seed (202, 203,
+204) but are separate simulations (`conditions: independent`, stated in `run.json` notes).
+Every segment and rung has VMAF (mean and minimum), SSIM and PSNR. Non-LLM runs have no
+`policy.log` and no guard or inference-time fields. All 12 Big Buck Bunny runs stop at about
+151 s, around segment 42 to 45 of 59. Computed QoE agrees with `summary.json` in all 60.
 
 | Step | Work | Done when |
 | --- | --- | --- |
-| 15 | Data requirements and the version 2 format for the ns-3 side | both documents reviewed |
-| 16 | Read version 2 experiments as well as version 1 bundles (a version 1 bundle is an experiment with one run); algorithm-specific fields optional; VMAF, SSIM and PSNR from the ladder when present | the test experiment and all 14 version 1 bundles load |
-| 17 | Comparison clock: one master time mapped to each run, by session time or by media time; QoE per run, with the VMAF of what was shown when present | fast unit tests |
+| 15 | Data requirements for the ns-3 side; first delivery received and checked | done |
+| 16 | Read the new runs: `policy.log` and LLM-only fields optional; stalls less than 1 s of playback apart merged into rebuffering episodes; each run's own algorithm, family and parameters shown instead of "LLM ABR"; VMAF, SSIM and PSNR read from the ladder; runs grouped by video, rate and `run_N` into experiments; the new set as the default data | all 60 runs and the old 14 load without errors; `validate_bundle` passes them |
+| 17 | Comparison clock: one master time mapped to each run, by session time or by media time; QoE per run with the VMAF of what was shown | fast unit tests |
 | 18 | Replay page layouts: Single (as now), Side by side (2), Grid (3 or 4); one transport; alignment toggle (same moment, same frame) | panes stay within one frame of each other over 60 s |
 | 19 | Wipe view: two runs in one frame with a divider and a zoom loupe | works at 4K in light and dark |
-| 20 | Charts with every run overlaid; scoreboard of QoE per algorithm | numbers match each run's summary |
+| 20 | Charts with every run overlaid; scoreboard of QoE and VMAF per algorithm | numbers match each run's summary |
 | 21 | Library grouped by experiment, Play and Compare on every run, home page and welcome updated | selection and grouping work in both appearances |
 | 22 | Rename to ReplayLab, new icon, network text taken from the data, settings carried over | old settings carry over; Dock icon correct |
-| 23 | First experiments from the ns-3 side loaded; README with a comparison GIF and screenshots | the LLM run compared with RobustMPC, MPC and BOLA side by side |
+| 23 | README with a comparison GIF and screenshots | the LLM compared with RobustMPC, MPC and BOLA side by side |
+
+Answers from the ns-3 side (2026-11-20):
+
+- **Stall counts.** The ns-3 player resumes on a single frame (`src/dash/model/mpeg-player.cc`,
+  lines 139 to 147), so while a slow download trickles in, the log alternates pause, one frame,
+  pause. Each of the three cases is one rebuffering episode (RobustMPC, Big Buck Bunny
+  18 Mbps: 5.4 to 15.4 s, 7.65 s stalled; LLM, chef_cooking 9 Mbps: 12.1 to 23.5 s, 9.12 s;
+  BOLA, pexels_34797065 18 Mbps: 23.1 to 27.0 s, 2.80 s). The total stall time is real and is
+  the only number the paper uses. **Decision:** the viewer merges stalls separated by less
+  than 1 s of playback into one rebuffering episode (part of step 16), shows the episode count
+  as "stalls" and the per-frame count as "player pauses"; the bundles stay as they are.
+- **Big Buck Bunny.** The sessions end at 150 s with the satellite pass (no handover in the
+  scenario); the full video needs about 195 s at 3.3 s per segment. **Decision:** keep it
+  partial. The viewer already ends the replay where the simulation stopped, at the same point
+  for every algorithm, and new simulations would no longer match the paper.
 
 
 ## Testing

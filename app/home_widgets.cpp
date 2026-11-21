@@ -71,8 +71,8 @@ QString counted(int n, const QString& one, const QString& many)
  */
 QString outcome(const BundleSummary& bundle)
 {
-    if (bundle.stalls > 0)
-        return counted(bundle.stalls, QObject::tr("stall"), QObject::tr("stalls"));
+    if (bundle.stallEpisodes > 0)
+        return counted(bundle.stallEpisodes, QObject::tr("stall"), QObject::tr("stalls"));
     return bundle.cutOff ? QObject::tr("cut off") : QObject::tr("no stalls");
 }
 
@@ -415,17 +415,22 @@ void RunCard::paintEvent(QPaintEvent*)
     painter.setFont(title);
     painter.setPen(Qt::white);
     const QString rate = feederRate(*bundle_);
+    // The algorithm, large, when the run names one; otherwise the feeder rate.
+    const QString feeder = rate.isEmpty() ? tr("Uncongested") : tr("%1 feeder").arg(rate);
+    const bool named = !bundle_->algorithm.isEmpty();
     painter.drawText(QRectF(frame.left() + 12, frame.bottom() - 44, frame.width() - 24, 22),
-                     Qt::AlignLeft | Qt::AlignVCenter, rate.isEmpty() ? tr("Uncongested") : tr("%1 feeder").arg(rate));
+                     Qt::AlignLeft | Qt::AlignVCenter, named ? algorithmDisplayName(bundle_->algorithm) : feeder);
     QFont small = format::scaled(font(), 0.85);
     painter.setFont(small);
     painter.setPen(QColor(255, 255, 255, 190));
     painter.drawText(QRectF(frame.left() + 12, frame.bottom() - 24, frame.width() - 24, 16),
-                     Qt::AlignLeft | Qt::AlignVCenter, counted(bundle_->segments, tr("segment"), tr("segments")));
+                     Qt::AlignLeft | Qt::AlignVCenter,
+                     named ? tr("%1 · %2").arg(feeder, counted(bundle_->segments, tr("segment"), tr("segments")))
+                           : counted(bundle_->segments, tr("segment"), tr("segments")));
 
     // A badge for how playback went: red for stalls, orange for a cut-off, green otherwise.
     const QString badge = outcome(*bundle_);
-    const QColor badgeColor = bundle_->stalls > 0 ? QColor(0xff, 0x45, 0x3a)
+    const QColor badgeColor = bundle_->stallEpisodes > 0 ? QColor(0xff, 0x45, 0x3a)
                               : bundle_->cutOff   ? QColor(0xff, 0x9f, 0x0a)
                                                   : QColor(0x30, 0xd1, 0x58);
     const double badgeWidth = QFontMetricsF(small).horizontalAdvance(badge) + 16;
@@ -433,7 +438,7 @@ void RunCard::paintEvent(QPaintEvent*)
     painter.setPen(Qt::NoPen);
     painter.setBrush(badgeColor);
     painter.drawRoundedRect(badgeRect, 10, 10);
-    painter.setPen(bundle_->stalls > 0 || bundle_->cutOff ? Qt::white : QColor(0x0b, 0x2a, 0x12));
+    painter.setPen(bundle_->stallEpisodes > 0 || bundle_->cutOff ? Qt::white : QColor(0x0b, 0x2a, 0x12));
     painter.drawText(badgeRect, Qt::AlignCenter, badge);
 
     if (featured_ || hovered_) {
@@ -475,13 +480,13 @@ FeaturedBanner::FeaturedBanner(QWidget* parent)
     title_->setWordWrap(true);
     bannerText(meta_, 1.0, false, 220);
     meta_->setTextFormat(Qt::RichText);
-    auto* policy = new QLabel(tr("LLM ABR"), this);
-    policy->setStyleSheet(QStringLiteral("color: white; background: transparent; border: 1px solid rgba(255,255,255,170);"
+    policy_ = new QLabel(this);
+    policy_->setStyleSheet(QStringLiteral("color: white; background: transparent; border: 1px solid rgba(255,255,255,170);"
                                          " border-radius: 5px; padding: 1px 7px;"));
     auto* metaRow = new QHBoxLayout();
     metaRow->setSpacing(14);
     metaRow->addWidget(meta_);
-    metaRow->addWidget(policy);
+    metaRow->addWidget(policy_);
     metaRow->addStretch(1);
     bannerText(highlight_, 1.25, true, 255);
     bannerText(description_, 1.0, false, 205);
@@ -560,15 +565,22 @@ void FeaturedBanner::setBundle(BundleSummaryPtr bundle, const QString& satellite
     meta_->setText(QStringLiteral("%1 &nbsp;&nbsp;&nbsp; %2")
                        .arg(rate.isEmpty() ? tr("Uncongested feeder") : tr("%1 feeder").arg(rate),
                             counted(run.segments, tr("segment"), tr("segments"))));
-    if (run.stalls > 0)
-        highlight_->setText(run.stalls == 1 ? tr("Stalled once over the satellite")
-                                            : tr("Stalled %1 times over the satellite").arg(run.stalls));
+    const QString algorithm = algorithmDisplayName(run.algorithm);
+    policy_->setText(algorithm);
+    if (run.stallEpisodes > 0)
+        highlight_->setText(run.stallEpisodes == 1
+                                ? tr("Stalled once over the satellite, for %1 s").arg(run.stalledTime, 0, 'f', 1)
+                                : tr("Stalled %1 times over the satellite, %2 s in all")
+                                      .arg(run.stallEpisodes)
+                                      .arg(run.stalledTime, 0, 'f', 1));
     else if (run.cutOff)
         highlight_->setText(tr("The simulation stopped during playback"));
     else
         highlight_->setText(tr("Played without a stall"));
     description_->setText(tr("Streamed to one of the users of a LEO satellite 5G network, through an IAB "
-                             "relay. An LLM chose the quality of every segment as the buffer rose and fell."));
+                             "relay. %1 chose the quality of every segment as the buffer rose and fell.")
+                              .arg(run.algorithm.compare(QLatin1String("llm"), Qt::CaseInsensitive) == 0
+                                       ? tr("An LLM") : algorithm));
     path_->setDetails(rate.isEmpty() ? QString() : tr("%1 feeder").arg(rate), satellite, backhaul);
     update();
 }

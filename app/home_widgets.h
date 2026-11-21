@@ -253,7 +253,8 @@ private:
     BundleSummaryPtr bundle_;  ///< The run shown.
     QImage image_;             ///< Its still.
     QLabel* title_;            ///< The video's title.
-    QLabel* meta_;             ///< Feeder rate, segments and policy.
+    QLabel* meta_;             ///< Feeder rate and segments.
+    QLabel* policy_ = nullptr; ///< The run's ABR algorithm, outlined.
     QLabel* highlight_;        ///< How playback went.
     QLabel* description_;      ///< What happened in the run.
     QPushButton* play_;        ///< Opens the run.

@@ -22,6 +22,8 @@ ShiftResult applySegmentShift(const std::vector<SegmentRecord>& records, const V
         segment.doneTime = download.doneTime;
         segment.playedRung = rung;
         segment.bytes = sizes.bytes(k, rung).value_or(0);
+        if (const SegmentQuality* quality = sizes.quality(k, rung))
+            segment.quality = *quality;
         segment.mediaPath = video.segmentPath(k, rung);
         segment.mediaDuration = video.nominalSegmentDuration;
         result.segments.push_back(std::move(segment));

@@ -97,9 +97,12 @@ std::shared_ptr<const LogIndex> LogIndex::open(const QString& simLogPath,
     index->texts_[0].mapped = MappedFile::open(simLogPath, &error);
     if (!index->texts_[0].mapped)
         index->errors_.append(error);
-    index->texts_[1].mapped = MappedFile::open(policyLogPath, &error);
-    if (!index->texts_[1].mapped)
-        index->errors_.append(error);
+    // An empty path means the run has no policy.log (only learned policies write one).
+    if (!policyLogPath.isEmpty()) {
+        index->texts_[1].mapped = MappedFile::open(policyLogPath, &error);
+        if (!index->texts_[1].mapped)
+            index->errors_.append(error);
+    }
     index->build();
     return index;
 }

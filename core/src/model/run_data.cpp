@@ -47,6 +47,47 @@ const Rung* VideoInfo::rung(int index) const
     return &ladder[static_cast<std::size_t>(index)];
 }
 
+const SegmentQuality* RunData::qualityAt(int segment, int rung) const
+{
+    const int rungs = static_cast<int>(video.ladder.size());
+    if (segment < 0 || rung < 0 || rung >= rungs || rungs == 0)
+        return nullptr;
+    const auto index = static_cast<std::size_t>(segment) * static_cast<std::size_t>(rungs)
+        + static_cast<std::size_t>(rung);
+    return index < ladderQuality.size() ? &ladderQuality[index] : nullptr;
+}
+
+std::vector<StallEpisode> stallEpisodes(const std::vector<Stall>& stalls, double gap)
+{
+    std::vector<StallEpisode> episodes;
+    for (const Stall& stall : stalls) {
+        if (!episodes.empty() && stall.start - episodes.back().end < gap) {
+            StallEpisode& last = episodes.back();
+            last.end = std::max(last.end, stall.end);
+            last.stalledTime += stall.duration();
+            ++last.pauses;
+            last.terminal = last.terminal || stall.terminal;
+            continue;
+        }
+        episodes.push_back({stall.start, stall.end, stall.duration(), 1, stall.terminal});
+    }
+    return episodes;
+}
+
+QString algorithmDisplayName(const QString& key)
+{
+    const QString k = key.toLower();
+    if (k == QLatin1String("llm"))
+        return QStringLiteral("LLM");
+    if (k == QLatin1String("robustmpc"))
+        return QStringLiteral("RobustMPC");
+    if (k == QLatin1String("mpc"))
+        return QStringLiteral("MPC");
+    if (k == QLatin1String("bola"))
+        return QStringLiteral("BOLA");
+    return key.isEmpty() ? QStringLiteral("ABR") : key;
+}
+
 const SegmentPlayback* RunData::playbackAt(double simTime) const
 {
     const auto it = std::ranges::upper_bound(playback, simTime, {},

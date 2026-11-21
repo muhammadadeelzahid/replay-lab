@@ -1092,7 +1092,9 @@ void MainWindow::startLogIndex()
     const auto& run = d_->session->run();
     d_->logIndexRun = run;
     const QString directory = run->info.bundleDirectory;
-    auto future = buildLogIndex(simLogPath(directory), policyLogPath(directory), run->info.nodeId);
+    // Only learned policies have a policy.log; without one the index shows sim.log alone.
+    const QString policyLog = QFileInfo::exists(policyLogPath(directory)) ? policyLogPath(directory) : QString();
+    auto future = buildLogIndex(simLogPath(directory), policyLog, run->info.nodeId);
     d_->logIndex.reset(future);
     d_->logWatcher->setFuture(future);
 }

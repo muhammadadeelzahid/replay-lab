@@ -100,6 +100,30 @@ QTreeWidgetItem* SourceList::addSection(const QString& title)
     return item;
 }
 
+namespace {
+
+/**
+ * @brief Tells whether runs come from more than one ABR algorithm.
+ *
+ * @param runs The runs.
+ * @return True if at least two different `algorithm` keys appear.
+ */
+bool hasSeveralAlgorithms(const QList<BundleSummaryPtr>& runs)
+{
+    QString first;
+    for (const BundleSummaryPtr& run : runs) {
+        if (run->algorithm.isEmpty())
+            continue;
+        if (first.isEmpty())
+            first = run->algorithm;
+        else if (run->algorithm != first)
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
 void SourceList::setRuns(const QList<BundleSummaryPtr>& runs)
 {
     const QSignalBlocker block(this);
@@ -109,22 +133,27 @@ void SourceList::setRuns(const QList<BundleSummaryPtr>& runs)
     QTreeWidgetItem* section = nullptr;
     QString sectionTitle;
     for (const BundleSummaryPtr& run : runs) {
-        if (!section || run->videoTitle != sectionTitle) {
-            sectionTitle = run->videoTitle;
-            section = addSection(sectionTitle);
-        }
         const QString link = run->linkRate ? format::bitrate(static_cast<double>(*run->linkRate))
                                            : tr("Uncongested");
-        auto* item = new QTreeWidgetItem(section, {link});
+        // Runs of several algorithms: one heading per video and rate, one entry per algorithm.
+        // Runs of one algorithm only: one heading per video, one entry per rate.
+        const bool byAlgorithm = !run->algorithm.isEmpty() && hasSeveralAlgorithms(runs);
+        const QString title = byAlgorithm ? tr("%1 · %2").arg(run->videoTitle, link) : run->videoTitle;
+        if (!section || title != sectionTitle) {
+            sectionTitle = title;
+            section = addSection(sectionTitle);
+        }
+        auto* item = new QTreeWidgetItem(section, {byAlgorithm ? algorithmDisplayName(run->algorithm) : link});
         item->setData(0, KindRole, Run);
         item->setData(0, DirectoryRole, run->directory);
         item->setToolTip(0, run->runId);
         // A short note on the right, as Mail shows counts: stalls, or a cut-off.
         QString note;
-        if (run->stalls == 1)
+        // Rebuffering episodes, not the player's single-frame pauses.
+        if (run->stallEpisodes == 1)
             note = tr("1 stall");
-        else if (run->stalls > 1)
-            note = tr("%1 stalls").arg(run->stalls);
+        else if (run->stallEpisodes > 1)
+            note = tr("%1 stalls").arg(run->stallEpisodes);
         else if (run->cutOff)
             note = tr("cut off");
         item->setData(0, kNoteRole, note);

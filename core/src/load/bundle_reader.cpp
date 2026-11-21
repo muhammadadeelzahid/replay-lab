@@ -152,6 +152,10 @@ Parsed<ExporterSummary> readSummary(const QString& directory)
 
 Parsed<std::vector<PolicyDecision>> readPolicyLog(const QString& directory, int nodeId)
 {
+    // Only learned policies have a policy.log; a missing file is not an error (one that
+    // exists but cannot be read still is).
+    if (!QFileInfo::exists(policyLogPath(directory)))
+        return {};
     return readMapped<std::vector<PolicyDecision>>(
         directory, QStringLiteral("logs/policy.log"), [&](QByteArrayView text) {
             Parsed<std::vector<PolicyDecision>> result;
@@ -214,6 +218,7 @@ LoadResult assembleRunData(BundleParts parts)
     run->stalls = std::move(parts.events.value.stalls);
 
     auto shifted = applySegmentShift(parts.records.value, run->video, parts.video.sizes.value);
+    run->ladderQuality = parts.video.sizes.value.qualities();
     run->segments = std::move(shifted.segments);
     run->decisions = std::move(shifted.decisions);
 

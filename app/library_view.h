@@ -35,7 +35,7 @@ class LibraryModel final : public QAbstractTableModel {
 
 public:
     /** @brief The table's columns. */
-    enum Column { Video, LinkRate, Segments, Stalls, CutOff, LogAgreement, ColumnCount };
+    enum Column { Video, Algorithm, LinkRate, Segments, Stalls, CutOff, LogAgreement, ColumnCount };
 
     using QAbstractTableModel::QAbstractTableModel;
 

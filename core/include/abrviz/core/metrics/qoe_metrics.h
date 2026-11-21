@@ -54,7 +54,9 @@ struct QoeReport {
     int chosenSwitches = 0;  ///< changes of chosen bitrate between consecutive records
 
     double startupDelay = 0.0;       ///< seconds from stream start to playback start
-    int stallCount = 0;  ///< stalls in `player_events.jsonl`
+    int stallCount = 0;  ///< stalls in `player_events.jsonl`, as the player logged them
+    /** @brief Rebuffering episodes: stalls less than `kEpisodeGap` of playback apart, merged. */
+    int stallEpisodes = 0;
     double rebufferTime = 0.0;       ///< seconds
     double averageThroughput = 0.0;  ///< bits per second, mean of the samples
 
@@ -62,6 +64,14 @@ struct QoeReport {
     int guardOverrides = 0;  ///< used decisions in which the buffer guard lowered the choice
     double averageDecisionDelay = 0.0;  ///< seconds
     double maxDecisionDelay = 0.0;      ///< seconds
+    /** @brief The run's decisions carry a guard flag and an inference time (learned policies). */
+    bool hasPolicyDetails = false;
+
+    /** @brief Mean VMAF of the shown segments at their played rungs, weighted by duration. */
+    std::optional<double> meanVmafShown;
+    std::optional<double> minVmafShown;  ///< lowest frame VMAF among the shown segments
+    /** @brief Seconds of shown media with a segment VMAF below 60; empty without scores. */
+    std::optional<double> timeBelowVmaf60;
 
     std::vector<SummaryCheck> checks;  ///< comparisons with `summary.json`
 
@@ -77,8 +87,8 @@ struct QoeReport {
 /**
  * @brief Computes the QoE numbers of a run and the checks against `summary.json`.
  *
- * Checks average chosen bitrate, chosen switches, average throughput, startup delay, stall
- * count and rebuffer time.
+ * Checks average chosen bitrate, chosen switches, average throughput, startup delay, the
+ * player's pause count (summary.json's `stall_count`) and rebuffer time.
  *
  * @param run The loaded run.
  * @return The report.

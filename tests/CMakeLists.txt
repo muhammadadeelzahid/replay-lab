@@ -6,7 +6,8 @@ function(abrviz_add_test name)
     target_link_libraries(${name} PRIVATE Qt6::Test ${ARG_LIBS})
     target_compile_definitions(${name} PRIVATE
         ABRVIZ_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
-        ABRVIZ_BUNDLES_DIR="${PROJECT_SOURCE_DIR}/viewer_bundles")
+        ABRVIZ_BUNDLES_DIR="${PROJECT_SOURCE_DIR}/viewer_bundles"
+        ABRVIZ_COMPARISON_BUNDLES_DIR="${PROJECT_SOURCE_DIR}/viewer_bundles_phasef")
     abrviz_set_warnings(${name})
     # Qt's QTRY_* macros narrow a std::chrono count to int inside their expansion, which GCC
     # reports in our files with -Wconversion; only the tests use them.
@@ -81,6 +82,10 @@ endif()
 
 abrviz_add_test(tst_core_edge_cases
     SOURCES tst_core_edge_cases.cpp
+    LIBS abrviz_core)
+
+abrviz_add_test(tst_comparison_data
+    SOURCES tst_comparison_data.cpp
     LIBS abrviz_core)
 
 abrviz_add_test(tst_playback_edge_cases
