@@ -50,7 +50,9 @@ add_library(abrviz_gui STATIC
     compare_view.h
     compare_view.cpp
     wipe_view.h
-    wipe_view.cpp)
+    wipe_view.cpp
+    scoreboard.h
+    scoreboard.cpp)
 
 qt_add_resources(abrviz_gui "abrviz_resources"
     PREFIX "/abrviz"

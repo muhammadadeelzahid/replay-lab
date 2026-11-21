@@ -35,8 +35,8 @@ public:
     /**
      * @brief The charts, top to bottom; the value is the chart's index.
      */
-    enum class Chart { Buffer, Throughput, Bitrate, RttLoss, DecisionDelay };
-    static constexpr int kChartCount = 5;  ///< Number of values in Chart.
+    enum class Chart { Buffer, Throughput, Bitrate, Vmaf, RttLoss, DecisionDelay };
+    static constexpr int kChartCount = 6;  ///< Number of values in Chart.
 
     /**
      * @brief Creates the charts and fills them from the current run.
@@ -57,6 +57,22 @@ public:
      * @return The chart, owned by its view; never null.
      */
     [[nodiscard]] QChart* chart(Chart chart) const;
+
+    /**
+     * @brief Draws other runs over the open run's buffer, bitrate and VMAF, one colour per
+     *        algorithm, for comparing ABR algorithms.
+     *
+     * @param others The other runs; empty to show the open run alone.
+     */
+    void setComparison(std::vector<std::shared_ptr<const RunData>> others);
+
+    /**
+     * @brief Tells whether a chart is shown (charts without data for the run are hidden).
+     *
+     * @param chart Which chart.
+     * @return True if the chart is visible.
+     */
+    [[nodiscard]] bool isShown(Chart chart) const;
     /**
      * @brief Number of series in a chart with the given name.
      *
@@ -155,8 +171,23 @@ private:
      * @param run The open run.
      */
     void fillDecisionDelay(Plot& plot, const RunData& run);
+    /**
+     * @brief Fills the picture-quality chart with the VMAF of each segment on screen.
+     *
+     * @param plot The VMAF chart.
+     * @param run The open run.
+     */
+    void fillVmaf(Plot& plot, const RunData& run);
+    /**
+     * @brief Draws another run's buffer, bitrate and VMAF in its algorithm's colour.
+     *
+     * @param run The other run.
+     */
+    void overlay(const RunData& run);
 
     Session* session_;  ///< Not owned; outlives the panel.
+    std::vector<std::shared_ptr<const RunData>> others_;  ///< Runs drawn over the open one.
+    QColor primary_;  ///< Colour of the open run's main series.
     std::shared_ptr<const RunData> run_;  ///< The run shown; null if none.
     std::array<std::unique_ptr<Plot>, kChartCount> plots_;  ///< Indexed by Chart.
     QLabel* readout_;  ///< Values at the cursor as rich text, above the charts; child of the panel.

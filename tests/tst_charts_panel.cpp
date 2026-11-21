@@ -154,6 +154,8 @@ private slots:
             const double first = f.panel.cursorX(Chart::Buffer);
             for (int i = 0; i < ChartsPanel::kChartCount; ++i) {
                 const auto chart = static_cast<Chart>(i);
+                if (!f.panel.isShown(chart))
+                    continue;  // e.g. VMAF, for a bundle without scores
                 QCOMPARE(f.panel.cursorX(chart), f.panel.xAt(chart, f.session.cursor()->time()));
                 QCOMPARE(f.panel.cursorX(chart), first);  // one shared x-axis
             }
@@ -169,15 +171,20 @@ private slots:
             QTest::qWait(50);
             const auto views = f.panel.findChildren<QChartView*>();
             QCOMPARE(views.size(), ChartsPanel::kChartCount);
+            QChartView* lastShown = nullptr;
             for (int i = 0; i < ChartsPanel::kChartCount; ++i) {
                 const auto chart = static_cast<Chart>(i);
+                if (!f.panel.isShown(chart))
+                    continue;
+                lastShown = views[i];
                 const double right = views[i]->chart()->plotArea().right();
                 QVERIFY2(right <= views[i]->viewport()->width(), qPrintable(QString::number(width)));
                 QVERIFY(std::abs(f.panel.cursorX(chart) - right) < 0.5);  // end of the axis
                 QVERIFY(right > views[i]->viewport()->width() - 60);       // and uses the width
             }
-            // The x-axis labels (drawn only under the last chart) moved with the plot area.
-            QChart* last = views.back()->chart();
+            // The x-axis labels (drawn only under the last chart shown) moved with the plot area.
+            QVERIFY(lastShown);
+            QChart* last = lastShown->chart();
             double rightmostLabel = 0.0;
             for (QGraphicsItem* item : last->scene()->items()) {
                 if (auto* text = dynamic_cast<QGraphicsTextItem*>(item);

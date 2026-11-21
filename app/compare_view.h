@@ -85,6 +85,14 @@ public:
      */
     void setLayoutMode(Layout layout);
 
+    /**
+     * @brief Shows a run side by side with the open run (the Side by side layout, unless more
+     *        panes are shown already), in the second pane.
+     *
+     * @param directory The run's bundle directory; it must be in the open run's experiment.
+     */
+    void compareWith(const QString& directory);
+
     /// @return The layout shown.
     [[nodiscard]] Layout layoutMode() const { return layout_; }
 
@@ -140,6 +148,13 @@ public:
      */
     [[nodiscard]] bool bothPlaying(int index) const;
 
+    /**
+     * @brief Returns the runs shown next to the open run.
+     *
+     * @return The other panes' runs that have loaded, in pane order.
+     */
+    [[nodiscard]] std::vector<std::shared_ptr<const RunData>> otherRuns() const;
+
     /// @return The Wipe view (shown in the Wipe layout).
     [[nodiscard]] WipeView* wipeView() const { return wipe_; }
 
@@ -152,6 +167,9 @@ signals:
 
     /// Every other pane has loaded its run.
     void ready();
+
+    /// The runs shown next to the open run changed (see otherRuns()).
+    void runsChanged();
 
 private:
     /// One pane other than the first, with its own session, player and load.

@@ -2,6 +2,7 @@
 
 #include "chart_series.h"
 #include "format.h"
+#include "algorithm_colors.h"
 #include "icons.h"
 #include "session.h"
 #include "time_cursor.h"
@@ -41,6 +42,39 @@ const QColor kPrimary{0x2f, 0x6d, 0xb5};    ///< Main series of a chart (blue).
 const QColor kSecondary{0x6b, 0x6b, 0x6b};  ///< Second series of a chart (grey).
 const QColor kStall{0xd6, 0x27, 0x28};      ///< Stalls (red).
 const QColor kOverride{0xe6, 0x55, 0x0d};   ///< Guard overrides of the LLM's choice (orange).
+
+/**
+ * @brief The segments on screen as steps over simulation time, stopping for stalls.
+ *
+ * @param run The run.
+ * @param value The step value of a shown segment; NaN leaves the segment out.
+ * @return The steps in time order.
+ */
+template <typename Value>
+std::vector<StepInterval> shownSteps(const RunData& run, Value&& value)
+{
+    std::vector<StepInterval> steps;
+    const double frame = run.info.playerSegmentDuration / kFramesPerSegment;
+    for (const SegmentPlayback& p : run.playback) {
+        const auto it = std::ranges::find(run.segments, p.segment, &Segment::index);
+        if (it == run.segments.end())
+            continue;
+        const double v = value(*it);
+        if (std::isnan(v))
+            continue;
+        double start = p.firstFrameTime;
+        const double end = p.lastFrameTime + frame;
+        for (const Stall& stall : run.stalls) {
+            if (stall.start > start && stall.start < end) {
+                steps.push_back({start, stall.start, v});
+                start = std::max(start, stall.end);
+            }
+        }
+        if (end > start)
+            steps.push_back({start, end, v});
+    }
+    return steps;
+}
 
 /**
  * @brief The last element at or before a time.
@@ -425,23 +459,108 @@ double ChartsPanel::cursorX(Chart which) const
 void ChartsPanel::rebuild()
 {
     run_ = session_->run();
-    const double end = std::max(1.0, session_->endTime());
+    // Comparing: every run in its algorithm's colour; alone: the usual blue.
+    primary_ = run_ && !others_.empty() ? algorithmColor(run_->info.policyName, palette()) : kPrimary;
+    double end = std::max(1.0, session_->endTime());
+    for (const auto& other : others_) {
+        if (other)
+            end = std::max(end, other->playbackEnd);
+    }
     for (auto& plot : plots_) {
         plot->clear();
         plot->x->setRange(0.0, end);
         plot->x->setTickInterval(niceStep(end));
     }
+    const auto at = [this](Chart chart) -> Plot& { return *plots_[static_cast<std::size_t>(chart)]; };
     if (run_) {
-        fillBuffer(*plots_[0], *run_);
-        fillThroughput(*plots_[1], *run_);
-        fillBitrate(*plots_[2], *run_);
-        fillRttLoss(*plots_[3], *run_);
-        fillDecisionDelay(*plots_[4], *run_);
+        fillBuffer(at(Chart::Buffer), *run_);
+        fillThroughput(at(Chart::Throughput), *run_);
+        fillBitrate(at(Chart::Bitrate), *run_);
+        fillVmaf(at(Chart::Vmaf), *run_);
+        fillRttLoss(at(Chart::RttLoss), *run_);
+        fillDecisionDelay(at(Chart::DecisionDelay), *run_);
+        for (const auto& other : others_) {
+            if (other)
+                overlay(*other);
+        }
+    }
+    // Charts with nothing to show for this run are hidden: VMAF without scores in the bundle,
+    // decision delay for algorithms that do not report it. The last chart shown carries the
+    // time labels.
+    const bool hasVmaf = run_ && std::ranges::any_of(run_->segments, [](const Segment& s) { return s.quality.vmaf.has_value(); });
+    const bool hasDelay = run_ && std::ranges::any_of(run_->decisions, [](const Decision& d) { return d.decisionDelay.has_value(); });
+    int lastShown = 0;
+    for (int i = 0; i < kChartCount; ++i) {
+        const auto chart = static_cast<Chart>(i);
+        const bool shown = (chart != Chart::Vmaf || hasVmaf) && (chart != Chart::DecisionDelay || hasDelay || !run_);
+        plots_[static_cast<std::size_t>(i)]->view->setVisible(shown);
+        plots_[static_cast<std::size_t>(i)]->legend->setVisible(shown);
+        if (shown)
+            lastShown = i;
+    }
+    for (int i = 0; i < kChartCount; ++i) {
+        Plot& plot = *plots_[static_cast<std::size_t>(i)];
+        plot.x->setLabelsVisible(i == lastShown);
+        plot.view->bottomMargin = i == lastShown ? kAxisLabelsHeight : kBottomMargin;
     }
     for (auto& plot : plots_)
         plot->finishRanges();
     updateCursor();
     updateReadout();
+}
+
+void ChartsPanel::setComparison(std::vector<std::shared_ptr<const RunData>> others)
+{
+    others_ = std::move(others);
+    rebuild();
+}
+
+bool ChartsPanel::isShown(Chart chart) const
+{
+    return !plots_[static_cast<std::size_t>(chart)]->view->isHidden();
+}
+
+void ChartsPanel::fillVmaf(Plot& plot, const RunData& run)
+{
+    const auto steps = shownSteps(run, [](const Segment& s) {
+        return s.quality.vmaf.value_or(std::numeric_limits<double>::quiet_NaN());
+    });
+    const double frame = run.info.playerSegmentDuration / kFramesPerSegment;
+    for (const auto& points : stepRuns(steps, 2.0 * frame))
+        plot.addLine(QStringLiteral("vmaf"), points, QPen(primary_, 2.0));
+    plot.yMax = std::max(plot.yMax, 100.0);
+    plot.legend->setText(tr("<b>Picture quality</b> (VMAF of what was on screen) &nbsp; %1")
+                             .arg(swatch(primary_, others_.empty() ? tr("VMAF") : algorithmDisplayName(run.info.policyName))));
+}
+
+void ChartsPanel::overlay(const RunData& run)
+{
+    const QColor color = algorithmColor(run.info.policyName, palette());
+    const QString name = algorithmDisplayName(run.info.policyName);
+    const double frame = run.info.playerSegmentDuration / kFramesPerSegment;
+    const auto at = [this](Chart chart) -> Plot& { return *plots_[static_cast<std::size_t>(chart)]; };
+
+    QList<QPointF> buffer;
+    for (const BufferPoint& p : run.buffer)
+        buffer.append(QPointF(p.time, p.level));
+    at(Chart::Buffer).addLine(QStringLiteral("buffer ") + name, buffer, QPen(color, 1.3));
+
+    const auto mbps = [&run](const Segment& s) {
+        const Rung* r = run.video.rung(s.playedRung);
+        return r ? static_cast<double>(r->bitrate) / 1e6 : std::numeric_limits<double>::quiet_NaN();
+    };
+    for (const auto& points : stepRuns(shownSteps(run, mbps), 2.0 * frame))
+        at(Chart::Bitrate).addLine(QStringLiteral("played ") + name, points, QPen(color, 1.6));
+
+    const auto vmaf = [](const Segment& s) {
+        return s.quality.vmaf.value_or(std::numeric_limits<double>::quiet_NaN());
+    };
+    for (const auto& points : stepRuns(shownSteps(run, vmaf), 2.0 * frame))
+        at(Chart::Vmaf).addLine(QStringLiteral("vmaf ") + name, points, QPen(color, 1.6));
+
+    // The legends list every run in its colour.
+    for (const Chart chart : {Chart::Buffer, Chart::Bitrate, Chart::Vmaf})
+        at(chart).legend->setText(at(chart).legend->text() + QStringLiteral(" &nbsp; ") + swatch(color, name));
 }
 
 void ChartsPanel::fillBuffer(Plot& plot, const RunData& run)
@@ -450,7 +569,7 @@ void ChartsPanel::fillBuffer(Plot& plot, const RunData& run)
     points.reserve(static_cast<qsizetype>(run.buffer.size()));
     for (const BufferPoint& p : run.buffer)
         points.append(QPointF(p.time, p.level));
-    plot.addLine(QStringLiteral("buffer"), points, QPen(kPrimary, 1.5));
+    plot.addLine(QStringLiteral("buffer"), points, QPen(primary_, 1.5));
 
     // Stalls as shaded bands from 0 to the top of the buffer range.
     const double top = std::max(1.0, plot.yMax * 1.1);
@@ -472,7 +591,7 @@ void ChartsPanel::fillBuffer(Plot& plot, const RunData& run)
         area->attachAxis(plot.y);
     }
     plot.legend->setText(tr("<b>Buffer</b> (s) &nbsp; %1 &nbsp; %2")
-                             .arg(swatch(kPrimary, tr("level")), swatch(kStall, tr("stall"))));
+                             .arg(swatch(primary_, others_.empty() || !run_ ? tr("level") : algorithmDisplayName(run_->info.policyName)), swatch(kStall, tr("stall"))));
 }
 
 void ChartsPanel::fillThroughput(Plot& plot, const RunData& run)
@@ -527,26 +646,11 @@ void ChartsPanel::fillBitrate(Plot& plot, const RunData& run)
         return r ? static_cast<double>(r->bitrate) / 1e6 : 0.0;
     };
 
-    std::vector<StepInterval> shown;
+    // A stall can fall inside a segment; the line stops for it.
     const double frame = run.info.playerSegmentDuration / kFramesPerSegment;
-    for (const SegmentPlayback& p : run.playback) {
-        const auto it = std::ranges::find(run.segments, p.segment, &Segment::index);
-        if (it == run.segments.end())
-            continue;
-        // A stall can fall inside a segment; the line stops for it.
-        double start = p.firstFrameTime;
-        const double end = p.lastFrameTime + frame;
-        for (const Stall& stall : run.stalls) {
-            if (stall.start > start && stall.start < end) {
-                shown.push_back({start, stall.start, mbps(it->playedRung)});
-                start = std::max(start, stall.end);
-            }
-        }
-        if (end > start)
-            shown.push_back({start, end, mbps(it->playedRung)});
-    }
+    const auto shown = shownSteps(run, [&](const Segment& s) { return mbps(s.playedRung); });
     for (const auto& points : stepRuns(shown, 2.0 * frame))
-        plot.addLine(QStringLiteral("played"), points, QPen(kPrimary, 2.0));
+        plot.addLine(QStringLiteral("played"), points, QPen(primary_, 2.0));
 
     QList<QPointF> chosen;
     QList<QPointF> overridden;
@@ -564,11 +668,14 @@ void ChartsPanel::fillBitrate(Plot& plot, const RunData& run)
     // The whole ladder fits, so rung changes are comparable between runs.
     if (!video.ladder.empty())
         plot.yMax = std::max(plot.yMax, mbps(video.ladder.back().index));
-    plot.legend->setText(tr("<b>Bitrate</b> (Mbps) &nbsp; %1 &nbsp; %2 &nbsp; %3 &nbsp; %4")
-                             .arg(swatch(kPrimary, tr("on screen")),
-                                  swatch(kSecondary, tr("chosen")),
-                                  swatch(kOverride, tr("guard override")),
-                                  swatch(kOverride, tr("LLM's choice"), true)));
+    // The guard and the LLM's own choice exist only for the LLM policy.
+    QString legend = tr("<b>Bitrate</b> (Mbps) &nbsp; %1 &nbsp; %2")
+                         .arg(swatch(primary_, others_.empty() ? tr("on screen") : algorithmDisplayName(run.info.policyName)),
+                              swatch(kSecondary, tr("chosen")));
+    if (!overridden.isEmpty() || !wanted.isEmpty())
+        legend += QStringLiteral(" &nbsp; %1 &nbsp; %2")
+                      .arg(swatch(kOverride, tr("guard override")), swatch(kOverride, tr("LLM's choice"), true));
+    plot.legend->setText(legend);
 }
 
 void ChartsPanel::fillRttLoss(Plot& plot, const RunData& run)

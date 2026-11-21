@@ -159,6 +159,14 @@ void CompareView::setLayoutMode(Layout layout)
     rebuildPanes();
 }
 
+void CompareView::compareWith(const QString& directory)
+{
+    if (layout_ == Layout::Single)
+        setLayoutMode(Layout::SideBySide);
+    if (!followers_.empty())
+        loadInto(*followers_.front(), directory);
+}
+
 void CompareView::setAlignment(ComparisonClock::Alignment alignment)
 {
     if (alignment == alignment_)
@@ -380,6 +388,17 @@ void CompareView::rebuildClock()
     for (const auto& follower : followers_)
         runs.push_back(follower->session->run());
     clock_ = ComparisonClock(std::move(runs), alignment_);
+    emit runsChanged();
+}
+
+std::vector<std::shared_ptr<const RunData>> CompareView::otherRuns() const
+{
+    std::vector<std::shared_ptr<const RunData>> runs;
+    for (const auto& follower : followers_) {
+        if (follower->session->run())
+            runs.push_back(follower->session->run());
+    }
+    return runs;
 }
 
 double CompareView::masterTime() const

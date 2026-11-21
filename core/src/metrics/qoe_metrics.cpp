@@ -150,7 +150,9 @@ QoeReport computeQoe(const RunData& run)
         shownSeconds += seconds;
         if (*segment.quality.vmaf < 60.0)
             below += seconds;
-        const double low = segment.quality.vmafMin.value_or(*segment.quality.vmaf);
+        // The lowest segment average: single frames can be black (fades), which says nothing
+        // about the algorithm.
+        const double low = *segment.quality.vmaf;
         r.minVmafShown = r.minVmafShown ? std::min(*r.minVmafShown, low) : low;
     }
     if (shownSeconds > 0.0) {

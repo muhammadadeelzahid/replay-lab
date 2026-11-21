@@ -153,7 +153,7 @@ void ReportView::refresh()
         addSection(tr("Picture quality"));
         addRow(tr("VMAF, average shown"), QString::number(*r.meanVmafShown, 'f', 1));
         if (r.minVmafShown)
-            addRow(tr("VMAF, lowest frame"), QString::number(*r.minVmafShown, 'f', 1));
+            addRow(tr("VMAF, lowest segment"), QString::number(*r.minVmafShown, 'f', 1));
         if (r.timeBelowVmaf60)
             addRow(tr("Time below VMAF 60"), format::seconds(*r.timeBelowVmaf60, 1));
     }

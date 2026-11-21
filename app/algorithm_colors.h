@@ -14,7 +14,8 @@ namespace abrviz {
 /**
  * @brief The colour of an ABR algorithm in panes, charts, the scoreboard and cards.
  *
- * The LLM policy uses the app's accent (coral); RobustMPC is blue, MPC green and BOLA violet.
+ * The LLM policy uses the app's accent (coral); RobustMPC is blue, MPC teal and BOLA violet.
+ * Green is left for marking the best values.
  * Other algorithms are grey.
  *
  * @param key The algorithm's key (`policy.name`), any case.
@@ -30,7 +31,7 @@ namespace abrviz {
     if (k == QLatin1String("robustmpc"))
         return dark ? QColor(0x5a, 0xa2, 0xff) : QColor(0x1f, 0x6f, 0xe0);
     if (k == QLatin1String("mpc"))
-        return dark ? QColor(0x3d, 0xd6, 0x8c) : QColor(0x1e, 0x9e, 0x5e);
+        return dark ? QColor(0x40, 0xc8, 0xe0) : QColor(0x0b, 0x8c, 0xa8);
     if (k == QLatin1String("bola"))
         return dark ? QColor(0xbf, 0x8c, 0xff) : QColor(0x8a, 0x4f, 0xe0);
     return dark ? QColor(0xae, 0xae, 0xb2) : QColor(0x6e, 0x6e, 0x73);

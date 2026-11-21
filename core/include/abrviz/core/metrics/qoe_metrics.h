@@ -69,7 +69,7 @@ struct QoeReport {
 
     /** @brief Mean VMAF of the shown segments at their played rungs, weighted by duration. */
     std::optional<double> meanVmafShown;
-    std::optional<double> minVmafShown;  ///< lowest frame VMAF among the shown segments
+    std::optional<double> minVmafShown;  ///< lowest segment VMAF (mean over its frames) shown
     /** @brief Seconds of shown media with a segment VMAF below 60; empty without scores. */
     std::optional<double> timeBelowVmaf60;
 

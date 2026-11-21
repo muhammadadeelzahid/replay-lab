@@ -3,6 +3,7 @@
 #include "branding.h"
 #include "charts_panel.h"
 #include "compare_view.h"
+#include "scoreboard.h"
 #include "format.h"
 #include "icons.h"
 #include "library_view.h"
@@ -282,6 +283,7 @@ struct MainWindow::Impl {
     /** @brief The page to show once the bundle being loaded opens (More Info: the report). */
     std::optional<Page> pageAfterOpen;
     CompareView* compare = nullptr;  ///< The Replay page's video area, one run or several.
+    Scoreboard* scoreboard = nullptr;  ///< Every algorithm of the open run's experiment, on the Report page.
     bool shutDown = false;   ///< Set by shutdown(); no new tasks start after it.
 };
 
@@ -510,6 +512,14 @@ void MainWindow::createPages()
     replayLayout->addWidget(divider(Qt::Horizontal, replay));
     // The open run alone, or with the other algorithms of its experiment side by side.
     d_->compare = new CompareView(d_->session, d_->player, d_->renderQueue.get(), replay);
+    // The charts draw the compared runs over the open one.
+    connect(d_->compare, &CompareView::runsChanged, this, [this] {
+        d_->charts->setComparison(d_->compare->otherRuns());
+        if (!d_->scoreboard)
+            return;
+        const auto& run = d_->session->run();
+        d_->scoreboard->setExperiment(d_->compare->experimentRuns(), run ? run->info.bundleDirectory : QString());
+    });
     replayLayout->addWidget(d_->compare, 1);
     d_->pages->addWidget(replay);
     d_->pages->addWidget(scrollable(padded(d_->charts, this), this));
@@ -521,7 +531,20 @@ void MainWindow::createPages()
     reportSplit->setStretchFactor(1, 2);
     reportSplit->setChildrenCollapsible(false);
     reportSplit->setHandleWidth(1);
-    d_->pages->addWidget(padded(reportSplit, this));
+    // With other algorithms to compare, the scoreboard sits above the open run's report.
+    d_->scoreboard = new Scoreboard(this);
+    // A click on another algorithm shows it side by side with the open run.
+    connect(d_->scoreboard, &Scoreboard::compareRequested, this, [this](const QString& directory) {
+        d_->compare->compareWith(directory);
+        showPage(Page::Replay);
+    });
+    auto* reportPage = new QWidget(this);
+    auto* reportLayout = new QVBoxLayout(reportPage);
+    reportLayout->setContentsMargins(0, 0, 0, 0);
+    reportLayout->setSpacing(8);
+    reportLayout->addWidget(d_->scoreboard);
+    reportLayout->addWidget(reportSplit, 1);
+    d_->pages->addWidget(padded(reportPage, this));
 
     d_->sidebar = new SourceList(this);
     d_->sidebarPane = new QWidget(this);

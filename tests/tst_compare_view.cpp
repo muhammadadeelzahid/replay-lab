@@ -10,6 +10,8 @@
 #include "replay_player.h"
 #include "run_pane.h"
 #include "session.h"
+#include "charts_panel.h"
+#include "scoreboard.h"
 #include "wipe_view.h"
 
 #include "abrviz/core/load/bundle_library.h"
@@ -185,6 +187,44 @@ private slots:
         QEvent leave(QEvent::Leave);
         QApplication::sendEvent(&wipe, &leave);
         QVERIFY(!wipe.isLoupeVisible());
+    }
+
+    void scoreboardRanksEveryAlgorithm()
+    {
+        Scoreboard board;
+        QSignalSpy filled(&board, &Scoreboard::filled);
+        const QString open = dir_.filePath(QStringLiteral("chef_cooking_llm_18Mbps_run_3"));
+        board.setExperiment(groupExperiments(library_).front().runs, open);
+        QVERIFY(filled.wait(kTimeoutMs) || filled.size() == 1);
+        QCOMPARE(board.rowsFilled(), 3);
+        QVERIFY(board.cell(0, Scoreboard::Algorithm).startsWith(QStringLiteral("LLM")));
+        QVERIFY(board.cell(0, Scoreboard::Algorithm).contains(QStringLiteral("open")));
+        QCOMPARE(board.cell(1, Scoreboard::Algorithm), QStringLiteral("RobustMPC"));
+        // The copies are the same run, so every row ties and every value is the best.
+        for (int row = 0; row < 3; ++row)
+            QVERIFY(board.isBest(row, Scoreboard::Stalls));
+        // The fixture has no picture-quality scores.
+        QCOMPARE(board.cell(0, Scoreboard::VmafMean), QStringLiteral("–"));
+        // Fewer than two runs: nothing to compare, the scoreboard hides.
+        board.setExperiment({library_.front()}, open);
+        QVERIFY(board.isHidden());
+    }
+
+    void chartsDrawTheComparedRuns()
+    {
+        Rig rig;
+        ChartsPanel charts(&rig.session);
+        rig.open(dir_.filePath(QStringLiteral("chef_cooking_llm_18Mbps_run_3")));
+        QCOMPARE(charts.seriesCount(ChartsPanel::Chart::Buffer, QStringLiteral("buffer RobustMPC")), 0);
+        const LoadResult other = loadBundleSync(dir_.filePath(QStringLiteral("chef_cooking_robustmpc_18Mbps_run_3")));
+        QVERIFY(other.run);
+        charts.setComparison({other.run});
+        QCOMPARE(charts.seriesCount(ChartsPanel::Chart::Buffer, QStringLiteral("buffer RobustMPC")), 1);
+        QVERIFY(charts.seriesCount(ChartsPanel::Chart::Bitrate, QStringLiteral("played RobustMPC")) >= 1);
+        // Without picture-quality scores the VMAF chart is hidden.
+        QVERIFY(!charts.isShown(ChartsPanel::Chart::Vmaf));
+        charts.setComparison({});
+        QCOMPARE(charts.seriesCount(ChartsPanel::Chart::Buffer, QStringLiteral("buffer RobustMPC")), 0);
     }
 
     void alignmentAndDestructionAreClean()
