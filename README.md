@@ -21,9 +21,9 @@ Built with C++20, Qt 6 and GStreamer.
 ## Download
 
 Packages for macOS (Apple silicon), Windows and Linux are on the
-[Releases](https://github.com/muhammadadeelzahid/replay-lab/releases) page, with the 14 LLM
-runs (`viewer_bundles.tar`). Extract the runs, open the app and choose the `viewer_bundles`
-folder. The 60 comparison runs are on Hugging Face (see [Simulation data](#simulation-data)).
+[Releases](https://github.com/muhammadadeelzahid/replay-lab/releases) page. The simulation
+runs are on Hugging Face (see [Simulation data](#simulation-data)): download them, open the app
+and choose the `runs` folder.
 
 - macOS: unzip and move the app to Applications. The first time, right-click it and choose
   Open (the app is not notarised).
@@ -207,7 +207,8 @@ The runs are not in git.
   ```
 
   and open `replaylab-runs/runs` in ReplayLab.
-- **The 14 earlier LLM runs** (about 714 MB): `viewer_bundles.tar` on the Releases page.
+- **The 14 earlier LLM runs** (about 714 MB): `viewer_bundles.tar` on the
+  [v0.1.0 release](https://github.com/muhammadadeelzahid/replay-lab/releases/tag/v0.1.0).
 
 `packaging/huggingface/stage.py` builds the uploaded folder from the bundles: it replaces
 cluster paths in the logs and adds the dataset card, the licence and `runs.csv`. See

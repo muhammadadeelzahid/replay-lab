@@ -1,7 +1,7 @@
 # Builds ReplayLab for macOS, Windows and Linux and attaches the packages to a draft
 # GitHub release. Runs when a version tag is pushed (git tag v2.0.0 && git push origin v2.0.0)
-# or by hand from the Actions tab. The simulation data (viewer_bundles.tar) is not in git; add
-# it to the draft release by hand before publishing it.
+# or by hand from the Actions tab. The simulation runs are not in git: the 60 comparison runs are
+# on Hugging Face (AdeelZahid/replaylab-leo-ntn-abr).
 name: Release
 
 on:
@@ -140,10 +140,16 @@ jobs:
           draft: true
           files: packages/*
           body: |
-            ReplayLab for macOS (Apple silicon), Windows (x64) and Linux (x86_64).
+            ReplayLab for macOS (Apple silicon), Windows (x64) and Linux (x86_64): replay ns-3
+            simulations of adaptive video streaming over a satellite 5G network, and compare ABR
+            algorithms (an LLM-based policy, RobustMPC, MPC, BOLA) side by side, in a grid or in
+            one frame split by a divider.
 
-            Download the package for your system and `viewer_bundles.tar` (the simulation runs).
-            Extract the runs, open the app and choose the `viewer_bundles` folder.
+            The simulation runs are on Hugging Face:
+            https://huggingface.co/datasets/AdeelZahid/replaylab-leo-ntn-abr
+            (60 runs, about 8.5 GB; accept the terms on the page). Download them with
+            `hf download AdeelZahid/replaylab-leo-ntn-abr --repo-type dataset --local-dir replaylab-runs`,
+            open the app and choose the `replaylab-runs/runs` folder.
 
             - macOS: unzip and move the app to Applications. The app is not notarised: the
               first time, right-click it and choose Open.
