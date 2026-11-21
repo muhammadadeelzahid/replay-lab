@@ -23,7 +23,7 @@ Built with C++20, Qt 6 and GStreamer.
 Packages for macOS (Apple silicon), Windows and Linux are on the
 [Releases](https://github.com/muhammadadeelzahid/replay-lab/releases) page, with the 14 LLM
 runs (`viewer_bundles.tar`). Extract the runs, open the app and choose the `viewer_bundles`
-folder. The comparison runs are described under [Simulation data](#simulation-data).
+folder. The 60 comparison runs are on Hugging Face (see [Simulation data](#simulation-data)).
 
 - macOS: unzip and move the app to Applications. The first time, right-click it and choose
   Open (the app is not notarised).
@@ -194,15 +194,24 @@ Command-line tools in `build/release/tools/`: `validate_bundle`, `print_report`,
 
 ## Simulation data
 
-Neither data set is in git.
+The runs are not in git.
 
-- **`viewer_bundles_phasef`** (60 runs, about 7.9 GB): 5 videos × 4 algorithms (LLM,
-  RobustMPC, MPC, BOLA) × 3 feeder rates, with VMAF, SSIM and PSNR for every segment and
-  quality. It is larger than a GitHub release allows (2 GB per file) and is shared separately.
-  Extract it into the repository root.
-- **`viewer_bundles`** (14 LLM runs, about 714 MB): `viewer_bundles.tar` on the Releases page.
+- **The 60 comparison runs** (about 8.5 GB): on Hugging Face as
+  [AdeelZahid/replaylab-leo-ntn-abr](https://huggingface.co/datasets/AdeelZahid/replaylab-leo-ntn-abr).
+  5 videos × 4 algorithms (LLM, RobustMPC, MPC, BOLA) × 3 feeder rates, with VMAF, SSIM and
+  PSNR for every segment and quality, and `runs.csv` with each run's QoE. Accept the terms on
+  the page, then:
 
-See [Simulation data](docs/simulation-data.md) for the bundle format.
+  ```sh
+  hf download AdeelZahid/replaylab-leo-ntn-abr --repo-type dataset --local-dir replaylab-runs
+  ```
+
+  and open `replaylab-runs/runs` in ReplayLab.
+- **The 14 earlier LLM runs** (about 714 MB): `viewer_bundles.tar` on the Releases page.
+
+`packaging/huggingface/stage.py` builds the uploaded folder from the bundles: it replaces
+cluster paths in the logs and adds the dataset card, the licence and `runs.csv`. See
+[Simulation data](docs/simulation-data.md) for the bundle format.
 
 ## Documentation
 

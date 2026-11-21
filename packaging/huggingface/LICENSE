@@ -1,0 +1,34 @@
+ReplayLab LEO NTN ABR runs: licence terms
+
+This dataset combines simulation outputs with video segments that come from third parties.
+They are licensed separately.
+
+1. Simulation outputs
+
+   Every file except the video segments (runs/*/videos/*/r*/seg_*.mp4): the logs, run.json,
+   summary.json, the JSON Lines files, video.json and runs.csv.
+
+   Licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0).
+   https://creativecommons.org/licenses/by/4.0/legalcode
+
+2. Video segments of Big Buck Bunny
+
+   runs/big_buck_bunny_*/videos/big_buck_bunny/
+   Big Buck Bunny, (c) copyright 2008, Blender Foundation, www.bigbuckbunny.org.
+   Licensed under the Creative Commons Attribution 3.0 License (CC BY 3.0).
+   https://creativecommons.org/licenses/by/3.0/legalcode
+   The segments are re-encoded at six qualities (250 kbps to 12 Mbps).
+
+3. Video segments of the Pexels videos
+
+   runs/chef_cooking_*/, runs/peace_autumn_lake_*/, runs/pexels_30886101_*/ and
+   runs/pexels_34797065_*/ (their videos/ folders).
+   From Pexels (https://www.pexels.com), under the Pexels License
+   (https://www.pexels.com/license/), which applies as published by Pexels. The segments
+   are re-encoded at six qualities for the simulation and are shared for research and
+   reproduction of the simulations only. They may not be sold, offered on a stock photo,
+   video or wallpaper platform, or used to train, fine-tune or evaluate machine-learning
+   models.
+
+The video files are provided as they are, without warranty. Rights in the videos remain with
+their owners.

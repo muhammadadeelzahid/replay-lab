@@ -240,14 +240,14 @@ LibraryView::LibraryView(QWidget* parent)
         auto* runCard = new SourceCard(Glyph::OpenBundle, tr("Open a Single Run"),
                                        tr("Replay one run bundle on its own"), false, page);
         auto* getCard = new SourceCard(Glyph::Download, tr("Get the Simulation Runs"),
-                                       tr("Download viewer_bundles.tar from the releases page"), false, page);
+                                       tr("Download the 60 runs from Hugging Face"), false, page);
         folderCard->setObjectName(QStringLiteral("actionRow"));
         runCard->setObjectName(QStringLiteral("actionRow"));
         getCard->setObjectName(QStringLiteral("downloadCard"));
         connect(folderCard, &QPushButton::clicked, this, &LibraryView::openFolderRequested);
         connect(runCard, &QPushButton::clicked, this, &LibraryView::openBundleRequested);
         connect(getCard, &QPushButton::clicked, this, [] {
-            QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/muhammadadeelzahid/replay-lab/releases")));
+            QDesktopServices::openUrl(QUrl(QStringLiteral("https://huggingface.co/datasets/AdeelZahid/replaylab-leo-ntn-abr")));
         });
         auto* cards = new QHBoxLayout();
         cards->setSpacing(10);
