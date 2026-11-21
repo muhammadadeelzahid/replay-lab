@@ -6,9 +6,11 @@
 
 #include "background_mode.h"
 #include "branding.h"
+#include "compare_view.h"
 #include "icons.h"
 #include "main_window.h"
 #include "replay_player.h"
+#include "run_pane.h"
 #include "session.h"
 #include "theme.h"
 #include "time_cursor.h"
@@ -75,8 +77,9 @@ void scheduleScreenshot(abrviz::MainWindow& window, const QString& file, bool wa
         started->start();
         QObject::connect(poll, &QTimer::timeout, &window, [&window, file, poll, started] {
             const auto* engine = window.player()->engine();
-            const bool waiting = engine && engine->state() == abrviz::ReplaySource::State::Preparing
-                && engine->isReady();
+            const bool waiting = (engine && engine->state() == abrviz::ReplaySource::State::Preparing
+                                  && engine->isReady())
+                || !window.compareView()->isReady();
             if (waiting && started->elapsed() < 10000)
                 return;
             poll->deleteLater();
@@ -235,10 +238,23 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
                 QApplication::exit(1);
                 return;
             }
-            if (!engine->isReady() || engine->state() != abrviz::ReplaySource::State::Paused)
+            if (!engine->isReady() || engine->state() != abrviz::ReplaySource::State::Paused
+                || !window.compareView()->isReady())
                 return;
             poll->deleteLater();
             const qint64 readyMs = renderClock->elapsed();
+            // With several panes, how far each other pane is from where it should be.
+            auto drifts = std::make_shared<std::vector<std::vector<double>>>(
+                static_cast<std::size_t>(std::max(0, window.compareView()->paneCount() - 1)));
+            auto* sampler = new QTimer(&window);
+            QObject::connect(sampler, &QTimer::timeout, &window, [&window, drifts] {
+                // Only while both play a segment: in a stall a pane waits or jumps by design.
+                for (std::size_t i = 0; i < drifts->size(); ++i) {
+                    if (window.compareView()->bothPlaying(static_cast<int>(i) + 1))
+                        (*drifts)[i].push_back(window.compareView()->frameDrift(static_cast<int>(i) + 1));
+                }
+            });
+            sampler->start(50);
             auto frames = std::make_shared<int>(0);
             // Gaps between frames longer than 150 ms, with the replay time they ended at.
             auto frameClock = std::make_shared<QElapsedTimer>();
@@ -262,7 +278,7 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
             playClock->start();
             player->play();
             auto finished = std::make_shared<bool>(false);
-            const auto finish = [&window, player, frames, gaps, decodedBefore, cpuBefore, playClock, startPosition, indexMs, loadMs, readyMs, finished] {
+            const auto finish = [&window, player, frames, gaps, drifts, decodedBefore, cpuBefore, playClock, startPosition, indexMs, loadMs, readyMs, finished] {
                 if (std::exchange(*finished, true))
                     return;
                 const double wall = static_cast<double>(playClock->elapsed()) / 1000.0;
@@ -286,6 +302,22 @@ void scheduleProfile(abrviz::MainWindow& window, double seconds, std::optional<d
                 std::printf("peak memory      %.0f MB\n", peakMemoryMb());
                 std::printf("gaps over 150 ms %lld%s%s\n", static_cast<long long>(gaps->size()),
                             gaps->isEmpty() ? "" : ": ", qPrintable(gaps->join(QStringLiteral(", "))));
+                for (std::size_t i = 0; i < drifts->size(); ++i) {
+                    const auto& d = (*drifts)[i];
+                    if (d.empty())
+                        continue;
+                    const double frame = 1.0 / std::max(1.0, run->video.frameRate);
+                    std::size_t within = 0;
+                    double worst = 0.0;
+                    for (const double x : d) {
+                        within += std::abs(x) <= frame ? 1 : 0;
+                        worst = std::max(worst, std::abs(x));
+                    }
+                    const auto& pane = window.compareView()->pane(static_cast<int>(i) + 1)->session()->run();
+                    std::printf("pane %zu %-10s while both play: within one frame %.0f %% of the time, worst %.3f s\n", i + 2,
+                                pane ? qPrintable(pane->info.policyName) : "-",
+                                100.0 * static_cast<double>(within) / static_cast<double>(d.size()), worst);
+                }
                 QApplication::exit(0);
             };
             // Stops after `seconds`, or earlier when the replay ends.
@@ -484,11 +516,19 @@ int main(int argc, char* argv[])
         QStringLiteral("Open the bundle, play it, save pictures of the window ten times a second "
                        "in this folder and quit."),
         QStringLiteral("folder"));
+    const QCommandLineOption layoutOption(
+        QStringLiteral("layout"),
+        QStringLiteral("Replay layout: single, side (side by side) or grid; needs other algorithms of the run's experiment."),
+        QStringLiteral("name"));
+    const QCommandLineOption alignOption(
+        QStringLiteral("align"),
+        QStringLiteral("How compared runs line up: moment (same moment, the default) or frame (same frame)."),
+        QStringLiteral("name"));
     const QCommandLineOption durationOption(
         QStringLiteral("duration"), QStringLiteral("How long --record records (default 8)."),
         QStringLiteral("seconds"), QStringLiteral("8"));
     parser.addOptions({bundleOption, timeOption, sizeOption, screenshotOption, engineOption,
-                       pageOption, profileOption, recordOption, durationOption});
+                       pageOption, profileOption, recordOption, durationOption, layoutOption, alignOption});
     parser.process(app);
     const bool background = parser.isSet(screenshotOption) || parser.isSet(profileOption)
         || parser.isSet(recordOption);
@@ -510,6 +550,29 @@ int main(int argc, char* argv[])
         const QStringList parts = parser.value(sizeOption).split(QLatin1Char('x'));
         if (parts.size() == 2)
             window.resize(parts[0].toInt(), parts[1].toInt());
+    }
+    if (parser.isSet(layoutOption)) {
+        const QString name = parser.value(layoutOption).toLower();
+        using Layout = abrviz::CompareView::Layout;
+        const std::optional<Layout> layout = name == QLatin1String("single") ? std::optional(Layout::Single)
+            : name == QLatin1String("side")                                 ? std::optional(Layout::SideBySide)
+            : name == QLatin1String("grid")                                 ? std::optional(Layout::Grid)
+                                                                            : std::nullopt;
+        if (!layout) {
+            std::fprintf(stderr, "unknown layout '%s'\n", qPrintable(name));
+            return 2;
+        }
+        window.compareView()->setLayoutMode(*layout);
+    }
+    if (parser.isSet(alignOption)) {
+        const QString name = parser.value(alignOption).toLower();
+        if (name != QLatin1String("moment") && name != QLatin1String("frame")) {
+            std::fprintf(stderr, "unknown alignment '%s'\n", qPrintable(name));
+            return 2;
+        }
+        window.compareView()->setAlignment(name == QLatin1String("frame")
+                                               ? abrviz::ComparisonClock::Alignment::MediaTime
+                                               : abrviz::ComparisonClock::Alignment::SessionTime);
     }
     // The page asked for is shown once the run is open (opening a run shows the replay).
     std::optional<abrviz::MainWindow::Page> page;

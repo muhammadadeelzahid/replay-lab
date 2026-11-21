@@ -15,6 +15,8 @@ class QAction;
 
 namespace abrviz {
 
+class CompareView;
+
 class ChartsPanel;
 class LibraryView;
 class LogConsole;
@@ -224,6 +226,13 @@ public:
      * @return Owned by the window.
      */
     [[nodiscard]] ReportView* report() const;
+
+    /**
+     * @brief Returns the Replay page's video area: the open run alone or several side by side.
+     *
+     * @return The view; owned by the window.
+     */
+    [[nodiscard]] CompareView* compareView() const;
 
     /**
      * @brief The transport bar under the pages.

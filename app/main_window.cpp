@@ -2,6 +2,7 @@
 
 #include "branding.h"
 #include "charts_panel.h"
+#include "compare_view.h"
 #include "format.h"
 #include "icons.h"
 #include "library_view.h"
@@ -280,6 +281,7 @@ struct MainWindow::Impl {
     QString loadingBundle;   ///< Absolute path of the bundle last loaded.
     /** @brief The page to show once the bundle being loaded opens (More Info: the report). */
     std::optional<Page> pageAfterOpen;
+    CompareView* compare = nullptr;  ///< The Replay page's video area, one run or several.
     bool shutDown = false;   ///< Set by shutdown(); no new tasks start after it.
 };
 
@@ -392,6 +394,8 @@ SegmentTimeline* MainWindow::timeline() const { return d_->timeline; }
 ChartsPanel* MainWindow::charts() const { return d_->charts; }
 ReplayPlayer* MainWindow::player() const { return d_->player; }
 RenderQueue* MainWindow::renderQueue() const { return d_->renderQueue.get(); }
+
+CompareView* MainWindow::compareView() const { return d_->compare; }
 LogConsole* MainWindow::logs() const { return d_->logs; }
 SummaryPanel* MainWindow::summary() const { return d_->summary; }
 ReportView* MainWindow::report() const { return d_->report; }
@@ -504,7 +508,9 @@ void MainWindow::createPages()
     replayLayout->setSpacing(0);
     replayLayout->addWidget(new NetworkPathView(d_->session, d_->player, replay));
     replayLayout->addWidget(divider(Qt::Horizontal, replay));
-    replayLayout->addWidget(d_->player, 1);
+    // The open run alone, or with the other algorithms of its experiment side by side.
+    d_->compare = new CompareView(d_->session, d_->player, d_->renderQueue.get(), replay);
+    replayLayout->addWidget(d_->compare, 1);
     d_->pages->addWidget(replay);
     d_->pages->addWidget(scrollable(padded(d_->charts, this), this));
     d_->pages->addWidget(padded(d_->logs, this));
@@ -1053,6 +1059,7 @@ void MainWindow::scanFinished()
         return;
     }
     d_->library->setBundles(future.result(), d_->scanningFolder);
+    d_->compare->setLibrary(future.result());
     if (d_->session->run())
         d_->library->setOpenBundle(d_->session->run()->info.bundleDirectory);
     rememberFolder(d_->scanningFolder);

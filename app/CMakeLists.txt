@@ -43,7 +43,12 @@ add_library(abrviz_gui STATIC
     home_widgets.h
     home_widgets.cpp
     theme.h
-    theme.cpp)
+    theme.cpp
+    algorithm_colors.h
+    run_pane.h
+    run_pane.cpp
+    compare_view.h
+    compare_view.cpp)
 
 qt_add_resources(abrviz_gui "abrviz_resources"
     PREFIX "/abrviz"

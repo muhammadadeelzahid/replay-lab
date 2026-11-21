@@ -88,6 +88,10 @@ abrviz_add_test(tst_comparison_data
     SOURCES tst_comparison_data.cpp
     LIBS abrviz_core)
 
+abrviz_add_test(tst_compare_view
+    SOURCES tst_compare_view.cpp
+    LIBS abrviz_gui)
+
 abrviz_add_test(tst_comparison_clock
     SOURCES tst_comparison_clock.cpp
     LIBS abrviz_core)

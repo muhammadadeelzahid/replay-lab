@@ -51,6 +51,7 @@ class GstSegmentSource final : public ReplaySource {
     Q_OBJECT
     Q_PROPERTY(qint64 framesDecoded READ framesDecoded)
     Q_PROPERTY(qint64 framesShown READ framesShown)
+    Q_PROPERTY(double frameMediaTime READ frameMediaTime)
 
 public:
     /**
