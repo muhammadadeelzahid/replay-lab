@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(abrviz
-    VERSION 1.0.0
+    VERSION 2.0.0
     DESCRIPTION "Viewer for ns-3 adaptive video streaming simulations"
     LANGUAGES CXX)
 

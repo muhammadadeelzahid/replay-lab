@@ -83,7 +83,15 @@ signals:
      */
     void runChosen(const QString& directory);
 
+protected:
+    /// Fits the status to the new width.
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
+    /// Shows as many of the status figures as fit the header.
+    void fitStatus();
+
+    QStringList statusParts_;    ///< Quality, VMAF and buffer, in that order.
     /// Updates the header from the session's run and cursor.
     void refresh();
 

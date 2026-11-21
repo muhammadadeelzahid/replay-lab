@@ -33,6 +33,10 @@ RunPane::RunPane(Session* session, ReplayPlayer* player, QWidget* parent)
     name_->setFont(bold);
     status_->setForegroundRole(QPalette::PlaceholderText);
     status_->setTextFormat(Qt::RichText);
+    // The status gives way when the pane is narrow, so the panes of a row share the width
+    // equally whatever their headers say.
+    status_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    status_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     stall_->setStyleSheet(QStringLiteral(
         "color: white; background: #ff453a; border-radius: 8px; padding: 1px 8px; font-weight: 600;"));
     stall_->hide();
@@ -50,8 +54,7 @@ RunPane::RunPane(Session* session, ReplayPlayer* player, QWidget* parent)
     header->addWidget(name_);
     header->addWidget(choice_);
     header->addWidget(stall_);
-    header->addStretch(1);
-    header->addWidget(status_);
+    header->addWidget(status_, 1);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -60,6 +63,7 @@ RunPane::RunPane(Session* session, ReplayPlayer* player, QWidget* parent)
     player_->setParent(this);
     layout->addWidget(player_, 1);
     player_->show();
+    setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Expanding);
 
     connect(session_, &Session::runChanged, this, &RunPane::refresh);
     connect(session_->cursor(), &TimeCursor::timeChanged, this, &RunPane::refresh);
@@ -135,13 +139,30 @@ void RunPane::refresh()
     const auto points = run->bufferBetween(run->streamStart, time);
     if (!points.empty())
         parts << tr("buffer %1 s").arg(points.back().level, 0, 'f', 1);
-    status_->setText(parts.join(QStringLiteral(" &nbsp;·&nbsp; ")));
+    statusParts_ = parts;
+    fitStatus();
     QStringList plain{algorithmDisplayName(key)};
     if (position.stalled)
         plain << tr("stalled");
     plain << parts;
     summary_ = plain.join(QStringLiteral(" · "));
     emit summaryChanged();
+}
+
+void RunPane::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    fitStatus();
+}
+
+void RunPane::fitStatus()
+{
+    // Drop figures from the end (buffer, then VMAF) until the rest fits the header.
+    QStringList parts = statusParts_;
+    const QFontMetrics metrics(status_->font());
+    while (parts.size() > 1 && metrics.horizontalAdvance(parts.join(QStringLiteral("  ·  "))) > status_->width())
+        parts.removeLast();
+    status_->setText(parts.join(QStringLiteral(" &nbsp;·&nbsp; ")));
 }
 
 } // namespace abrviz

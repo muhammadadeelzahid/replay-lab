@@ -204,8 +204,20 @@ with `static_assert`.
 | `PipelineGuard`, `VideoFrameMapGuard` | no | no |
 | `RenderQueue`, `GstSegmentSource` | no | no |
 
+## Comparing runs
 
-## GUI
+Runs with the same video, feeder rate and run number form an experiment
+(`groupExperiments()` in `bundle_library`), one run per ABR algorithm.
+
+- `ComparisonClock` maps one master time to each run's replay time, by session time
+  (`streamStart + t`, through each run's `PlaybackClock`) or by media time. The open run is
+  the master; past a run's end it reports "ended", before its first frame "starting".
+- `stallEpisodes()` merges stalls separated by less than 1 s of playback (`kEpisodeGap`): the
+  ns-3 player resumes on single frames, so one freeze is logged as many stalls. QoE reports
+  episodes as stalls and keeps the raw count as player pauses.
+- Picture quality comes from the bundle's VMAF per segment and rung; `computeQoe` averages the
+  VMAF of the segments that were on screen.
+
 
 - `MainWindow`: laid out as a macOS app. A source-list sidebar (`SourceList`) shows All Runs
   and, per video, its runs by link rate (with a note for stalls or a cut-off); selecting a run
@@ -243,6 +255,17 @@ with `static_assert`.
   through `PlaybackClock`. (A `QVideoWidget` renders into a native child window, which other
   widgets cannot draw over, so the overlay could not be shown on top of it.)
 - `ReportView`: QoE numbers, compared with `summary.json`.
+- `CompareView`: the Replay page's video area. Single, Side by side, Grid (up to four) or Wipe.
+  The first pane is the open run's `ReplayPlayer`; each other pane (`RunPane`) has its own
+  `Session` and engine and loads its run in the background. A timer every 100 ms steers the
+  other panes to the master time: a pane that is ahead waits, one that is behind seeks, and
+  the main pane waits for one that cannot keep up.
+- `WipeView`: two engines' video sinks in one scene, the right one clipped at a divider that
+  can be dragged, and a round 2x loupe that is a second view of the same scene.
+- `Scoreboard`: on the Report page, one row per algorithm of the experiment, loaded in the
+  background, with the best value of each column marked.
+- `ChartsPanel::setComparison` draws the other panes' buffer, bitrate and VMAF over the open
+  run's, in each algorithm's colour (`algorithm_colors.h`).
 
 
 ## Replay engines

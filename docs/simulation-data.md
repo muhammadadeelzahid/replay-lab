@@ -12,6 +12,20 @@ The bundles are produced by `scratch/ai_llm/export_viewer_bundle.py` in the rese
 repository. The 14 bundles listed below are final; the viewer works with them as they are.
 
 
+## Comparison bundles
+
+`viewer_bundles_phasef` holds 60 bundles in the same format: the 5 videos at 9, 18 and 36 Mbps,
+each streamed by four ABR algorithms (`policy.name` in `run.json`: `llm`, `robustmpc`, `mpc`,
+`bola`). The differences from the bundles below:
+
+- Big Buck Bunny is included at 9 Mbps; every Big Buck Bunny session stops at about 151 s, at
+  the end of the satellite pass, so its playback is cut off for every algorithm.
+- `videos/<name>/segments.jsonl` has `vmaf`, `vmaf_min`, `ssim` and `psnr` for each segment
+  and rung.
+- Only the LLM runs have `logs/policy.log` and the guard and decision-delay fields; the viewer
+  treats them as optional.
+- Runs with the same video, rate and `run_N` share a seed but are separate simulations.
+
 ## Bundles
 
 14 bundles: 5 videos at 3 feeder link rates, without `big_buck_bunny` at 9 Mbps (no UE received

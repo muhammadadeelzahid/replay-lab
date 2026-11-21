@@ -2,26 +2,28 @@
 
 <img src="app/resources/app-icon.svg" width="96" align="right" alt="">
 
-Replays ns-3 simulations of adaptive video streaming over a satellite 5G network with
-integrated access and backhaul (IAB). For each run it shows the video the viewer saw, segment
-by segment, with its stalls, the bitrate decisions of the LLM ABR policy, the buffer,
-throughput, RTT and loss, and the simulation logs.
+Compares adaptive bitrate (ABR) algorithms by replaying ns-3 simulations of video streaming
+over a satellite 5G network with integrated access and backhaul (IAB). Each run is played as
+the viewer saw it, segment by segment, with its stalls. Runs of different algorithms on the same
+video and link can be played side by side, in a grid or in one frame split by a divider, with
+their buffer, bitrate and picture quality (VMAF) drawn on the same charts.
 
-Network: a LEO satellite gNB at 550 km (28 GHz, 100 MHz) backhauls an IAB relay, which serves
-three users. The video server reaches the satellite over a feeder link of 9, 18 or 36 Mbps.
+The algorithms in the data are an LLM-based policy, RobustMPC, MPC and BOLA. Network: a LEO
+satellite gNB at 550 km (28 GHz, 100 MHz) backhauls an IAB relay, which serves three users. The
+video server reaches the satellite over a feeder link of 9, 18 or 36 Mbps.
 
 Built with C++20, Qt 6 and GStreamer.
 
-![Replay of Big Buck Bunny at 36 Mbps: the buffer runs dry while segment 17 is still coming over the satellite, the user stalls, then playback resumes](docs/images/demo.gif)
+![Big Buck Bunny at 18 Mbps, LLM and RobustMPC side by side: both stall at the start, and the LLM run resumes about 3 s earlier](docs/images/compare.gif)
 
-[Full-quality video (MP4)](docs/images/demo.mp4)
+[Full-quality video (MP4)](docs/images/compare.mp4)
 
 ## Download
 
 Packages for macOS (Apple silicon), Windows and Linux are on the
-[Releases](https://github.com/muhammadadeelzahid/replay-lab/releases) page, with the simulation
+[Releases](https://github.com/muhammadadeelzahid/replay-lab/releases) page, with the 14 LLM
 runs (`viewer_bundles.tar`). Extract the runs, open the app and choose the `viewer_bundles`
-folder.
+folder. The comparison runs are described under [Simulation data](#simulation-data).
 
 - macOS: unzip and move the app to Applications. The first time, right-click it and choose
   Open (the app is not notarised).
@@ -33,12 +35,17 @@ its video is rendered (a few seconds) and cached. Build from source for the GStr
 
 ## Features
 
-- Library of runs grouped by video and feeder link rate, with stalls and cut-off playback marked
-- Replay of the video as the viewer saw it, with the network path and the segment in flight
-- Charts of buffer, throughput, bitrate, RTT, loss and decision delay
+- Library grouped by video and feeder link rate, one entry per algorithm, with stalls and
+  cut-off playback marked
+- Replay of one run, two side by side, a grid of up to four, or two in one frame split by a
+  divider that can be dragged, with a 2x magnifier
+- Runs lined up at the same moment of the session or at the same frame of the video
+- Charts of buffer, throughput, bitrate, VMAF, RTT, loss and decision delay, with the compared
+  runs drawn over the open one
+- A scoreboard of every algorithm of an experiment: bitrate, VMAF, switches, stalls, stalled
+  time and startup, with the best of each marked
 - Indexed, filterable `sim.log` and policy log
 - QoE report checked against `summary.json`
-- Segment timeline shared by all views
 
 ## Screenshots
 
@@ -46,21 +53,45 @@ The app follows the system's light or dark appearance.
 
 ![The welcome screen in light and dark mode](docs/images/welcome.jpg)
 
-**All Runs.** The featured run, the path it was streamed over, and a row of runs for each video.
+**All Runs.** The featured run, how each algorithm did on the same video and link, and a row of
+runs for each video. Compare opens the run next to another algorithm.
 
 ![All Runs](docs/images/home.jpg)
 
-**Replay.** The video as the user saw it, under the satellite path, with the segment timeline.
+**Grid.** The four algorithms at the same moment: the LLM run is stalled at 2160p while
+RobustMPC plays at 240p.
 
-![Replay](docs/images/replay.jpg)
+![Grid of four algorithms](docs/images/grid.jpg)
 
-**Analysis.** Buffer, throughput, bitrate, RTT and decision delay, following the cursor.
+**Wipe.** Two algorithms in one frame, at the same frame of the video: 1080p on the left,
+2160p on the right.
+
+![Wipe view](docs/images/wipe.jpg)
+
+**Analysis.** Buffer, throughput, bitrate and VMAF of the compared runs, one colour per
+algorithm.
 
 ![Analysis](docs/images/analysis.jpg)
 
-**Report.** The QoE numbers, checked against `summary.json`.
+**Report.** The scoreboard of every algorithm above the open run's QoE report.
 
 ![Report](docs/images/report.jpg)
+
+## Reading the comparison
+
+- **The runs are separate simulations.** Runs with the same video, rate and run number share a
+  seed, but the network does not behave identically across them, so differences are not due to
+  the algorithm alone.
+- **Stalls are counted as episodes.** The ns-3 player resumes on single frames, so one freeze
+  is logged as many short stalls. Stalls separated by less than 1 s of playback are merged into
+  one episode; the report gives both counts ("1 (27 player pauses)").
+- **Big Buck Bunny is partial.** Every session stops at about 151 s, when the satellite pass
+  ends, at the same point for every algorithm.
+- **Same moment and same frame.** A simulated segment takes 3.3 s of session time but holds
+  2 s of video, so in Same moment a pane that is playing moves ahead of one that is stalled.
+  Same frame keeps the video in step instead.
+- **The grid is best effort at 4K.** Four 2160p videos decoded at once can be more than the
+  CPU keeps up with; panes are then kept in step by jumping, not smoothly.
 
 ## Replay engines
 
@@ -105,7 +136,7 @@ From the command line:
 
 ```sh
 APP="build/release/app/ReplayLab.app/Contents/MacOS/ReplayLab"
-"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57
+"$APP" viewer_bundles_phasef --bundle big_buck_bunny_llm_18Mbps_run_3 --time 10 --layout side
 ```
 
 On Linux the executable is `build/release/app/replaylab`.
@@ -116,6 +147,8 @@ On Linux the executable is `build/release/app/replaylab`.
 | `--time <s>` | move the cursor to a simulation time |
 | `--engine gstreamer\|prerendered` | replay engine |
 | `--page library\|replay\|analysis\|logs\|report` | view to show |
+| `--layout single\|side\|grid\|wipe` | runs shown on the Replay page |
+| `--align moment\|frame` | line the runs up by session time or by video frame |
 | `--size WxH` | window size |
 | `--screenshot <file.png>` | save a screenshot and quit |
 | `--profile <s>` | play for some seconds and print timings |
@@ -136,12 +169,12 @@ The pictures in this README were made with the app itself (`ABRVIZ_APPEARANCE=li
 `dark` picks the appearance):
 
 ```sh
-"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 50 --size 1440x900 \
-    --record frames --duration 9
+"$APP" viewer_bundles_phasef --bundle big_buck_bunny_llm_18Mbps_run_3 --time 10 --layout side \
+    --size 1440x900 --record frames --duration 10
 ffmpeg -framerate 10 -i frames/frame-%04d.png -vf "fps=8,scale=880:-1:flags=lanczos,\
-split[a][b];[a]palettegen=max_colors=144[p];[b][p]paletteuse=dither=bayer" docs/images/demo.gif
-"$APP" viewer_bundles --bundle big_buck_bunny_llm_36Mbps_run_2 --time 57 --page analysis \
-    --size 1440x900 --screenshot analysis.png
+split[a][b];[a]palettegen=max_colors=144[p];[b][p]paletteuse=dither=bayer" docs/images/compare.gif
+"$APP" viewer_bundles_phasef --bundle chef_cooking_llm_9Mbps_run_4 --time 18 --layout grid \
+    --size 1440x900 --screenshot grid.png
 ```
 
 Command-line tools in `build/release/tools/`: `validate_bundle`, `print_report`,
@@ -149,8 +182,15 @@ Command-line tools in `build/release/tools/`: `validate_bundle`, `print_report`,
 
 ## Simulation data
 
-The 14 run bundles (about 714 MB) are not in git. Download `viewer_bundles.tar` from the
-Releases page and extract it into the repository root as `viewer_bundles/`.
+Neither data set is in git.
+
+- **`viewer_bundles_phasef`** (60 runs, about 7.9 GB): 5 videos × 4 algorithms (LLM,
+  RobustMPC, MPC, BOLA) × 3 feeder rates, with VMAF, SSIM and PSNR for every segment and
+  quality. It is larger than a GitHub release allows (2 GB per file) and is shared separately.
+  Extract it into the repository root.
+- **`viewer_bundles`** (14 LLM runs, about 714 MB): `viewer_bundles.tar` on the Releases page.
+
+See [Simulation data](docs/simulation-data.md) for the bundle format.
 
 ## Documentation
 
