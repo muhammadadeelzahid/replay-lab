@@ -94,6 +94,15 @@ public:
      */
     void compareWith(const QString& directory);
 
+    /**
+     * @brief Makes a run the first other pane of the next run opened, instead of the usual
+     *        choice. Set it before opening the run, so its pane does not first load (and, for
+     *        the pre-rendered engine, start rendering) another run.
+     *
+     * @param directory The run's bundle directory, in the next run's experiment.
+     */
+    void preferFollower(const QString& directory);
+
     /// @return The layout shown.
     [[nodiscard]] Layout layoutMode() const { return layout_; }
 
@@ -262,7 +271,8 @@ private:
     Layout preferred_ = Layout::Single;  ///< The layout last chosen; used when there are runs to compare.
     ComparisonClock::Alignment alignment_ = ComparisonClock::Alignment::SessionTime;
     bool steering_ = false;  ///< Set while the view itself moves or pauses a pane.
-    bool mainHeld_ = false;  ///< The first pane is waiting for a slower one.
+    bool mainHeld_ = false;
+    QString preferred_follower_;  ///< First other pane of the next run opened (preferFollower()).  ///< The first pane is waiting for a slower one.
 };
 
 } // namespace abrviz

@@ -157,6 +157,7 @@ jobs:
               info, then Run anyway.
             - Linux: `chmod +x` the AppImage and run it.
 
-            These packages use the pre-rendered engine: the first time a run is played, its video
-            is rendered with the bundled ffmpeg (a few seconds) and kept in the cache. Build from
-            source to use the GStreamer engine.
+            These packages use the pre-rendered engine: the first time a run is opened, its video
+            is rendered with the bundled ffmpeg and kept in the cache (about 15 s for a 4K run on
+            an Apple silicon Mac; a comparison renders each run shown). Build from source to use
+            the GStreamer engine, which plays the segments directly.

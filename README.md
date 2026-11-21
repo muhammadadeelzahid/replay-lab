@@ -30,8 +30,10 @@ and choose the `runs` folder.
 - Windows: unzip and run `replaylab.exe`.
 - Linux: `chmod +x` the AppImage and run it.
 
-The packages include ffmpeg and use the pre-rendered engine: the first time a run is played,
-its video is rendered (a few seconds) and cached. Build from source for the GStreamer engine.
+The packages include ffmpeg and use the pre-rendered engine: the first time a run is opened,
+its video is rendered and cached (about 15 s for a 4K run on an Apple silicon Mac, using every
+core; a comparison renders each run shown). Build from source for the GStreamer engine, which
+plays the segments directly.
 
 ## Features
 
@@ -147,7 +149,7 @@ From the command line:
 
 ```sh
 APP="build/release/app/ReplayLab.app/Contents/MacOS/ReplayLab"
-"$APP" viewer_bundles_phasef --bundle big_buck_bunny_llm_18Mbps_run_3 --time 10 --layout side
+"$APP" replaylab-runs/runs --bundle big_buck_bunny_llm_18Mbps_run_3 --time 10 --layout side
 ```
 
 On Linux the executable is `build/release/app/replaylab`.
@@ -176,18 +178,6 @@ On Linux the executable is `build/release/app/replaylab`.
 | ⌘O / ⇧⌘O | open a folder / a run |
 | ⌘R | render the video |
 | ⌘, | settings |
-
-The pictures in this README were made with the app itself (`ABRVIZ_APPEARANCE=light` or
-`dark` picks the appearance):
-
-```sh
-"$APP" viewer_bundles_phasef --bundle big_buck_bunny_llm_18Mbps_run_3 --time 10 --layout side \
-    --size 1440x900 --record frames --duration 10
-ffmpeg -framerate 10 -i frames/frame-%04d.png -vf "fps=8,scale=880:-1:flags=lanczos,\
-split[a][b];[a]palettegen=max_colors=144[p];[b][p]paletteuse=dither=bayer" docs/images/compare.gif
-"$APP" viewer_bundles_phasef --bundle chef_cooking_llm_9Mbps_run_4 --time 18 --layout grid \
-    --size 1440x900 --screenshot grid.png
-```
 
 Command-line tools in `build/release/tools/`: `validate_bundle`, `print_report`,
 `render_experienced`.

@@ -1206,6 +1206,7 @@ void MainWindow::compareAt(const QString& directory, const QString& rival, doubl
     if (d_->compare->layoutMode() == CompareView::Layout::Single)
         d_->compare->setLayoutMode(CompareView::Layout::SideBySide);
     d_->compareAfterOpen = std::pair{rival, time};
+    d_->compare->preferFollower(rival);
     d_->pageAfterOpen = Page::Replay;
     openBundle(directory);
 }
@@ -1288,6 +1289,7 @@ void MainWindow::loadFinished()
     if (ok) {
         startLogIndex();
         if (compareAfterOpen) {
+            // The rival is already the second pane (preferFollower()); this keeps the layout.
             d_->compare->compareWith(compareAfterOpen->first);
             d_->session->cursor()->setTime(compareAfterOpen->second);
         }

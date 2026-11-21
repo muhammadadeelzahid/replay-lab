@@ -87,6 +87,8 @@ private:
             while (player.engine()->state() != ReplaySource::State::Paused
                    && timer.elapsed() < kTimeoutMs)
                 QTest::qWait(20);
+            if (player.engine()->state() != ReplaySource::State::Paused)
+                qWarning("render ended in state %d: %s", static_cast<int>(player.engine()->state()), qPrintable(player.messageText()));
             return player.engine()->state() == ReplaySource::State::Paused;
         }
     };
@@ -101,13 +103,15 @@ private slots:
             QSKIP("ffmpeg not found");
     }
 
-    void asksForARenderFirst()
+    void rendersWhenARunOpens()
     {
+        // No render on request: opening a run without a video starts rendering it.
         QTemporaryDir empty;
         Fixture f(empty.path(), ffmpeg_);
         QVERIFY(!f.player.engine()->isReady());
-        QVERIFY(f.player.messageText().contains(QStringLiteral("Render Video")));
-        QVERIFY(f.render());
+        QCOMPARE(f.player.engine()->state(), ReplaySource::State::Preparing);
+        QVERIFY(f.player.messageText().contains(QStringLiteral("Rendering")));
+        QVERIFY(f.render());  // prepare() while rendering does not start a second render
         QVERIFY(f.player.messageText().isEmpty());
         QVERIFY(f.player.overlayText().contains(QStringLiteral("Segment")));
         QVERIFY(f.player.overlayText().contains(QStringLiteral("Pre-rendered")));

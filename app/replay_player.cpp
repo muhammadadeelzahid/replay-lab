@@ -161,6 +161,8 @@ bool ReplayPlayer::setEngine(Engine engine)
     engine_->setRun(session_->run());
     if (engine_->isReady())
         engine_->seek(session_->clock().simToReplay(session_->cursor()->time()));
+    else if (session_->run())
+        engine_->prepare();  // render a run that has no video yet, without asking
     emit engineChanged();
     updateOverlay();
     updateMessage();
@@ -245,8 +247,13 @@ void ReplayPlayer::runChanged()
 {
     error_.clear();
     engineShowedPicture_ = false;
-    if (engine_)
+    if (engine_) {
         engine_->setRun(session_->run());
+        // The pre-rendered engine needs the run's video rendered (once; it is cached). It
+        // starts at once, so a run opened alone or in a comparison pane plays without a click.
+        if (session_->run() && !engine_->isReady())
+            engine_->prepare();
+    }
     updateOverlay();
     updateMessage();
     updateControls();

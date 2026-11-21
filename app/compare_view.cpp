@@ -159,6 +159,11 @@ void CompareView::setLayoutMode(Layout layout)
     rebuildPanes();
 }
 
+void CompareView::preferFollower(const QString& directory)
+{
+    preferred_follower_ = directory;
+}
+
 void CompareView::compareWith(const QString& directory)
 {
     if (layout_ == Layout::Single)
@@ -291,7 +296,16 @@ QStringList CompareView::defaultFollowers(int count) const
     // open run.
     QStringList directories;
     const QString open = session_->run() ? absolute(session_->run()->info.bundleDirectory) : QString();
+    // A run asked for with preferFollower() comes first (once).
+    if (!preferred_follower_.isEmpty() && absolute(preferred_follower_) != open
+        && std::ranges::any_of(peers_, [&](const BundleSummaryPtr& m) {
+               return absolute(m->directory) == absolute(preferred_follower_);
+           }))
+        directories << preferred_follower_;
     for (const BundleSummaryPtr& member : peers_) {
+        if (directories.size() >= count)
+            break;
+        if (absolute(member->directory) != open && !directories.contains(member->directory))
         if (directories.size() >= count)
             break;
         if (absolute(member->directory) != open)
@@ -304,6 +318,8 @@ void CompareView::rebuildPanes()
 {
     const int wanted = panesFor(layout_, static_cast<int>(peers_.size())) - 1;
     const QStringList choices = defaultFollowers(wanted);
+    if (session_->run())
+        preferred_follower_.clear();  // used for the run it was set for
 
     // Keep the panes that already show a run of this experiment; drop the rest.
     if (routedToWipe_) {
@@ -369,7 +385,8 @@ void CompareView::rebuildPanes()
 
 void CompareView::loadInto(Follower& follower, const QString& directory)
 {
-    if (absolute(directory) == absolute(follower.directory) && follower.session->run())
+    // Already showing it, or still loading it.
+    if (absolute(directory) == absolute(follower.directory) && (follower.session->run() || follower.load.isRunning()))
         return;
     follower.directory = directory;
     follower.held = false;
@@ -531,7 +548,9 @@ void CompareView::updateCovers()
         Follower& follower = *followers_[i];
         const ReplaySource* engine = follower.pane->player()->engine();
         if (!follower.session->run() || !engine || !engine->isReady()) {
-            follower.pane->setCover(tr("Loading…"));
+            // The pre-rendered engine renders the run's video first (once; it is cached).
+            const bool rendering = engine && follower.session->run() && engine->state() == ReplaySource::State::Preparing;
+            follower.pane->setCover(rendering ? tr("Rendering the video…") : tr("Loading…"));
             continue;
         }
         if (follower.lining) {
